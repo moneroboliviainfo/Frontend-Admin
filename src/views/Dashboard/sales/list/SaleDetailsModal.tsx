@@ -749,7 +749,7 @@ const OrderDetailsModal = ({ open, onClose, order }: OrderDetailsModalProps) => 
 
                 {showDhlInput && (
                   <>
-                    {order.shipment && (
+                    {!order.shipment && (
                       <TextField
                         size='small'
                         label='Código DHL'
@@ -758,6 +758,7 @@ const OrderDetailsModal = ({ open, onClose, order }: OrderDetailsModalProps) => 
                         placeholder='Ej: DHL-123456'
                         className='max-sm:is-full sm:is-[200px]'
                         disabled={sendOrderMutation.isPending}
+                        required
                       />
                     )}
                     <Button
@@ -774,7 +775,7 @@ const OrderDetailsModal = ({ open, onClose, order }: OrderDetailsModalProps) => 
                       variant='contained'
                       color='success'
                       onClick={handleSendOrder}
-                      disabled={sendOrderMutation.isPending}
+                      disabled={sendOrderMutation.isPending || (!order.shipment && !dhlCode.trim())}
                       startIcon={
                         sendOrderMutation.isPending ? (
                           <CircularProgress size={20} color='inherit' />
