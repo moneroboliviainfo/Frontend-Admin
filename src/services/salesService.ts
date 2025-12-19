@@ -68,7 +68,7 @@ class CartServiceClass {
 
   async sendOrder(orderId: number, dhlCode?: string): Promise<Order> {
     const payload = dhlCode ? { dhl_code: dhlCode } : {}
-    const response = await apiClient.patch<Order>(`/api/orders/${orderId}`, payload)
+    const response = await apiClient.put<Order>(`/api/orders/${orderId}`, payload)
 
     return response.data
   }
