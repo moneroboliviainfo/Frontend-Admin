@@ -144,15 +144,20 @@ const getFullMenuData = (): VerticalMenuDataType[] => [
     ]
   },
 
-  // MÓDULO ANUNCIOS
+  // MÓDULO ANUNCIOS Y BANNERS
   {
     isSection: true,
-    label: 'Anuncios'
+    label: 'ANUNCIOS Y BANNERS'
   },
   {
-    label: 'Crear Anuncio',
+    label: 'Anuncios',
     icon: 'tabler-notification',
     href: '/advertisement/'
+  },
+  {
+    label: 'Banners',
+    icon: 'tabler-video',
+    href: '/banners/'
   }
 ]
 

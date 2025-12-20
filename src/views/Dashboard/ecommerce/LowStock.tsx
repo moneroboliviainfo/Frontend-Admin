@@ -1,5 +1,7 @@
 'use client'
 
+import { useState } from 'react'
+
 // MUI Imports
 import Card from '@mui/material/Card'
 import CardHeader from '@mui/material/CardHeader'
@@ -8,23 +10,60 @@ import Typography from '@mui/material/Typography'
 import Skeleton from '@mui/material/Skeleton'
 import Chip from '@mui/material/Chip'
 import Box from '@mui/material/Box'
+import Button from '@mui/material/Button'
+import CircularProgress from '@mui/material/CircularProgress'
 
 // Components Imports
 /* import OptionMenu from '@core/components/option-menu' */
 
 // Hooks
 import { useLowStock } from '@/hooks/useDashboard'
+import { variantService } from '@/services/variantService'
 
 const LowStock = () => {
   const { data: lowStockData, isLoading } = useLowStock()
+  const [isExporting, setIsExporting] = useState(false)
+
+  const handleExportExcel = async () => {
+    setIsExporting(true)
+
+    try {
+      const blob = await variantService.exportToExcel()
+      const url = window.URL.createObjectURL(blob)
+      const link = document.createElement('a')
+
+      link.href = url
+      link.download = `productos-stock-${new Date().toISOString().split('T')[0]}.xlsx`
+      document.body.appendChild(link)
+      link.click()
+      document.body.removeChild(link)
+      window.URL.revokeObjectURL(url)
+    } catch (error) {
+      console.error('Error al exportar Excel:', error)
+    } finally {
+      setIsExporting(false)
+    }
+  }
 
   return (
     <Card>
       <CardHeader
         title='Productos con Bajo Stock'
         subheader='Productos que necesitan reabastecimiento'
-
-     /*    action={<OptionMenu options={['Ver Más', 'Refrescar']} />} */
+        action={
+          <Button
+            variant='contained'
+            color='success'
+            size='small'
+            onClick={handleExportExcel}
+            disabled={isExporting}
+            startIcon={
+              isExporting ? <CircularProgress size={16} color='inherit' /> : <i className='tabler-file-spreadsheet' />
+            }
+          >
+            {isExporting ? 'Exportando...' : 'Exportar Excel'}
+          </Button>
+        }
       />
       <CardContent>
         <Box

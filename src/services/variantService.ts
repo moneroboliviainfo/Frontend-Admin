@@ -124,6 +124,14 @@ class VariantServiceClass {
 
     return response.data
   }
+
+  async exportToExcel(): Promise<Blob> {
+    const response = await apiClient.get('/api/variants/export/exel', {
+      responseType: 'blob'
+    })
+
+    return response.data
+  }
 }
 
 export const variantService = new VariantServiceClass()
