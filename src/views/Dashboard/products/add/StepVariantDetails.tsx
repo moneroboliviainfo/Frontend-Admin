@@ -42,6 +42,7 @@ import type { VariantFormData, MediaFile, NewColorForm, VariantSizeForm } from '
 import VariantsList from './components/VariantsList'
 import VariantMediaUploader from './components/VariantMediaUploader'
 import AddStockModal from './components/AddStockModal'
+import SubtractStockModal from './components/SubtractStockModal'
 
 type Props = {
   activeStep: number
@@ -72,6 +73,7 @@ const StepVariantDetails = ({ activeStep, handlePrev, steps, mode, productId, pr
   const [filesError, setFilesError] = useState<string | null>(null)
   const [sizesError, setSizesError] = useState<string | null>(null)
   const [addStockModalOpen, setAddStockModalOpen] = useState(false)
+  const [subtractStockModalOpen, setSubtractStockModalOpen] = useState(false)
 
   const [colorModalOpen, setColorModalOpen] = useState(false)
 
@@ -633,15 +635,26 @@ const StepVariantDetails = ({ activeStep, handlePrev, steps, mode, productId, pr
 
                 <Box sx={{ display: 'flex', gap: 1 }}>
                   {isEditing && variantForm.sizes.some(s => s.id) && (
-                    <Button
-                      variant='contained'
-                      size='small'
-                      color='success'
-                      startIcon={<i className='tabler-plus' />}
-                      onClick={() => setAddStockModalOpen(true)}
-                    >
-                      Agregar Stock
-                    </Button>
+                    <>
+                      <Button
+                        variant='contained'
+                        size='small'
+                        color='success'
+                        startIcon={<i className='tabler-plus' />}
+                        onClick={() => setAddStockModalOpen(true)}
+                      >
+                        Agregar Stock
+                      </Button>
+                      <Button
+                        variant='contained'
+                        size='small'
+                        color='error'
+                        startIcon={<i className='tabler-minus' />}
+                        onClick={() => setSubtractStockModalOpen(true)}
+                      >
+                        Quitar Stock
+                      </Button>
+                    </>
                   )}
                   <Button
                     variant='outlined'
@@ -874,6 +887,26 @@ const StepVariantDetails = ({ activeStep, handlePrev, steps, mode, productId, pr
           open={addStockModalOpen}
           onClose={() => {
             setAddStockModalOpen(false)
+
+            if (editingVariantId) {
+              setVariantToLoadId(editingVariantId)
+            }
+          }}
+          variants={variantForm.sizes
+            .filter(s => s.id)
+            .map(s => ({
+              id: s.id!,
+              size: { name: s.size },
+              availableStock: s.quantity
+            }))}
+          variantId={editingVariantId!}
+        />
+      )}
+      {isEditing && variantForm.sizes.length > 0 && (
+        <SubtractStockModal
+          open={subtractStockModalOpen}
+          onClose={() => {
+            setSubtractStockModalOpen(false)
 
             if (editingVariantId) {
               setVariantToLoadId(editingVariantId)

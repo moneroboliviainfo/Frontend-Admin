@@ -11,6 +11,8 @@ import Typography from '@mui/material/Typography'
 import Skeleton from '@mui/material/Skeleton'
 import TablePagination from '@mui/material/TablePagination'
 import Chip from '@mui/material/Chip'
+import Button from '@mui/material/Button'
+import CircularProgress from '@mui/material/CircularProgress'
 
 // Third-party Imports
 import { createColumnHelper, flexRender, getCoreRowModel, useReactTable, getPaginationRowModel, getFilteredRowModel } from '@tanstack/react-table'
@@ -23,6 +25,7 @@ import TablePaginationComponent from '@components/TablePaginationComponent'
 
 // Hooks
 import { useBestsellers } from '@/hooks/useDashboard'
+import { variantService } from '@/services/variantService'
 
 // Types
 import type { BestsellerItem } from '@/types/api/dashboard'
@@ -43,6 +46,28 @@ const columnHelper = createColumnHelper<BestsellerItem>()
 const BestSellers = () => {
   const { data: bestsellersData, isLoading } = useBestsellers()
   const [rowSelection, setRowSelection] = useState({})
+  const [isExportingTotalSales, setIsExportingTotalSales] = useState(false)
+
+  const handleExportTotalSales = async () => {
+    setIsExportingTotalSales(true)
+
+    try {
+      const blob = await variantService.exportTotalSalesToExcel()
+      const url = window.URL.createObjectURL(blob)
+      const link = document.createElement('a')
+
+      link.href = url
+      link.download = `ventas-totales-${new Date().toISOString().split('T')[0]}.xlsx`
+      document.body.appendChild(link)
+      link.click()
+      document.body.removeChild(link)
+      window.URL.revokeObjectURL(url)
+    } catch (error) {
+      console.error('Error al exportar ventas totales:', error)
+    } finally {
+      setIsExportingTotalSales(false)
+    }
+  }
 
   const columns = useMemo<ColumnDef<BestsellerItem, any>[]>(
     () => [
@@ -126,8 +151,24 @@ const BestSellers = () => {
       <CardHeader
         title='Productos Más Vendidos'
         subheader='Top productos con más ventas'
-
-        /* action={<OptionMenu options={['Ver Más', 'Refrescar']} />} */
+        action={
+          <Button
+            variant='contained'
+            color='primary'
+            size='small'
+            onClick={handleExportTotalSales}
+            disabled={isExportingTotalSales}
+            startIcon={
+              isExportingTotalSales ? (
+                <CircularProgress size={16} color='inherit' />
+              ) : (
+                <i className='tabler-file-spreadsheet' />
+              )
+            }
+          >
+            {isExportingTotalSales ? 'Exportando...' : 'Excel Ventas Totales'}
+          </Button>
+        }
       />
       <CardContent>
         {isLoading ? (

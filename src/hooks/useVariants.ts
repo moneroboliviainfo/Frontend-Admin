@@ -91,6 +91,28 @@ export const useAddStock = () => {
   })
 }
 
+export const useSubtractStock = () => {
+  const queryClient = useQueryClient()
+
+  return useMutation({
+    mutationFn: (data: { variantId: number; quantity: number; reason?: string }) =>
+      variantService.subtractStock(data),
+    onSuccess: () => {
+      queryClient.invalidateQueries({
+        queryKey: ['variants'],
+        refetchType: 'active'
+      })
+      queryClient.invalidateQueries({
+        queryKey: ['variant'],
+        refetchType: 'active'
+      })
+    },
+    onError: error => {
+      console.error('Error subtracting stock:', error)
+    }
+  })
+}
+
 export const useDeleteVariant = () => {
   const queryClient = useQueryClient()
 

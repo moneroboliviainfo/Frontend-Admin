@@ -46,6 +46,12 @@ class VariantServiceClass {
     return response.data
   }
 
+  async subtractStock(data: { variantId: number; quantity: number; reason?: string }): Promise<AddStockResponse> {
+    const response = await apiClient.post<AddStockResponse>('/api/variants/subtractstock', data)
+
+    return response.data
+  }
+
   async updateVariant(id: number, data: UpdateVariantDto): Promise<Variant> {
     const response = await apiClient.patch<Variant>(`/api/variants/${id}`, data)
 
@@ -127,6 +133,22 @@ class VariantServiceClass {
 
   async exportToExcel(): Promise<Blob> {
     const response = await apiClient.get('/api/variants/export/exel', {
+      responseType: 'blob'
+    })
+
+    return response.data
+  }
+
+  async exportTransactionsToExcel(): Promise<Blob> {
+    const response = await apiClient.get('/api/variants/export/transactions/exel', {
+      responseType: 'blob'
+    })
+
+    return response.data
+  }
+
+  async exportTotalSalesToExcel(): Promise<Blob> {
+    const response = await apiClient.get('/api/variants/export/total-sales/exel', {
       responseType: 'blob'
     })
 

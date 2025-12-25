@@ -23,6 +23,7 @@ import { variantService } from '@/services/variantService'
 const LowStock = () => {
   const { data: lowStockData, isLoading } = useLowStock()
   const [isExporting, setIsExporting] = useState(false)
+  const [isExportingTransactions, setIsExportingTransactions] = useState(false)
 
   const handleExportExcel = async () => {
     setIsExporting(true)
@@ -45,24 +46,63 @@ const LowStock = () => {
     }
   }
 
+  const handleExportTransactions = async () => {
+    setIsExportingTransactions(true)
+
+    try {
+      const blob = await variantService.exportTransactionsToExcel()
+      const url = window.URL.createObjectURL(blob)
+      const link = document.createElement('a')
+
+      link.href = url
+      link.download = `transacciones-stock-${new Date().toISOString().split('T')[0]}.xlsx`
+      document.body.appendChild(link)
+      link.click()
+      document.body.removeChild(link)
+      window.URL.revokeObjectURL(url)
+    } catch (error) {
+      console.error('Error al exportar transacciones:', error)
+    } finally {
+      setIsExportingTransactions(false)
+    }
+  }
+
   return (
     <Card>
       <CardHeader
         title='Productos con Bajo Stock'
         subheader='Productos que necesitan reabastecimiento'
         action={
-          <Button
-            variant='contained'
-            color='success'
-            size='small'
-            onClick={handleExportExcel}
-            disabled={isExporting}
-            startIcon={
-              isExporting ? <CircularProgress size={16} color='inherit' /> : <i className='tabler-file-spreadsheet' />
-            }
-          >
-            {isExporting ? 'Exportando...' : 'Exportar Excel'}
-          </Button>
+          <Box sx={{ display: 'flex', gap: 1 }}>
+            <Button
+              variant='contained'
+              color='success'
+              size='small'
+              onClick={handleExportExcel}
+              disabled={isExporting || isExportingTransactions}
+              startIcon={
+                isExporting ? <CircularProgress size={16} color='inherit' /> : <i className='tabler-file-spreadsheet' />
+              }
+            >
+              {isExporting ? 'Exportando...' : 'Excel Stock'}
+            </Button>
+            <Button
+              variant='contained'
+              color='primary'
+              size='small'
+              onClick={handleExportTransactions}
+              disabled={isExporting || isExportingTransactions}
+              startIcon={
+                isExportingTransactions ? (
+                  <CircularProgress size={16} color='inherit' />
+                ) : (
+                  <i className='tabler-file-download' />
+                )
+              }
+            >
+              {isExportingTransactions ? 'Exportando...' : 'Excel/Transacciones'}
+            </Button>
+          </Box>
         }
       />
       <CardContent>
