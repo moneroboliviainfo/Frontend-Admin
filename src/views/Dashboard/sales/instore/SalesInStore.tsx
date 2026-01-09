@@ -147,6 +147,7 @@ const PointOfSale: React.FC = () => {
     if (qrMatch) {
       // Enviar el formato completo al backend
       setDebouncedSearch(searchTerm)
+      setVariantsPage(1) // Resetear página del backend
       skipDebounceRef.current = true
 
       setTimeout(() => {
@@ -164,6 +165,7 @@ const PointOfSale: React.FC = () => {
 
     debounceTimerRef.current = setTimeout(() => {
       setDebouncedSearch(searchTerm)
+      setVariantsPage(1) // Resetear página del backend
     }, 500)
 
     return () => {
@@ -217,7 +219,7 @@ const PointOfSale: React.FC = () => {
     }
   }, [paymentVerification, isVerifyingPayment])
 
-  const flattenedVariants = useMemo(() => {
+  const allFlattenedVariants = useMemo(() => {
     if (!variantsData?.data) return []
 
     return variantsData.data
@@ -236,8 +238,8 @@ const PointOfSale: React.FC = () => {
         }))
       )
       .filter(item => item.variantSizeId)
-      .slice(0, variantsLimit)
-  }, [variantsData, variantsLimit])
+  }, [variantsData])
+
 
   const formatCurrency = (amount: number | string) => {
     const numAmount = typeof amount === 'string' ? parseFloat(amount) : amount
@@ -257,7 +259,7 @@ const PointOfSale: React.FC = () => {
   }
 
   const getVariantInfo = (variantId: number) => {
-    return flattenedVariants.find(v => v.variantSizeId === variantId)
+    return allFlattenedVariants.find(v => v.variantSizeId === variantId)
   }
 
   const addToCart = (item: any) => {
@@ -650,7 +652,7 @@ const PointOfSale: React.FC = () => {
               activeStepIndex={activeStepIndex}
               steps={steps}
               isLoading={isLoadingVariants || isLoading}
-              variants={flattenedVariants}
+              variants={allFlattenedVariants}
               variantsPage={variantsPage}
               variantsLimit={variantsLimit}
               totalVariants={variantsData?.meta?.total || 0}

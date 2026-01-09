@@ -187,9 +187,13 @@ const ProductCatalog: React.FC<ProductCatalogProps> = ({
           page={variantsPage - 1}
           onPageChange={onPageChange}
           rowsPerPage={variantsLimit}
-          rowsPerPageOptions={[10]}
-          labelRowsPerPage='Productos por página:'
-          labelDisplayedRows={({ from, to, count }) => `${from}-${to} de ${count}`}
+          rowsPerPageOptions={[]}
+          labelRowsPerPage=''
+          labelDisplayedRows={({ page, count }) => {
+            const lastPage = Math.ceil(count / variantsLimit)
+
+            return `Página ${page + 1} de ${lastPage} - Mostrando ${variants.length} productos (${count} variantes de color)`
+          }}
         />
       )}
     </Card>
