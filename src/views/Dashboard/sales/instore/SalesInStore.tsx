@@ -207,7 +207,6 @@ const PointOfSale: React.FC = () => {
         paymentVerification.paid === true)
 
     if (isPaid && isVerifyingPayment) {
-      // Pago verificado exitosamente
       setIsVerifyingPayment(false)
       setCurrentStep('COMPLETED')
       setShowPaymentDialog(false)
@@ -348,7 +347,6 @@ const PointOfSale: React.FC = () => {
       setCartToken(cartResponse.token)
 
       if (isEditingOrder) {
-        // Modo edición: Solo verificar stock, no crear orden nueva
         const repriceResponse = await repriceMutation.mutateAsync(cartResponse.token)
 
         setRepriceData(repriceResponse)
