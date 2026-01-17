@@ -147,8 +147,13 @@ class VariantServiceClass {
     return response.data
   }
 
-  async exportTotalSalesToExcel(): Promise<Blob> {
-    const response = await apiClient.get('/api/variants/export/total-sales/exel', {
+  async exportTotalSalesToExcel(startDate?: string, endDate?: string): Promise<Blob> {
+    const params = new URLSearchParams()
+
+    if (startDate) params.append('startDate', startDate)
+    if (endDate) params.append('endDate', endDate)
+
+    const response = await apiClient.get(`/api/variants/export/total-sales/exel?${params}`, {
       responseType: 'blob'
     })
 

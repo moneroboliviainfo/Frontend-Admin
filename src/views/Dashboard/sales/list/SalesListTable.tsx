@@ -30,7 +30,7 @@ const getEstadoColor = (estado: string): 'primary' | 'error' | 'success' | 'warn
     case 'confirmed':
       return 'primary'
     case 'sent':
-      return 'primary'
+      return 'success'
     case 'expired':
       return 'error'
     case 'cancelled_for_edit':
@@ -53,6 +53,27 @@ const getEstadoLabel = (estado: string): string => {
   }
 
   return labels[estado] || estado
+}
+
+const getRowBackgroundColor = (estado: string): string => {
+  switch (estado) {
+    case 'sent':
+    case 'completed':
+      return 'bg-green-50 hover:bg-green-100'
+    case 'paid':
+      return 'bg-yellow-50 hover:bg-yellow-100'
+    case 'cancelled':
+    case 'expired':
+      return 'bg-red-50 hover:bg-red-100'
+    case 'cancelled_for_edit':
+      return 'bg-orange-50 hover:bg-orange-100'
+    case 'pending':
+      return 'bg-amber-50 hover:bg-amber-100'
+    case 'confirmed':
+      return 'bg-blue-50 hover:bg-blue-100'
+    default:
+      return 'hover:bg-actionHover'
+  }
 }
 
 const getPaymentLabel = (paymentType: string): string => {
@@ -256,7 +277,7 @@ const OrdersListTable = () => {
                   <tr
                     key={order.id}
                     onClick={() => handleRowClick(order)}
-                    className='border-b hover:bg-actionHover cursor-pointer transition-colors'
+                    className={`border-b cursor-pointer transition-colors ${getRowBackgroundColor(order.status)}`}
                   >
                     <td className='p-4'>
                       <Typography variant='body2' className='font-medium'>

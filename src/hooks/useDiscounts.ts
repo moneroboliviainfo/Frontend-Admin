@@ -40,6 +40,17 @@ export const useAddDiscountsToProducts = () => {
   })
 }
 
+export const useApplyDiscountToAll = () => {
+  const queryClient = useQueryClient()
+
+  return useMutation({
+    mutationFn: (discountId: number) => discountService.applyDiscountToAll({ discountId }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['products'] })
+    }
+  })
+}
+
 export const useRemoveDiscountFromProduct = () => {
   const queryClient = useQueryClient()
 

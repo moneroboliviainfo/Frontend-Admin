@@ -5,7 +5,8 @@ import type {
   DiscountResponse,
   AddDiscountsToProductsRequest,
   AddDiscountsToProductsResponse,
-  RemoveDiscountRequest
+  RemoveDiscountRequest,
+  ApplyDiscountToAllRequest
 } from '@/types/api/discounts'
 
 class DiscountServiceClass {
@@ -23,6 +24,11 @@ class DiscountServiceClass {
 
   async addDiscountsToProducts(data: AddDiscountsToProductsRequest): Promise<AddDiscountsToProductsResponse> {
     const response = await apiClient.put<AddDiscountsToProductsResponse>('/api/products/add-discounts', data)
+
+    return response.data
+  }
+  async applyDiscountToAll(data: ApplyDiscountToAllRequest): Promise<AddDiscountsToProductsResponse> {
+    const response = await apiClient.put<AddDiscountsToProductsResponse>('/api/products/add-discounts/all', data)
 
     return response.data
   }

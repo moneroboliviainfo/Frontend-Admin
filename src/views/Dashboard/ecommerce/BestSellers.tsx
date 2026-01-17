@@ -13,9 +13,17 @@ import TablePagination from '@mui/material/TablePagination'
 import Chip from '@mui/material/Chip'
 import Button from '@mui/material/Button'
 import CircularProgress from '@mui/material/CircularProgress'
+import TextField from '@mui/material/TextField'
 
 // Third-party Imports
-import { createColumnHelper, flexRender, getCoreRowModel, useReactTable, getPaginationRowModel, getFilteredRowModel } from '@tanstack/react-table'
+import {
+  createColumnHelper,
+  flexRender,
+  getCoreRowModel,
+  useReactTable,
+  getPaginationRowModel,
+  getFilteredRowModel
+} from '@tanstack/react-table'
 import type { ColumnDef, FilterFn } from '@tanstack/react-table'
 import { rankItem } from '@tanstack/match-sorter-utils'
 
@@ -47,12 +55,14 @@ const BestSellers = () => {
   const { data: bestsellersData, isLoading } = useBestsellers()
   const [rowSelection, setRowSelection] = useState({})
   const [isExportingTotalSales, setIsExportingTotalSales] = useState(false)
+  const [startDate, setStartDate] = useState('')
+  const [endDate, setEndDate] = useState('')
 
   const handleExportTotalSales = async () => {
     setIsExportingTotalSales(true)
 
     try {
-      const blob = await variantService.exportTotalSalesToExcel()
+      const blob = await variantService.exportTotalSalesToExcel(startDate, endDate)
       const url = window.URL.createObjectURL(blob)
       const link = document.createElement('a')
 
@@ -79,7 +89,13 @@ const BestSellers = () => {
 
           return (
             <div className='flex items-center gap-3'>
-              <img src={firstImage} alt={productName} width={40} height={40} style={{ objectFit: 'cover', borderRadius: '4px' }} />
+              <img
+                src={firstImage}
+                alt={productName}
+                width={40}
+                height={40}
+                style={{ objectFit: 'cover', borderRadius: '4px' }}
+              />
               <Typography className='font-medium' color='text.primary'>
                 {productName}
               </Typography>
@@ -94,7 +110,10 @@ const BestSellers = () => {
             label={row.original.productColor.color.name}
             size='small'
             variant='tonal'
-            style={{ backgroundColor: row.original.productColor.color.code + '30', color: row.original.productColor.color.code }}
+            style={{
+              backgroundColor: row.original.productColor.color.code + '30',
+              color: row.original.productColor.color.code
+            }}
           />
         )
       }),
@@ -104,14 +123,7 @@ const BestSellers = () => {
       }),
       columnHelper.accessor('sale', {
         header: 'Vendidos',
-        cell: ({ row }) => (
-          <Chip
-            label={row.original.sale}
-            color='success'
-            size='small'
-            variant='tonal'
-          />
-        )
+        cell: ({ row }) => <Chip label={row.original.sale} color='success' size='small' variant='tonal' />
       }),
       columnHelper.accessor('productColor.product.price', {
         header: 'Precio',
@@ -152,22 +164,40 @@ const BestSellers = () => {
         title='Productos Más Vendidos'
         subheader='Top productos con más ventas'
         action={
-          <Button
-            variant='contained'
-            color='primary'
-            size='small'
-            onClick={handleExportTotalSales}
-            disabled={isExportingTotalSales}
-            startIcon={
-              isExportingTotalSales ? (
-                <CircularProgress size={16} color='inherit' />
-              ) : (
-                <i className='tabler-file-spreadsheet' />
-              )
-            }
-          >
-            {isExportingTotalSales ? 'Exportando...' : 'Excel Ventas Totales'}
-          </Button>
+          <div className='flex items-center gap-2'>
+            <TextField
+              type='date'
+              size='small'
+              label='Fecha Inicio'
+              value={startDate}
+              onChange={e => setStartDate(e.target.value)}
+              InputLabelProps={{ shrink: true }}
+            />
+            <TextField
+              type='date'
+              size='small'
+              label='Fecha Fin'
+              value={endDate}
+              onChange={e => setEndDate(e.target.value)}
+              InputLabelProps={{ shrink: true }}
+            />
+            <Button
+              variant='contained'
+              color='primary'
+              size='small'
+              onClick={handleExportTotalSales}
+              disabled={isExportingTotalSales}
+              startIcon={
+                isExportingTotalSales ? (
+                  <CircularProgress size={16} color='inherit' />
+                ) : (
+                  <i className='tabler-file-spreadsheet' />
+                )
+              }
+            >
+              {isExportingTotalSales ? 'Exportando...' : 'Excel Ventas Totales'}
+            </Button>
+          </div>
         }
       />
       <CardContent>
@@ -191,7 +221,9 @@ const BestSellers = () => {
                     <tr key={headerGroup.id}>
                       {headerGroup.headers.map(header => (
                         <th key={header.id}>
-                          {header.isPlaceholder ? null : flexRender(header.column.columnDef.header, header.getContext())}
+                          {header.isPlaceholder
+                            ? null
+                            : flexRender(header.column.columnDef.header, header.getContext())}
                         </th>
                       ))}
                     </tr>
@@ -207,13 +239,16 @@ const BestSellers = () => {
                   </tbody>
                 ) : (
                   <tbody>
-                    {table.getRowModel().rows.slice(0, table.getState().pagination.pageSize).map(row => (
-                      <tr key={row.id}>
-                        {row.getVisibleCells().map(cell => (
-                          <td key={cell.id}>{flexRender(cell.column.columnDef.cell, cell.getContext())}</td>
-                        ))}
-                      </tr>
-                    ))}
+                    {table
+                      .getRowModel()
+                      .rows.slice(0, table.getState().pagination.pageSize)
+                      .map(row => (
+                        <tr key={row.id}>
+                          {row.getVisibleCells().map(cell => (
+                            <td key={cell.id}>{flexRender(cell.column.columnDef.cell, cell.getContext())}</td>
+                          ))}
+                        </tr>
+                      ))}
                   </tbody>
                 )}
               </table>

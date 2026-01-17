@@ -51,7 +51,8 @@ import {
   useCreatePermanentDiscount,
   useCreateSeasonalDiscount,
   useAddDiscountsToProducts,
-  useRemoveDiscountFromProduct
+  useRemoveDiscountFromProduct,
+  useApplyDiscountToAll
 } from '@/hooks/useDiscounts'
 
 import CustomTextField from '@core/components/mui/TextField'
@@ -127,6 +128,7 @@ const DiscountsListTable = () => {
   })
 
   const [selectedProducts, setSelectedProducts] = useState<number[]>([])
+  const [applyToAll, setApplyToAll] = useState(false)
 
   const [open, setOpen] = useState<boolean>(false)
   const [snackPack, setSnackPack] = useState<SnackbarMessage[]>([])
@@ -136,6 +138,7 @@ const DiscountsListTable = () => {
   const createSeasonalDiscount = useCreateSeasonalDiscount()
   const addDiscountsToProducts = useAddDiscountsToProducts()
   const removeDiscountFromProduct = useRemoveDiscountFromProduct()
+  const applyDiscountToAll = useApplyDiscountToAll()
 
   const queryParams = useMemo(
     () => ({
@@ -184,6 +187,7 @@ const DiscountsListTable = () => {
 
   const handleCloseAddDialog = useCallback(() => {
     setAddDialogOpen(false)
+    setApplyToAll(false)
   }, [])
 
   const handleSelectAll = useCallback(
@@ -223,12 +227,6 @@ const DiscountsListTable = () => {
   }, [allProducts, selectedProducts])
 
   const handleOpenAddDialog = useCallback(() => {
-    if (selectedProducts.length === 0) {
-      showMessage('Debe seleccionar al menos un producto', 'warning')
-
-      return
-    }
-
     setFormData({
       description: '',
       value: 0,
@@ -236,12 +234,13 @@ const DiscountsListTable = () => {
       endDate: null
     })
     setDiscountType('permanent')
+    setApplyToAll(false)
     setAddDialogOpen(true)
-  }, [selectedProducts, showMessage])
+  }, [])
 
   const handleSubmitDiscount = useCallback(async () => {
-    if (selectedProducts.length === 0) {
-      showMessage('Debe seleccionar al menos un producto', 'warning')
+    if (!applyToAll && selectedProducts.length === 0) {
+      showMessage('Debe seleccionar al menos un producto o marcar "Aplicar a todos"', 'warning')
 
       return
     }
@@ -254,6 +253,13 @@ const DiscountsListTable = () => {
 
     if (discountType === 'temporary' && (!formData.startDate || !formData.endDate)) {
       showMessage('Debe seleccionar las fechas de inicio y fin', 'warning')
+
+      return
+    }
+
+    // Solo descuentos temporales pueden aplicarse a todos
+    if (applyToAll && discountType !== 'temporary') {
+      showMessage('Solo los descuentos temporales se pueden aplicar a todos los productos', 'warning')
 
       return
     }
@@ -277,12 +283,17 @@ const DiscountsListTable = () => {
         })
       }
 
-      await addDiscountsToProducts.mutateAsync({
-        productsIds: selectedProducts,
-        discountId: discountResponse.id
-      })
+      if (applyToAll) {
+        await applyDiscountToAll.mutateAsync(discountResponse.id)
+        showMessage('Descuento aplicado a TODOS los productos', 'success')
+      } else {
+        await addDiscountsToProducts.mutateAsync({
+          productsIds: selectedProducts,
+          discountId: discountResponse.id
+        })
+        showMessage(`Descuento aplicado a ${selectedProducts.length} producto(s)`, 'success')
+      }
 
-      showMessage(`Descuento creado y asignado a ${selectedProducts.length} producto(s)`, 'success')
       handleCloseAddDialog()
       setSelectedProducts([])
     } catch (error) {
@@ -290,12 +301,14 @@ const DiscountsListTable = () => {
       showMessage(error instanceof Error ? error.message : 'Error al crear descuento', 'error')
     }
   }, [
+    applyToAll,
     selectedProducts,
     formData,
     discountType,
     createPermanentDiscount,
     createSeasonalDiscount,
     addDiscountsToProducts,
+    applyDiscountToAll,
     handleCloseAddDialog,
     showMessage
   ])
@@ -331,6 +344,7 @@ const DiscountsListTable = () => {
             checked={isAllSelected}
             indeterminate={isIndeterminate}
             onChange={e => handleSelectAll(e.target.checked)}
+            disabled={applyToAll}
           />
         ),
         cell: ({ row }: any) => (
@@ -338,6 +352,7 @@ const DiscountsListTable = () => {
             checked={isProductSelected(row.original.id)}
             onChange={e => handleSelectProduct(row.original.id, e.target.checked)}
             onClick={e => e.stopPropagation()}
+            disabled={applyToAll}
           />
         ),
         enableSorting: false
@@ -498,7 +513,15 @@ const DiscountsListTable = () => {
         }
       }
     ],
-    [isAllSelected, isIndeterminate, handleSelectAll, isProductSelected, handleSelectProduct, handleOpenDeleteDialog]
+    [
+      isAllSelected,
+      isIndeterminate,
+      handleSelectAll,
+      isProductSelected,
+      handleSelectProduct,
+      handleOpenDeleteDialog,
+      applyToAll
+    ]
   )
 
   const table = useReactTable({
@@ -593,7 +616,7 @@ const DiscountsListTable = () => {
           <Alert severity='info'>Actualizando datos...</Alert>
         </Box>
       )}
-      {selectedProducts.length > 0 && (
+      {selectedProducts.length > 0 && !applyToAll && (
         <Box sx={{ px: 3, pb: 2 }}>
           <Alert severity='info' onClose={() => setSelectedProducts([])}>
             {selectedProducts.length} producto(s) seleccionado(s)
@@ -680,12 +703,41 @@ const DiscountsListTable = () => {
                 select
                 label='Tipo de Descuento'
                 value={discountType}
-                onChange={e => setDiscountType(e.target.value as 'permanent' | 'temporary')}
+                onChange={e => {
+                  const newType = e.target.value as 'permanent' | 'temporary'
+
+                  setDiscountType(newType)
+
+                  if (newType === 'permanent') {
+                    setApplyToAll(false)
+                  }
+                }}
                 fullWidth
               >
                 <MenuItem value='permanent'>Descuento Permanente</MenuItem>
                 <MenuItem value='temporary'>Descuento Temporal</MenuItem>
               </CustomTextField>
+
+              {/* Checkbox para aplicar a todos - SOLO para temporales */}
+              {discountType === 'temporary' && (
+                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                  <Checkbox
+                    checked={applyToAll}
+                    onChange={e => {
+                      setApplyToAll(e.target.checked)
+
+                      if (e.target.checked) {
+                        setSelectedProducts([])
+                      }
+                    }}
+                  />
+                  <Typography>Aplicar descuento a TODOS los productos</Typography>
+                </Box>
+              )}
+
+              {applyToAll && (
+                <Alert severity='warning'>Este descuento se aplicará a TODOS los productos de la tienda</Alert>
+              )}
 
               <CustomTextField
                 label='Descripción'

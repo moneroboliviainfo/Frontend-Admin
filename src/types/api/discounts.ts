@@ -36,3 +36,6 @@ export interface AddDiscountsToProductsResponse {
 export interface RemoveDiscountRequest {
   discount: null
 }
+export interface ApplyDiscountToAllRequest {
+  discountId: number
+}

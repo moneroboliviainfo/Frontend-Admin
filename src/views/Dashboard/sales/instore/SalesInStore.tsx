@@ -4,7 +4,19 @@ import React, { useState, useMemo, useRef, useEffect } from 'react'
 
 import { useRouter, useSearchParams } from 'next/navigation'
 
-import { Grid, Box, Alert } from '@mui/material'
+import {
+  Grid,
+  Box,
+  Alert,
+  Dialog,
+  DialogTitle,
+  DialogContent,
+  DialogActions,
+  Button,
+  TextField,
+  CircularProgress,
+  Typography
+} from '@mui/material'
 
 import {
   useAddToCart,
@@ -17,6 +29,7 @@ import {
   useGetOrder,
   useUpdateOrder
 } from '@/hooks/useSales'
+import { useDailyCash, useCreateDailyCash } from '@/hooks/useDailyCash'
 import { useVariants } from '@/hooks/useVariants'
 import type { CartItem, RepriceResponse, Order, GenerateQRResponse } from '@/types/api/sales'
 import type { Variant, VariantSize } from '@/types/api/variants'
@@ -50,6 +63,12 @@ const steps = ['Armando Carrito', 'Verificando Stock', 'Orden Creada', 'Procesan
 const PointOfSale: React.FC = () => {
   const router = useRouter()
   const searchParams = useSearchParams()
+
+  // Estados para la validación de daily cash
+  const [dailyCashModalOpen, setDailyCashModalOpen] = useState(false)
+  const [initialAmount, setInitialAmount] = useState('')
+  const [dailyCashError, setDailyCashError] = useState('')
+
   const [searchTerm, setSearchTerm] = useState('')
   const [debouncedSearch, setDebouncedSearch] = useState('')
   const [cartItems, setCartItems] = useState<CartItemLocal[]>([])
@@ -80,22 +99,28 @@ const PointOfSale: React.FC = () => {
   const timerIntervalRef = useRef<NodeJS.Timeout>()
   const skipDebounceRef = useRef(false)
 
+  // Hooks para daily cash
+  const { data: dailyCashData, isLoading: isDailyCashLoading, error: dailyCashApiError } = useDailyCash()
+  const createDailyCash = useCreateDailyCash()
+
   const addToCartMutation = useAddToCart()
   const repriceMutation = useRepriceCart()
   const createOrderMutation = useCreateOrder()
   const confirmOrderMutation = useConfirmOrder()
   const cancelOrderMutation = useCancelOrder()
   const updateOrderMutation = useUpdateOrder()
-
   const generateQRMutation = useGenerateQR()
 
-  // Query para verificar el pago QR usando el Order ID
   const { data: paymentVerification } = useVerifyPayment(orderData?.id ? String(orderData.id) : '', isVerifyingPayment)
-
-  // Query para cargar la orden en edición
   const { data: editingOrderData, isLoading: isLoadingEditingOrder } = useGetOrder(editingOrderId, !!editingOrderId)
-
   const { data: variantsData, isLoading: isLoadingVariants } = useVariants(variantsPage, variantsLimit, debouncedSearch)
+
+  // Verificar daily cash al montar el componente
+  useEffect(() => {
+    if (!isDailyCashLoading && dailyCashApiError) {
+      setDailyCashModalOpen(true)
+    }
+  }, [isDailyCashLoading, dailyCashApiError])
 
   // Detectar si estamos en modo edición al cargar el componente
   useEffect(() => {
@@ -115,7 +140,7 @@ const PointOfSale: React.FC = () => {
   useEffect(() => {
     if (editingOrderData && isEditingOrder && editingOrderData.items) {
       const loadedCartItems: CartItemLocal[] = editingOrderData.items
-        .filter(item => item.variant && item.variant.id) // Filtrar items sin variant
+        .filter(item => item.variant && item.variant.id)
         .map(item => ({
           variantId: item.variant.id,
           quantity: item.quantity,
@@ -145,9 +170,8 @@ const PointOfSale: React.FC = () => {
     const qrMatch = searchTerm.match(/<qr>\d+<\/qr>/)
 
     if (qrMatch) {
-      // Enviar el formato completo al backend
       setDebouncedSearch(searchTerm)
-      setVariantsPage(1) // Resetear página del backend
+      setVariantsPage(1)
       skipDebounceRef.current = true
 
       setTimeout(() => {
@@ -165,7 +189,7 @@ const PointOfSale: React.FC = () => {
 
     debounceTimerRef.current = setTimeout(() => {
       setDebouncedSearch(searchTerm)
-      setVariantsPage(1) // Resetear página del backend
+      setVariantsPage(1)
     }, 500)
 
     return () => {
@@ -238,7 +262,6 @@ const PointOfSale: React.FC = () => {
       )
       .filter(item => item.variantSizeId)
   }, [variantsData])
-
 
   const formatCurrency = (amount: number | string) => {
     const numAmount = typeof amount === 'string' ? parseFloat(amount) : amount
@@ -313,8 +336,6 @@ const PointOfSale: React.FC = () => {
     setErrorMessage('')
     setTimeRemaining(0)
     setOrderExpiresAt(null)
-
-    // Limpiar datos del QR y detener verificación
     setQrData(null)
     setIsVerifyingPayment(false)
 
@@ -389,7 +410,6 @@ const PointOfSale: React.FC = () => {
     setSelectedPayment(paymentType)
 
     if (orderData) {
-      // Si ya existe una orden y seleccionamos QR, generar el código QR inmediatamente
       if (paymentType === 'qr') {
         try {
           setErrorMessage('')
@@ -439,14 +459,13 @@ const PointOfSale: React.FC = () => {
       const expirationDate = new Date()
 
       if (paymentType === 'qr') {
-        expirationDate.setMinutes(expirationDate.getMinutes() + 15) // 15 min para QR
+        expirationDate.setMinutes(expirationDate.getMinutes() + 15)
       } else {
-        expirationDate.setMinutes(expirationDate.getMinutes() + 25) // 25 min para efectivo/tarjeta
+        expirationDate.setMinutes(expirationDate.getMinutes() + 25)
       }
 
       setOrderExpiresAt(expirationDate)
 
-      // Si el método de pago es QR, generar el código QR automáticamente
       if (paymentType === 'qr') {
         setCurrentStep('PAYMENT')
         setActiveStepIndex(3)
@@ -468,12 +487,10 @@ const PointOfSale: React.FC = () => {
   }
 
   const confirmPayment = async () => {
-    // Si estamos en modo edición, confirmar la edición
     if (isEditingOrder && editingOrderId) {
       return confirmEditOrder()
     }
 
-    // Modo normal: confirmar pago
     if (!orderData) {
       setErrorMessage('No hay orden creada')
 
@@ -583,7 +600,6 @@ const PointOfSale: React.FC = () => {
 
   const handleCloseWithoutOrder = () => {
     setShowPaymentDialog(false)
-
     setCurrentStep('BUILDING_CART')
     setActiveStepIndex(0)
     setRepriceData(null)
@@ -592,8 +608,6 @@ const PointOfSale: React.FC = () => {
     setOrderData(null)
     setTimeRemaining(0)
     setOrderExpiresAt(null)
-
-    // Limpiar datos del QR y detener verificación al cerrar sin orden
     setQrData(null)
     setIsVerifyingPayment(false)
 
@@ -627,6 +641,107 @@ const PointOfSale: React.FC = () => {
   }
 
   const timerProgress = orderExpiresAt ? (timeRemaining / (selectedPayment === 'qr' ? 15 * 60 : 25 * 60)) * 100 : 100
+
+  const handleSubmitDailyCash = async () => {
+    setDailyCashError('')
+
+    const amount = parseFloat(initialAmount)
+
+    if (isNaN(amount) || amount <= 0) {
+      setDailyCashError('Debe ingresar un monto válido mayor a 0')
+
+      return
+    }
+
+    try {
+      await createDailyCash.mutateAsync({
+        quantity: amount.toFixed(2)
+      })
+
+      setDailyCashModalOpen(false)
+      setInitialAmount('')
+    } catch (error: any) {
+      console.error('Error al crear daily cash:', error)
+      setDailyCashError(error?.response?.data?.message || 'Error al registrar el valor inicial')
+    }
+  }
+
+  if (isDailyCashLoading) {
+    return (
+      <Box
+        sx={{
+          height: 'calc(100vh - 180px)',
+          display: 'flex',
+          justifyContent: 'center',
+          alignItems: 'center',
+          flexDirection: 'column'
+        }}
+      >
+        <CircularProgress size={60} />
+        <Typography sx={{ mt: 3 }}>Verificando registro del día...</Typography>
+      </Box>
+    )
+  }
+
+  // Mostrar modal si no existe daily cash
+  if (dailyCashModalOpen) {
+    return (
+      <>
+        <Box
+          sx={{
+            height: 'calc(100vh - 180px)',
+            display: 'flex',
+            justifyContent: 'center',
+            alignItems: 'center',
+            bgcolor: 'background.default'
+          }}
+        >
+          <Typography variant='h6' color='text.secondary'>
+            Cargando punto de venta...
+          </Typography>
+        </Box>
+
+        <Dialog open={dailyCashModalOpen} disableEscapeKeyDown maxWidth='sm' fullWidth>
+          <DialogTitle>Valor Inicial del Día</DialogTitle>
+          <DialogContent>
+            <Box sx={{ pt: 2 }}>
+              <Alert severity='warning' sx={{ mb: 3 }}>
+                Debe registrar el valor inicial de caja para el día de hoy antes de iniciar ventas
+              </Alert>
+
+              <TextField
+                label='Monto Inicial (Bs)'
+                type='number'
+                value={initialAmount}
+                onChange={e => setInitialAmount(e.target.value)}
+                fullWidth
+                autoFocus
+                inputProps={{
+                  min: 0,
+                  step: 0.01
+                }}
+                error={!!dailyCashError}
+                helperText={dailyCashError}
+              />
+            </Box>
+          </DialogContent>
+          <DialogActions>
+            <Button onClick={() => router.push('/home')} color='secondary'>
+              Cancelar
+            </Button>
+            <Button
+              onClick={handleSubmitDailyCash}
+              variant='contained'
+              color='primary'
+              disabled={createDailyCash.isPending}
+            >
+              {createDailyCash.isPending ? 'Guardando...' : 'Registrar'}
+            </Button>
+          </DialogActions>
+        </Dialog>
+      </>
+    )
+  }
 
   return (
     <Box
@@ -712,7 +827,6 @@ const PointOfSale: React.FC = () => {
           setShowSuccessDialog(false)
 
           if (isEditingOrder) {
-            // Si estamos en modo edición, redirige a la lista de ventas
             router.push('/sales/list')
           } else {
             clearCart()
