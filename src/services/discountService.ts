@@ -38,6 +38,14 @@ class DiscountServiceClass {
 
     await apiClient.patch(`/api/products/${productId}`, data)
   }
+
+  async deleteAllPermanentDiscounts(): Promise<void> {
+    await apiClient.delete('/api/discounts/permanents')
+  }
+
+  async deleteAllSeasonalDiscounts(): Promise<void> {
+    await apiClient.delete('/api/discounts/seasonals')
+  }
 }
 
 export const discountService = new DiscountServiceClass()

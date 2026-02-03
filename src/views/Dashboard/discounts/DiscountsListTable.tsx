@@ -52,7 +52,9 @@ import {
   useCreateSeasonalDiscount,
   useAddDiscountsToProducts,
   useRemoveDiscountFromProduct,
-  useApplyDiscountToAll
+  useApplyDiscountToAll,
+  useDeleteAllPermanentDiscounts,
+  useDeleteAllSeasonalDiscounts
 } from '@/hooks/useDiscounts'
 
 import CustomTextField from '@core/components/mui/TextField'
@@ -117,6 +119,8 @@ const DiscountsListTable = () => {
 
   const [addDialogOpen, setAddDialogOpen] = useState(false)
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false)
+  const [deleteAllPermanentDialogOpen, setDeleteAllPermanentDialogOpen] = useState(false)
+  const [deleteAllSeasonalDialogOpen, setDeleteAllSeasonalDialogOpen] = useState(false)
   const [productToRemoveDiscount, setProductToRemoveDiscount] = useState<number | null>(null)
   const [discountType, setDiscountType] = useState<'permanent' | 'temporary'>('permanent')
 
@@ -139,6 +143,8 @@ const DiscountsListTable = () => {
   const addDiscountsToProducts = useAddDiscountsToProducts()
   const removeDiscountFromProduct = useRemoveDiscountFromProduct()
   const applyDiscountToAll = useApplyDiscountToAll()
+  const deleteAllPermanentDiscounts = useDeleteAllPermanentDiscounts()
+  const deleteAllSeasonalDiscounts = useDeleteAllSeasonalDiscounts()
 
   const queryParams = useMemo(
     () => ({
@@ -257,7 +263,6 @@ const DiscountsListTable = () => {
       return
     }
 
-    // Solo descuentos temporales pueden aplicarse a todos
     if (applyToAll && discountType !== 'temporary') {
       showMessage('Solo los descuentos temporales se pueden aplicar a todos los productos', 'warning')
 
@@ -334,6 +339,26 @@ const DiscountsListTable = () => {
       }
     }
   }, [productToRemoveDiscount, removeDiscountFromProduct, showMessage, handleCloseDeleteDialog])
+
+  const handleConfirmDeleteAllPermanent = useCallback(async () => {
+    try {
+      await deleteAllPermanentDiscounts.mutateAsync()
+      showMessage('Todos los descuentos permanentes han sido eliminados', 'success')
+      setDeleteAllPermanentDialogOpen(false)
+    } catch (error) {
+      showMessage('Error al eliminar descuentos permanentes', 'error')
+    }
+  }, [deleteAllPermanentDiscounts, showMessage])
+
+  const handleConfirmDeleteAllSeasonal = useCallback(async () => {
+    try {
+      await deleteAllSeasonalDiscounts.mutateAsync()
+      showMessage('Todos los descuentos temporales han sido eliminados', 'success')
+      setDeleteAllSeasonalDialogOpen(false)
+    } catch (error) {
+      showMessage('Error al eliminar descuentos temporales', 'error')
+    }
+  }, [deleteAllSeasonalDiscounts, showMessage])
 
   const columns = useMemo<ColumnDef<any, any>[]>(
     () => [
@@ -587,6 +612,24 @@ const DiscountsListTable = () => {
         />
         <Box className='flex gap-4'>
           <Button
+            variant='outlined'
+            color='error'
+            onClick={() => setDeleteAllSeasonalDialogOpen(true)}
+            startIcon={<i className='tabler-trash' />}
+            disabled={deleteAllSeasonalDiscounts.isPending}
+          >
+            Quitar Temporales
+          </Button>
+          <Button
+            variant='outlined'
+            color='error'
+            onClick={() => setDeleteAllPermanentDialogOpen(true)}
+            startIcon={<i className='tabler-trash' />}
+            disabled={deleteAllPermanentDiscounts.isPending}
+          >
+            Quitar Permanentes
+          </Button>
+          <Button
             variant='contained'
             color='primary'
             onClick={handleOpenAddDialog}
@@ -816,6 +859,50 @@ const DiscountsListTable = () => {
           </Button>
           <Button onClick={handleConfirmRemoveDiscount} color='error' variant='contained'>
             Eliminar
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      <Dialog open={deleteAllPermanentDialogOpen} onClose={() => setDeleteAllPermanentDialogOpen(false)}>
+        <DialogTitle>Eliminar todos los descuentos permanentes</DialogTitle>
+        <DialogContent>
+          <DialogContentText>
+            ¿Estás seguro de que deseas eliminar TODOS los descuentos permanentes? Esta acción no se puede deshacer.
+          </DialogContentText>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setDeleteAllPermanentDialogOpen(false)} color='secondary'>
+            Cancelar
+          </Button>
+          <Button
+            onClick={handleConfirmDeleteAllPermanent}
+            color='error'
+            variant='contained'
+            disabled={deleteAllPermanentDiscounts.isPending}
+          >
+            {deleteAllPermanentDiscounts.isPending ? 'Eliminando...' : 'Eliminar Todos'}
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      <Dialog open={deleteAllSeasonalDialogOpen} onClose={() => setDeleteAllSeasonalDialogOpen(false)}>
+        <DialogTitle>Eliminar todos los descuentos temporales</DialogTitle>
+        <DialogContent>
+          <DialogContentText>
+            ¿Estás seguro de que deseas eliminar TODOS los descuentos temporales? Esta acción no se puede deshacer.
+          </DialogContentText>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setDeleteAllSeasonalDialogOpen(false)} color='secondary'>
+            Cancelar
+          </Button>
+          <Button
+            onClick={handleConfirmDeleteAllSeasonal}
+            color='error'
+            variant='contained'
+            disabled={deleteAllSeasonalDiscounts.isPending}
+          >
+            {deleteAllSeasonalDiscounts.isPending ? 'Eliminando...' : 'Eliminar Todos'}
           </Button>
         </DialogActions>
       </Dialog>

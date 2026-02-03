@@ -61,3 +61,25 @@ export const useRemoveDiscountFromProduct = () => {
     }
   })
 }
+
+export const useDeleteAllPermanentDiscounts = () => {
+  const queryClient = useQueryClient()
+
+  return useMutation({
+    mutationFn: () => discountService.deleteAllPermanentDiscounts(),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['products'] })
+    }
+  })
+}
+
+export const useDeleteAllSeasonalDiscounts = () => {
+  const queryClient = useQueryClient()
+
+  return useMutation({
+    mutationFn: () => discountService.deleteAllSeasonalDiscounts(),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['products'] })
+    }
+  })
+}

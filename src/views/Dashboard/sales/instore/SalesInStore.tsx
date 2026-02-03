@@ -64,7 +64,6 @@ const PointOfSale: React.FC = () => {
   const router = useRouter()
   const searchParams = useSearchParams()
 
-  // Estados para la validación de daily cash
   const [dailyCashModalOpen, setDailyCashModalOpen] = useState(false)
   const [initialAmount, setInitialAmount] = useState('')
   const [dailyCashError, setDailyCashError] = useState('')
@@ -87,11 +86,9 @@ const PointOfSale: React.FC = () => {
   const [variantsPage, setVariantsPage] = useState(1)
   const [variantsLimit] = useState(10)
 
-  // Estados para el flujo de pago con QR
   const [qrData, setQrData] = useState<GenerateQRResponse | null>(null)
   const [isVerifyingPayment, setIsVerifyingPayment] = useState(false)
 
-  // Estados para el modo de edición
   const [isEditingOrder, setIsEditingOrder] = useState(false)
   const [editingOrderId, setEditingOrderId] = useState<number | null>(null)
 
@@ -99,7 +96,6 @@ const PointOfSale: React.FC = () => {
   const timerIntervalRef = useRef<NodeJS.Timeout>()
   const skipDebounceRef = useRef(false)
 
-  // Hooks para daily cash
   const { data: dailyCashData, isLoading: isDailyCashLoading, error: dailyCashApiError } = useDailyCash()
   const createDailyCash = useCreateDailyCash()
 
@@ -115,14 +111,12 @@ const PointOfSale: React.FC = () => {
   const { data: editingOrderData, isLoading: isLoadingEditingOrder } = useGetOrder(editingOrderId, !!editingOrderId)
   const { data: variantsData, isLoading: isLoadingVariants } = useVariants(variantsPage, variantsLimit, debouncedSearch)
 
-  // Verificar daily cash al montar el componente
   useEffect(() => {
     if (!isDailyCashLoading && dailyCashApiError) {
       setDailyCashModalOpen(true)
     }
   }, [isDailyCashLoading, dailyCashApiError])
 
-  // Detectar si estamos en modo edición al cargar el componente
   useEffect(() => {
     const editOrderIdParam = searchParams.get('editOrderId')
 
@@ -136,7 +130,6 @@ const PointOfSale: React.FC = () => {
     }
   }, [searchParams])
 
-  // Cargar la orden en el carrito cuando se obtienen los datos
   useEffect(() => {
     if (editingOrderData && isEditingOrder && editingOrderData.items) {
       const loadedCartItems: CartItemLocal[] = editingOrderData.items
@@ -647,8 +640,8 @@ const PointOfSale: React.FC = () => {
 
     const amount = parseFloat(initialAmount)
 
-    if (isNaN(amount) || amount <= 0) {
-      setDailyCashError('Debe ingresar un monto válido mayor a 0')
+    if (isNaN(amount) || amount < 0) {
+      setDailyCashError('Debe ingresar un monto válido (0 o mayor)')
 
       return
     }
