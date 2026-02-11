@@ -20,18 +20,32 @@ const VariantMediaUploader = ({ mediaFiles, onFilesChange, error, onErrorChange,
   const fileInputRef = useRef<HTMLInputElement>(null)
   const [isDragging, setIsDragging] = useState(false)
 
+  const MAX_FILE_SIZE_MB = 3
+  const MAX_FILE_SIZE_BYTES = MAX_FILE_SIZE_MB * 1024 * 1024
+
   const isValidFileType = (file: File): boolean => {
     const validTypes = ['image/jpeg', 'image/jpg', 'image/png', 'image/webp', 'video/mp4', 'application/pdf']
 
     return validTypes.includes(file.type)
   }
 
+  const isValidFileSize = (file: File): boolean => {
+    return file.size <= MAX_FILE_SIZE_BYTES
+  }
+
   const processFiles = (files: FileList) => {
     const newFiles: MediaFile[] = []
     const invalidFiles: string[] = []
+    const oversizedFiles: string[] = []
 
     Array.from(files).forEach(file => {
-      if (isValidFileType(file)) {
+      if (!isValidFileType(file)) {
+        invalidFiles.push(file.name)
+      } else if (!isValidFileSize(file)) {
+        const sizeMB = (file.size / (1024 * 1024)).toFixed(2)
+
+        oversizedFiles.push(`${file.name} (${sizeMB}MB)`)
+      } else {
         const mediaFile: MediaFile = {
           id: Date.now() + Math.random().toString(),
           file,
@@ -42,14 +56,17 @@ const VariantMediaUploader = ({ mediaFiles, onFilesChange, error, onErrorChange,
         }
 
         newFiles.push(mediaFile)
-      } else {
-        invalidFiles.push(file.name)
       }
     })
 
     if (invalidFiles.length > 0) {
       onErrorChange(`Formato no válido: ${invalidFiles.join(', ')}. Solo se permiten JPG, JPEG, PNG, WEBP, MP4, PDF`)
       toast.error(`${invalidFiles.length} archivo(s) con formato no válido`)
+    }
+
+    if (oversizedFiles.length > 0) {
+      onErrorChange(`Archivo(s) muy grande(s): ${oversizedFiles.join(', ')}. Máximo ${MAX_FILE_SIZE_MB}MB`)
+      toast.error(`${oversizedFiles.length} archivo(s) exceden el límite de ${MAX_FILE_SIZE_MB}MB`)
     }
 
     if (newFiles.length > 0) {
@@ -159,7 +176,7 @@ const VariantMediaUploader = ({ mediaFiles, onFilesChange, error, onErrorChange,
           {isDragging ? 'Suelta aquí los archivos' : 'Arrastra imágenes/videos o haz clic para seleccionar'}
         </Typography>
         <Typography variant='caption' color={error ? 'error' : 'text.secondary'}>
-          Formatos: JPG, JPEG, PNG, WEBP, MP4, PDF
+          Formatos: JPG, JPEG, PNG, WEBP, MP4, PDF (máx. 3MB por archivo)
         </Typography>
       </Box>
 

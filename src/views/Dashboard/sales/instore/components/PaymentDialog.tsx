@@ -1,4 +1,4 @@
-import React from 'react'
+import React, { useState, useMemo, useEffect } from 'react'
 
 import {
   Dialog,
@@ -12,7 +12,9 @@ import {
   Card,
   CardContent,
   CircularProgress,
-  LinearProgress
+  LinearProgress,
+  TextField,
+  Alert
 } from '@mui/material'
 import Grid from '@mui/material/Grid2'
 
@@ -62,6 +64,36 @@ const PaymentDialog: React.FC<PaymentDialogProps> = ({
   isEditingOrder = false,
   editingOrderId = null
 }) => {
+  const [cashReceived, setCashReceived] = useState<string>('')
+
+  const totalToPay = useMemo(() => {
+    if (orderData) {
+      return typeof orderData.totalPrice === 'string'
+        ? parseFloat(orderData.totalPrice)
+        : orderData.totalPrice
+    }
+
+    if (repriceData) {
+      return parseFloat(repriceData.total)
+    }
+
+    return 0
+  }, [orderData, repriceData])
+
+  const cashChange = useMemo(() => {
+    const received = parseFloat(cashReceived)
+
+    if (isNaN(received) || received <= 0) return null
+
+    return received - totalToPay
+  }, [cashReceived, totalToPay])
+
+  useEffect(() => {
+    if (!open || selectedPayment !== 'cash') {
+      setCashReceived('')
+    }
+  }, [open, selectedPayment])
+
   const formatCurrency = (amount: number | string) => {
     const numAmount = typeof amount === 'string' ? parseFloat(amount) : amount
 
@@ -224,11 +256,48 @@ const PaymentDialog: React.FC<PaymentDialogProps> = ({
         )}
 
         {selectedPayment === 'cash' && (
-          <Paper sx={{ p: 4, mt: 3, textAlign: 'center', bgcolor: 'success.lighter' }}>
-            <Typography sx={{ fontSize: '4rem', mb: 2 }}>💵</Typography>
-            <Typography variant='h6' fontWeight='bold'>
-              Pago en Efectivo
-            </Typography>
+          <Paper sx={{ p: 4, mt: 3, bgcolor: 'success.lighter' }}>
+            <Box sx={{ textAlign: 'center', mb: 3 }}>
+              <Typography sx={{ fontSize: '3rem', mb: 1 }}>💵</Typography>
+              <Typography variant='h6' fontWeight='bold'>
+                Pago en Efectivo
+              </Typography>
+            </Box>
+
+            <TextField
+              fullWidth
+              label='Monto recibido (Bs)'
+              type='number'
+              value={cashReceived}
+              onChange={e => setCashReceived(e.target.value)}
+              placeholder='0.00'
+              slotProps={{
+                htmlInput: { min: 0, step: 0.01 }
+              }}
+              sx={{
+                mb: 2,
+                '& .MuiOutlinedInput-root': {
+                  backgroundColor: 'white'
+                }
+              }}
+            />
+
+            {cashChange !== null && (
+              <Alert
+                severity={cashChange >= 0 ? 'success' : 'error'}
+                sx={{ mt: 2 }}
+                icon={cashChange >= 0 ? <span>💰</span> : <span>⚠️</span>}
+              >
+                <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', width: '100%' }}>
+                  <Typography variant='body1' fontWeight='bold'>
+                    {cashChange >= 0 ? 'Cambio a devolver:' : 'Falta:'}
+                  </Typography>
+                  <Typography variant='h5' fontWeight='bold'>
+                    Bs {Math.abs(cashChange).toFixed(2)}
+                  </Typography>
+                </Box>
+              </Alert>
+            )}
           </Paper>
         )}
 
