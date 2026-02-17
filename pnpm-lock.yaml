@@ -77,6 +77,9 @@ importers:
       keen-slider:
         specifier: ^6.8.6
         version: 6.8.6
+      logrocket:
+        specifier: ^12.0.0
+        version: 12.0.0
       next:
         specifier: ^15.5.9
         version: 15.5.9(react-dom@18.3.1(react@18.3.1))(react@18.3.1)
@@ -2505,6 +2508,9 @@ packages:
 
   lodash.truncate@4.4.2:
     resolution: {integrity: sha512-jttmRe7bRse52OsWIMDLaXxWqRAmtIUccAQ3garviCqJjafXOfNMO0yMfNpdD6zbGaTU0P5Nz7e7gAT6cKmJRw==}
+
+  logrocket@12.0.0:
+    resolution: {integrity: sha512-7VUI2gi3XxACLqJGZJ/8hRx3KT7z2joNXcBqbefkfWI6rLqMJOq0LUmfLbw3qRPPZTjOBiwpKKVecusL3V5K7Q==}
 
   loose-envify@1.4.0:
     resolution: {integrity: sha512-lyuxPGr/Wfhrlem2CL/UcnUc1zcqKAImBDzukY7Y5F/yQiNdko6+fRLevlw1HgMySw7f611UIY408EtxRSoK3Q==}
@@ -6031,6 +6037,8 @@ snapshots:
   lodash.merge@4.6.2: {}
 
   lodash.truncate@4.4.2: {}
+
+  logrocket@12.0.0: {}
 
   loose-envify@1.4.0:
     dependencies:
