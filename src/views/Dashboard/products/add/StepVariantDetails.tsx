@@ -1,4 +1,5 @@
-import { useState, useRef, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
+import type { SyntheticEvent } from 'react'
 
 import { useRouter } from 'next/navigation'
 
@@ -16,10 +17,13 @@ import Alert from '@mui/material/Alert'
 import Card from '@mui/material/Card'
 import CardContent from '@mui/material/CardContent'
 import CardHeader from '@mui/material/CardHeader'
+import Backdrop from '@mui/material/Backdrop'
+import LinearProgress from '@mui/material/LinearProgress'
+import Snackbar from '@mui/material/Snackbar'
+import Fade from '@mui/material/Fade'
 import { useQueryClient } from '@tanstack/react-query'
 
 import CircularProgress from '@mui/material/CircularProgress'
-import { toast } from 'react-toastify'
 import { HexColorPicker } from 'react-colorful'
 
 import { z } from 'zod'
@@ -43,6 +47,12 @@ import VariantsList from './components/VariantsList'
 import VariantMediaUploader from './components/VariantMediaUploader'
 import AddStockModal from './components/AddStockModal'
 import SubtractStockModal from './components/SubtractStockModal'
+
+type SnackbarMessage = {
+  key: number
+  message: string
+  severity: 'success' | 'error' | 'info' | 'warning'
+}
 
 type Props = {
   activeStep: number
@@ -74,6 +84,14 @@ const StepVariantDetails = ({ activeStep, handlePrev, steps, mode, productId, pr
   const [sizesError, setSizesError] = useState<string | null>(null)
   const [addStockModalOpen, setAddStockModalOpen] = useState(false)
   const [subtractStockModalOpen, setSubtractStockModalOpen] = useState(false)
+  const [isMediaUploading, setIsMediaUploading] = useState(false)
+  const [isSavingVariant, setIsSavingVariant] = useState(false)
+  const [savingMessage, setSavingMessage] = useState('')
+
+  // Snackbar states
+  const [snackbarOpen, setSnackbarOpen] = useState(false)
+  const [snackPack, setSnackPack] = useState<SnackbarMessage[]>([])
+  const [messageInfo, setMessageInfo] = useState<SnackbarMessage | undefined>(undefined)
 
   const [colorModalOpen, setColorModalOpen] = useState(false)
 
@@ -95,6 +113,30 @@ const StepVariantDetails = ({ activeStep, handlePrev, steps, mode, productId, pr
   const updateVariant = useUpdateVariant()
   const deleteMultimedia = useDeleteMultimedia()
   const isCreateMode = mode === 'create'
+
+  // Snackbar logic
+  useEffect(() => {
+    if (snackPack.length && !messageInfo) {
+      setSnackbarOpen(true)
+      setSnackPack(prev => prev.slice(1))
+      setMessageInfo({ ...snackPack[0] })
+    } else if (snackPack.length && messageInfo && snackbarOpen) {
+      setSnackbarOpen(false)
+    }
+  }, [snackPack, messageInfo, snackbarOpen])
+
+  const showMessage = useCallback((message: string, severity: 'success' | 'error' | 'info' | 'warning') => {
+    setSnackPack(prev => [...prev, { message, severity, key: new Date().getTime() }])
+  }, [])
+
+  const handleSnackbarClose = (_event: Event | SyntheticEvent, reason?: string) => {
+    if (reason === 'clickaway') return
+    setSnackbarOpen(false)
+  }
+
+  const handleSnackbarExited = () => {
+    setMessageInfo(undefined)
+  }
 
   const detectFileType = (url: string): 'image' | 'video' | 'document' => {
     const ext = url.split('.').pop()?.toLowerCase() || ''
@@ -202,7 +244,7 @@ const StepVariantDetails = ({ activeStep, handlePrev, steps, mode, productId, pr
           }
         })
 
-        toast.error(validation.error.issues[0].message)
+        showMessage(validation.error.issues[0].message, 'error')
 
         return
       }
@@ -212,10 +254,14 @@ const StepVariantDetails = ({ activeStep, handlePrev, steps, mode, productId, pr
       const selectedColor = getSelectedColor()
 
       if (!selectedColor || !selectedColor.name) {
-        toast.error('Selecciona un color')
+        showMessage('Selecciona un color', 'error')
 
         return
       }
+
+      // Activar overlay de carga
+      setIsSavingVariant(true)
+      setSavingMessage('Preparando archivos...')
 
       const newMultimediaFiles = validatedData.mediaFiles.filter(f => f.source === 'new' && f.type !== 'document')
       const newPdfFiles = validatedData.mediaFiles.filter(f => f.source === 'new' && f.type === 'document')
@@ -232,12 +278,14 @@ const StepVariantDetails = ({ activeStep, handlePrev, steps, mode, productId, pr
       let uploadedPdfUrls: string[] = []
 
       if (newMultimediaFiles.length > 0) {
+        setSavingMessage(`Subiendo ${newMultimediaFiles.length} imagen(es)/video(s)...`)
         const uploaded = await uploadMultimedia.mutateAsync(newMultimediaFiles.map(f => f.file!))
 
         uploadedMultimediaUrls = uploaded.map((file: any) => (typeof file === 'string' ? file : file.url))
       }
 
       if (newPdfFiles.length > 0) {
+        setSavingMessage(`Subiendo ${newPdfFiles.length} documento(s) PDF...`)
         const uploaded = await uploadMultimedia.mutateAsync(newPdfFiles.map(f => f.file!))
 
         uploadedPdfUrls = uploaded.map((file: any) => (typeof file === 'string' ? file : file.url))
@@ -264,6 +312,8 @@ const StepVariantDetails = ({ activeStep, handlePrev, steps, mode, productId, pr
           }))
 
       if (isEditing && editingVariantId) {
+        setSavingMessage('Actualizando variante...')
+
         const updateData = {
           multimedia: finalMultimediaUrls,
           pdfs: finalPdfUrls,
@@ -276,11 +326,14 @@ const StepVariantDetails = ({ activeStep, handlePrev, steps, mode, productId, pr
           id: editingVariantId,
           data: updateData
         })
+        setSavingMessage('Actualizando lista de variantes...')
         await queryClient.refetchQueries({
           queryKey: ['variants', 'product', parseInt(productId!)]
         })
-        toast.success('Variante actualizada exitosamente')
+        showMessage('Variante actualizada exitosamente', 'success')
       } else {
+        setSavingMessage('Guardando variante...')
+
         const createData = {
           multimedia: finalMultimediaUrls,
           pdfs: finalPdfUrls,
@@ -291,13 +344,13 @@ const StepVariantDetails = ({ activeStep, handlePrev, steps, mode, productId, pr
         }
 
         await createVariant.mutateAsync(createData)
-        toast.success('Variante guardada exitosamente')
+        showMessage('Variante guardada exitosamente', 'success')
       }
 
       handleClearForm()
     } catch (error) {
       if (error instanceof z.ZodError) {
-        toast.error(error.issues[0]?.message || 'Error de validación')
+        showMessage(error.issues[0]?.message || 'Error de validación', 'error')
         console.error('Errores de validación:', error.format())
 
         return
@@ -305,38 +358,55 @@ const StepVariantDetails = ({ activeStep, handlePrev, steps, mode, productId, pr
 
       const apiError = error as any
 
+      // Detectar error de timeout
+      if (apiError?.code === 'ECONNABORTED' || apiError?.message?.includes('timeout')) {
+        showMessage('La conexión tardó demasiado. Verifica tu internet e intenta de nuevo.', 'error')
+
+        return
+      }
+
+      // Detectar error de red
+      if (apiError?.code === 'ERR_NETWORK' || apiError?.message?.includes('Network Error')) {
+        showMessage('Error de conexión. Verifica tu internet e inténtalo de nuevo.', 'error')
+
+        return
+      }
+
       if (apiError?.response?.status === 409) {
         const selectedColor = getSelectedColor()
         const errorMsg = `Ya existe una variante con el color "${selectedColor?.name}". Por favor, selecciona otro color.`
 
         setColorError(errorMsg)
-        toast.error(errorMsg)
+        showMessage(errorMsg, 'error')
 
         return
       } else if (apiError?.response?.status === 400) {
         const message = apiError?.response?.data?.message
 
         if (Array.isArray(message)) {
-          toast.error(`Error: ${message.join(', ')}`)
+          showMessage(`Error: ${message.join(', ')}`, 'error')
         } else if (typeof message === 'string') {
-          toast.error(`Error: ${message}`)
+          showMessage(`Error: ${message}`, 'error')
         } else {
-          toast.error('Datos inválidos. Verifica todos los campos.')
+          showMessage('Datos inválidos. Verifica todos los campos.', 'error')
         }
       } else if (apiError?.message?.includes('multimedia')) {
-        toast.error('Error al procesar los archivos. Inténtalo de nuevo.')
+        showMessage('Error al procesar los archivos. Inténtalo de nuevo.', 'error')
       } else {
-        toast.error(isEditing ? 'Error al actualizar la variante' : 'Error al guardar la variante')
+        showMessage(isEditing ? 'Error al actualizar la variante' : 'Error al guardar la variante', 'error')
       }
 
       console.error('Error completo:', error)
+    } finally {
+      setIsSavingVariant(false)
+      setSavingMessage('')
     }
   }
 
   const handleFinish = async () => {
     try {
       if (!existingVariants?.variants || existingVariants.variants.length === 0) {
-        toast.error('Debes crear al menos una variante antes de finalizar')
+        showMessage('Debes crear al menos una variante antes de finalizar', 'error')
 
         return
       }
@@ -344,16 +414,16 @@ const StepVariantDetails = ({ activeStep, handlePrev, steps, mode, productId, pr
       setIsSubmitting(true)
 
       if (isCreateMode) {
-        toast.success('Producto creado exitosamente con sus variantes')
+        showMessage('Producto creado exitosamente con sus variantes', 'success')
       } else {
-        toast.success('Producto actualizado exitosamente')
+        showMessage('Producto actualizado exitosamente', 'success')
       }
 
       setTimeout(() => {
         router.push('/products/list')
       }, 1500)
     } catch (error) {
-      toast.error('Error al finalizar')
+      showMessage('Error al finalizar', 'error')
       console.error(error)
     } finally {
       setIsSubmitting(false)
@@ -363,14 +433,14 @@ const StepVariantDetails = ({ activeStep, handlePrev, steps, mode, productId, pr
   const handleDeleteExistingFile = async (url: string) => {
     try {
       await deleteMultimedia.mutateAsync([url])
-      toast.success('Archivo eliminado ')
+      showMessage('Archivo eliminado', 'success')
 
       setVariantForm(prev => ({
         ...prev,
         mediaFiles: prev.mediaFiles.filter(file => file.url !== url)
       }))
     } catch (error) {
-      toast.error('Error al eliminar el archivo')
+      showMessage('Error al eliminar el archivo', 'error')
     }
   }
 
@@ -457,10 +527,10 @@ const StepVariantDetails = ({ activeStep, handlePrev, steps, mode, productId, pr
         }))
       }
 
-      toast.info(`Color cargado: ${colorToLoad.name}`)
+      showMessage(`Color cargado: ${colorToLoad.name}`, 'info')
       setColorToLoadId(null)
     }
-  }, [colorToLoad, colorToLoadId, colors])
+  }, [colorToLoad, colorToLoadId, colors, showMessage])
 
   if (isCreateMode && !productCreated) {
     return (
@@ -483,446 +553,548 @@ const StepVariantDetails = ({ activeStep, handlePrev, steps, mode, productId, pr
   }
 
   return (
-    <Grid container spacing={4}>
-      {productId && (
-        <Grid size={{ xs: 12 }}>
-          <CustomTextField
-            fullWidth
-            label='Producto '
-            value={productName || productId}
-            disabled
-            size='small'
-            helperText='Configurando variantes para este producto'
-          />
-        </Grid>
-      )}
-
-      <Grid size={{ xs: 12, lg: 7 }}>
-        <Card>
-          <CardHeader
-            title={isEditing ? 'Editar Variante' : 'Nueva Variante'}
-            subheader={isEditing ? 'Modificando variante existente' : 'Configura color, archivos y tallas'}
-            titleTypographyProps={{ variant: 'h6' }}
-            action={
-              isEditing && (
-                <Button onClick={handleClearForm} size='small' variant='outlined'>
-                  Cancelar Edición
-                </Button>
-              )
-            }
-          />
-          <CardContent>
-            <VariantMediaUploader
-              mediaFiles={variantForm.mediaFiles}
-              onFilesChange={files => setVariantForm(prev => ({ ...prev, mediaFiles: files }))}
-              error={filesError}
-              onErrorChange={setFilesError}
-              onDeleteExisting={handleDeleteExistingFile}
-            />
-
-            <Box sx={{ mb: 3 }}>
-              <Typography variant='subtitle2' gutterBottom>
-                Color
-              </Typography>
-              <Grid container spacing={2}>
-                <Grid size={{ xs: 12, sm: 8 }}>
-                  <CustomTextField
-                    select
-                    fullWidth
-                    size='small'
-                    label='Seleccionar Color'
-                    value={variantForm.colorId}
-                    onChange={e => {
-                      setVariantForm(prev => ({ ...prev, colorId: e.target.value }))
-                      setColorError(null)
-                    }}
-                    error={!!colorError}
-                    helperText={colorError || ''}
-                    disabled={colorsLoading}
-                    SelectProps={{
-                      renderValue: selected => {
-                        if (!selected) return 'Selecciona un color'
-
-                        if (selected === 'custom' && variantForm.customColorName) {
-                          return (
-                            <Box display='flex' alignItems='center' gap={1}>
-                              <Box
-                                sx={{
-                                  width: 16,
-                                  height: 16,
-                                  borderRadius: '50%',
-                                  backgroundColor: variantForm.customColorCode || '#000000',
-                                  border: '1px solid #ddd'
-                                }}
-                              />
-                              <Typography variant='body2'>{variantForm.customColorName}</Typography>
-                            </Box>
-                          )
-                        }
-
-                        const selectedColor = colors?.find(c => c.id.toString() === selected)
-
-                        if (selectedColor) {
-                          return (
-                            <Box display='flex' alignItems='center' gap={1}>
-                              <Box
-                                sx={{
-                                  width: 16,
-                                  height: 16,
-                                  borderRadius: '50%',
-                                  backgroundColor: selectedColor.code,
-                                  border: '1px solid #ddd'
-                                }}
-                              />
-                              <Typography variant='body2'>{selectedColor.name}</Typography>
-                            </Box>
-                          )
-                        }
-
-                        return 'Selecciona un color'
-                      }
-                    }}
-                  >
-                    <MenuItem value=''>Selecciona un color</MenuItem>
-                    {colors?.map(color => (
-                      <MenuItem key={color.id} value={color.id.toString()}>
-                        <Box display='flex' alignItems='center' gap={1}>
-                          <Box
-                            sx={{
-                              width: 16,
-                              height: 16,
-                              borderRadius: '50%',
-                              backgroundColor: color.code,
-                              border: '1px solid #ddd'
-                            }}
-                          />
-                          <Typography variant='body2'>{color.name}</Typography>
-                        </Box>
-                      </MenuItem>
-                    ))}
-                    <MenuItem value='custom'>
-                      <Box display='flex' alignItems='center' gap={1}>
-                        <i className='tabler-plus' style={{ fontSize: '16px' }} />
-                        <Typography variant='body2'>Color personalizado</Typography>
-                      </Box>
-                    </MenuItem>
-                  </CustomTextField>
-                </Grid>
-                <Grid size={{ xs: 12, sm: 4 }}>
-                  <Button
-                    fullWidth
-                    variant='outlined'
-                    size='small'
-                    onClick={() => setColorModalOpen(true)}
-                    startIcon={<i className='tabler-palette' />}
-                  >
-                    Crear Color
-                  </Button>
-                </Grid>
-              </Grid>
-            </Box>
-
-            <Box sx={{ mb: 3 }}>
-              <Box display='flex' justifyContent='space-between' alignItems='center' sx={{ mb: 2 }}>
-                <Typography
-                  variant='subtitle2'
-                  sx={{
-                    color: sizesError ? 'var(--mui-palette-error-main)' : 'inherit'
-                  }}
-                >
-                  Tallas y Stock
-                </Typography>
-
-                <Box sx={{ display: 'flex', gap: 1 }}>
-                  {isEditing && variantForm.sizes.some(s => s.id) && (
-                    <>
-                      <Button
-                        variant='contained'
-                        size='small'
-                        color='success'
-                        startIcon={<i className='tabler-plus' />}
-                        onClick={() => setAddStockModalOpen(true)}
-                      >
-                        Agregar Stock
-                      </Button>
-                      <Button
-                        variant='contained'
-                        size='small'
-                        color='error'
-                        startIcon={<i className='tabler-minus' />}
-                        onClick={() => setSubtractStockModalOpen(true)}
-                      >
-                        Quitar Stock
-                      </Button>
-                    </>
-                  )}
-                  <Button
-                    variant='outlined'
-                    size='small'
-                    startIcon={<i className='tabler-plus' />}
-                    onClick={handleAddSize}
-                  >
-                    Añadir Talla
-                  </Button>
-                </Box>
+    <>
+      <Backdrop
+        sx={{
+          zIndex: theme => theme.zIndex.drawer + 1,
+          backdropFilter: 'blur(4px)',
+          backgroundColor: 'rgba(0, 0, 0, 0.5)'
+        }}
+        open={isSavingVariant}
+      >
+        <Fade in={isSavingVariant}>
+          <Card
+            sx={{
+              minWidth: 380,
+              maxWidth: 420,
+              boxShadow: 'var(--mui-customShadows-xl)',
+              border: '1px solid',
+              borderColor: 'divider'
+            }}
+          >
+            <CardContent sx={{ p: 6, textAlign: 'center' }}>
+              <Box
+                sx={{
+                  width: 80,
+                  height: 80,
+                  borderRadius: '50%',
+                  backgroundColor: 'primary.lighter',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  mx: 'auto',
+                  mb: 4
+                }}
+              >
+                <CircularProgress color='primary' size={40} thickness={4} />
               </Box>
 
-              {variantForm.sizes.map((size, index) => (
-                <Grid container spacing={1} key={index} sx={{ mb: 1, alignItems: 'center' }}>
-                  <Grid size={{ xs: 5 }}>
-                    <CustomTextField
-                      fullWidth
-                      size='small'
-                      value={size.size}
-                      onChange={e => handleSizeChange(index, 'size', e.target.value)}
-                      placeholder='Talla (S, M, L ...)'
-                      disabled={!!size.id}
-                      error={!!sizesError}
-                    />
-                  </Grid>
-                  <Grid size={{ xs: 5 }}>
-                    <CustomTextField
-                      fullWidth
-                      size='small'
-                      type='number'
-                      placeholder='0'
-                      value={size.quantity || ''}
-                      onChange={e => {
-                        const value = e.target.value
+              <Typography variant='h5' sx={{ mb: 1, fontWeight: 600 }}>
+                {isEditing ? 'Actualizando Variante' : 'Guardando Variante'}
+              </Typography>
 
-                        handleSizeChange(index, 'quantity', value === '' ? 0 : parseInt(value) || 0)
+              <Typography variant='body2' color='text.secondary' sx={{ mb: 4 }}>
+                {savingMessage || 'Procesando...'}
+              </Typography>
+
+              <LinearProgress
+                sx={{
+                  height: 6,
+                  borderRadius: 3,
+                  mb: 3,
+                  backgroundColor: 'action.hover',
+                  '& .MuiLinearProgress-bar': {
+                    borderRadius: 3
+                  }
+                }}
+              />
+
+              <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 1 }}>
+                <i className='tabler-info-circle' style={{ fontSize: '16px', color: 'var(--mui-palette-text-secondary)' }} />
+                <Typography variant='caption' color='text.secondary'>
+                  Por favor no cierres esta ventana
+                </Typography>
+              </Box>
+            </CardContent>
+          </Card>
+        </Fade>
+      </Backdrop>
+
+      <Grid container spacing={4}>
+        {productId && (
+          <Grid size={{ xs: 12 }}>
+            <CustomTextField
+              fullWidth
+              label='Producto '
+              value={productName || productId}
+              disabled
+              size='small'
+              helperText='Configurando variantes para este producto'
+            />
+          </Grid>
+        )}
+
+        <Grid size={{ xs: 12, lg: 7 }}>
+          <Card>
+            <CardHeader
+              title={isEditing ? 'Editar Variante' : 'Nueva Variante'}
+              subheader={isEditing ? 'Modificando variante existente' : 'Configura color, archivos y tallas'}
+              titleTypographyProps={{ variant: 'h6' }}
+              action={
+                isEditing && (
+                  <Button onClick={handleClearForm} size='small' variant='outlined'>
+                    Cancelar Edición
+                  </Button>
+                )
+              }
+            />
+            <CardContent>
+              <VariantMediaUploader
+                mediaFiles={variantForm.mediaFiles}
+                onFilesChange={files => setVariantForm(prev => ({ ...prev, mediaFiles: files }))}
+                error={filesError}
+                onErrorChange={setFilesError}
+                onDeleteExisting={handleDeleteExistingFile}
+                onUploadingChange={setIsMediaUploading}
+              />
+
+              <Box sx={{ mb: 3 }}>
+                <Typography variant='subtitle2' gutterBottom>
+                  Color
+                </Typography>
+                <Grid container spacing={2}>
+                  <Grid size={{ xs: 12, sm: 8 }}>
+                    <CustomTextField
+                      select
+                      fullWidth
+                      size='small'
+                      label='Seleccionar Color'
+                      value={variantForm.colorId}
+                      onChange={e => {
+                        setVariantForm(prev => ({ ...prev, colorId: e.target.value }))
+                        setColorError(null)
                       }}
-                      disabled={!!size.id}
-                      error={!!sizesError}
-                      sx={{
-                        '& input[type=number]': {
-                          MozAppearance: 'textfield'
-                        },
-                        '& input[type=number]::-webkit-outer-spin-button, & input[type=number]::-webkit-inner-spin-button':
-                          {
-                            WebkitAppearance: 'none',
-                            margin: 0
+                      error={!!colorError}
+                      helperText={colorError || ''}
+                      disabled={colorsLoading}
+                      SelectProps={{
+                        renderValue: selected => {
+                          if (!selected) return 'Selecciona un color'
+
+                          if (selected === 'custom' && variantForm.customColorName) {
+                            return (
+                              <Box display='flex' alignItems='center' gap={1}>
+                                <Box
+                                  sx={{
+                                    width: 16,
+                                    height: 16,
+                                    borderRadius: '50%',
+                                    backgroundColor: variantForm.customColorCode || '#000000',
+                                    border: '1px solid #ddd'
+                                  }}
+                                />
+                                <Typography variant='body2'>{variantForm.customColorName}</Typography>
+                              </Box>
+                            )
                           }
+
+                          const selectedColor = colors?.find(c => c.id.toString() === selected)
+
+                          if (selectedColor) {
+                            return (
+                              <Box display='flex' alignItems='center' gap={1}>
+                                <Box
+                                  sx={{
+                                    width: 16,
+                                    height: 16,
+                                    borderRadius: '50%',
+                                    backgroundColor: selectedColor.code,
+                                    border: '1px solid #ddd'
+                                  }}
+                                />
+                                <Typography variant='body2'>{selectedColor.name}</Typography>
+                              </Box>
+                            )
+                          }
+
+                          return 'Selecciona un color'
+                        }
                       }}
-                    />
+                    >
+                      <MenuItem value=''>Selecciona un color</MenuItem>
+                      {colors?.map(color => (
+                        <MenuItem key={color.id} value={color.id.toString()}>
+                          <Box display='flex' alignItems='center' gap={1}>
+                            <Box
+                              sx={{
+                                width: 16,
+                                height: 16,
+                                borderRadius: '50%',
+                                backgroundColor: color.code,
+                                border: '1px solid #ddd'
+                              }}
+                            />
+                            <Typography variant='body2'>{color.name}</Typography>
+                          </Box>
+                        </MenuItem>
+                      ))}
+                      <MenuItem value='custom'>
+                        <Box display='flex' alignItems='center' gap={1}>
+                          <i className='tabler-plus' style={{ fontSize: '16px' }} />
+                          <Typography variant='body2'>Color personalizado</Typography>
+                        </Box>
+                      </MenuItem>
+                    </CustomTextField>
                   </Grid>
-                  <Grid size={{ xs: 2 }}>
-                    {!size.id && (
-                      <IconButton
-                        size='small'
-                        color='error'
-                        onClick={() => handleRemoveSize(index)}
-                        disabled={variantForm.sizes.filter(s => !s.id).length === 1}
-                      >
-                        <i className='tabler-trash' />
-                      </IconButton>
-                    )}
+                  <Grid size={{ xs: 12, sm: 4 }}>
+                    <Button
+                      fullWidth
+                      variant='outlined'
+                      size='small'
+                      onClick={() => setColorModalOpen(true)}
+                      startIcon={<i className='tabler-palette' />}
+                    >
+                      Crear Color
+                    </Button>
                   </Grid>
                 </Grid>
-              ))}
-              {sizesError && (
-                <Typography
-                  variant='caption'
-                  sx={{
-                    display: 'block',
-                    mt: 1,
-                    color: 'var(--mui-palette-error-main)'
-                  }}
-                >
-                  {sizesError}
-                </Typography>
-              )}
-            </Box>
-            {/* {formError && (
+              </Box>
+
+              <Box sx={{ mb: 3 }}>
+                <Box display='flex' justifyContent='space-between' alignItems='center' sx={{ mb: 2 }}>
+                  <Typography
+                    variant='subtitle2'
+                    sx={{
+                      color: sizesError ? 'var(--mui-palette-error-main)' : 'inherit'
+                    }}
+                  >
+                    Tallas y Stock
+                  </Typography>
+
+                  <Box sx={{ display: 'flex', gap: 1 }}>
+                    {isEditing && variantForm.sizes.some(s => s.id) && (
+                      <>
+                        <Button
+                          variant='contained'
+                          size='small'
+                          color='success'
+                          startIcon={<i className='tabler-plus' />}
+                          onClick={() => setAddStockModalOpen(true)}
+                        >
+                          Agregar Stock
+                        </Button>
+                        <Button
+                          variant='contained'
+                          size='small'
+                          color='error'
+                          startIcon={<i className='tabler-minus' />}
+                          onClick={() => setSubtractStockModalOpen(true)}
+                        >
+                          Quitar Stock
+                        </Button>
+                      </>
+                    )}
+                    <Button
+                      variant='outlined'
+                      size='small'
+                      startIcon={<i className='tabler-plus' />}
+                      onClick={handleAddSize}
+                    >
+                      Añadir Talla
+                    </Button>
+                  </Box>
+                </Box>
+
+                {variantForm.sizes.map((size, index) => (
+                  <Grid container spacing={1} key={index} sx={{ mb: 1, alignItems: 'center' }}>
+                    <Grid size={{ xs: 5 }}>
+                      <CustomTextField
+                        fullWidth
+                        size='small'
+                        value={size.size}
+                        onChange={e => handleSizeChange(index, 'size', e.target.value)}
+                        placeholder='Talla (S, M, L ...)'
+                        disabled={!!size.id}
+                        error={!!sizesError}
+                      />
+                    </Grid>
+                    <Grid size={{ xs: 5 }}>
+                      <CustomTextField
+                        fullWidth
+                        size='small'
+                        type='number'
+                        placeholder='0'
+                        value={size.quantity || ''}
+                        onChange={e => {
+                          const value = e.target.value
+
+                          handleSizeChange(index, 'quantity', value === '' ? 0 : parseInt(value) || 0)
+                        }}
+                        disabled={!!size.id}
+                        error={!!sizesError}
+                        sx={{
+                          '& input[type=number]': {
+                            MozAppearance: 'textfield'
+                          },
+                          '& input[type=number]::-webkit-outer-spin-button, & input[type=number]::-webkit-inner-spin-button':
+                            {
+                              WebkitAppearance: 'none',
+                              margin: 0
+                            }
+                        }}
+                      />
+                    </Grid>
+                    <Grid size={{ xs: 2 }}>
+                      {!size.id && (
+                        <IconButton
+                          size='small'
+                          color='error'
+                          onClick={() => handleRemoveSize(index)}
+                          disabled={variantForm.sizes.filter(s => !s.id).length === 1}
+                        >
+                          <i className='tabler-trash' />
+                        </IconButton>
+                      )}
+                    </Grid>
+                  </Grid>
+                ))}
+                {sizesError && (
+                  <Typography
+                    variant='caption'
+                    sx={{
+                      display: 'block',
+                      mt: 1,
+                      color: 'var(--mui-palette-error-main)'
+                    }}
+                  >
+                    {sizesError}
+                  </Typography>
+                )}
+              </Box>
+              {/* {formError && (
               <Alert severity='error' sx={{ mb: 2 }} onClose={() => setFormError(null)}>
                 {formError}
               </Alert>
             )} */}
 
-            <Button
-              fullWidth
-              variant='contained'
-              onClick={handleSaveVariant}
-              disabled={uploadMultimedia.isPending || createVariant.isPending || updateVariant.isPending}
-              startIcon={
-                uploadMultimedia.isPending || createVariant.isPending || updateVariant.isPending ? (
-                  <CircularProgress size={16} />
-                ) : isEditing ? (
-                  <i className='tabler-device-floppy' />
-                ) : (
-                  <i className='tabler-plus' />
-                )
-              }
-            >
-              {uploadMultimedia.isPending
-                ? 'Subiendo archivos...'
-                : createVariant.isPending || updateVariant.isPending
-                  ? isEditing
-                    ? 'Actualizando variante...'
-                    : 'Guardando variante...'
-                  : isEditing
-                    ? 'Actualizar Variante'
-                    : 'Guardar Variante'}
-            </Button>
-          </CardContent>
-        </Card>
-      </Grid>
-
-      <Grid size={{ xs: 12, lg: 5 }}>
-        <VariantsList
-          variants={existingVariants?.variants || []}
-          isLoading={variantsLoading}
-          editingVariantId={editingVariantId}
-          onVariantClick={handleEditVariant}
-        />
-      </Grid>
-
-      {existingVariants?.variants?.length ? (
-        <Grid size={{ xs: 12 }}>
-          <Alert severity='success'>
-            <strong>{existingVariants.variants.length} variante(s) creadas</strong>
-          </Alert>
+              <Button
+                fullWidth
+                variant='contained'
+                onClick={handleSaveVariant}
+                disabled={
+                  isMediaUploading || uploadMultimedia.isPending || createVariant.isPending || updateVariant.isPending
+                }
+                startIcon={
+                  isMediaUploading ||
+                  uploadMultimedia.isPending ||
+                  createVariant.isPending ||
+                  updateVariant.isPending ? (
+                    <CircularProgress size={16} />
+                  ) : isEditing ? (
+                    <i className='tabler-device-floppy' />
+                  ) : (
+                    <i className='tabler-plus' />
+                  )
+                }
+              >
+                {isMediaUploading
+                  ? 'Procesando archivos...'
+                  : uploadMultimedia.isPending
+                    ? 'Subiendo archivos...'
+                    : createVariant.isPending || updateVariant.isPending
+                      ? isEditing
+                        ? 'Actualizando variante...'
+                        : 'Guardando variante...'
+                      : isEditing
+                        ? 'Actualizar Variante'
+                        : 'Guardar Variante'}
+              </Button>
+            </CardContent>
+          </Card>
         </Grid>
-      ) : null}
 
-      <Grid size={{ xs: 12 }}>
-        <Box display='flex' justifyContent='space-between' alignItems='center'>
-          <Button
-            variant='tonal'
-            color='secondary'
-            onClick={handlePrev}
-            type='button'
-            startIcon={<DirectionalIcon ltrIconClass='tabler-arrow-left' rtlIconClass='tabler-arrow-right' />}
-          >
-            Anterior
-          </Button>
+        <Grid size={{ xs: 12, lg: 5 }}>
+          <VariantsList
+            variants={existingVariants?.variants || []}
+            isLoading={variantsLoading}
+            editingVariantId={editingVariantId}
+            onVariantClick={handleEditVariant}
+          />
+        </Grid>
 
-          <Button
-            variant='contained'
-            color={activeStep === steps.length - 1 ? 'success' : 'primary'}
-            onClick={handleFinish}
-            type='button'
-            disabled={isSubmitting}
-            endIcon={isSubmitting ? <CircularProgress size={16} /> : <i className='tabler-device-floppy' />}
-          >
-            {isSubmitting ? 'Finalizando...' : isCreateMode ? 'Finalizar Creación' : 'Finalizar Actualización'}
-          </Button>
-        </Box>
-      </Grid>
+        {existingVariants?.variants?.length ? (
+          <Grid size={{ xs: 12 }}>
+            <Alert severity='success'>
+              <strong>{existingVariants.variants.length} variante(s) creadas</strong>
+            </Alert>
+          </Grid>
+        ) : null}
 
-      <Dialog open={colorModalOpen} onClose={() => setColorModalOpen(false)} maxWidth='xs' fullWidth>
-        <DialogTitle>Nuevo Color</DialogTitle>
-        <DialogContent>
-          <Box sx={{ mt: 2 }}>
-            <CustomTextField
-              fullWidth
-              size='small'
-              label='Nombre del Color'
-              value={newColor.name}
-              onChange={e => setNewColor({ ...newColor, name: e.target.value })}
-              placeholder='Ej: Verde Oliva'
-              sx={{ mb: 3 }}
-            />
+        <Grid size={{ xs: 12 }}>
+          <Box display='flex' justifyContent='space-between' alignItems='center'>
+            <Button
+              variant='tonal'
+              color='secondary'
+              onClick={handlePrev}
+              type='button'
+              startIcon={<DirectionalIcon ltrIconClass='tabler-arrow-left' rtlIconClass='tabler-arrow-right' />}
+            >
+              Anterior
+            </Button>
 
-            <Typography variant='subtitle2' gutterBottom>
-              Selector de Color
-            </Typography>
-            <Box display='flex' gap={2} alignItems='center'>
-              <HexColorPicker
-                color={newColor.code}
-                onChange={color => setNewColor({ ...newColor, code: color })}
-                style={{ width: '120px', height: '120px' }}
+            <Button
+              variant='contained'
+              color={activeStep === steps.length - 1 ? 'success' : 'primary'}
+              onClick={handleFinish}
+              type='button'
+              disabled={isSubmitting}
+              endIcon={isSubmitting ? <CircularProgress size={16} /> : <i className='tabler-device-floppy' />}
+            >
+              {isSubmitting ? 'Finalizando...' : isCreateMode ? 'Finalizar Creación' : 'Finalizar Actualización'}
+            </Button>
+          </Box>
+        </Grid>
+
+        <Dialog open={colorModalOpen} onClose={() => setColorModalOpen(false)} maxWidth='xs' fullWidth>
+          <DialogTitle>Nuevo Color</DialogTitle>
+          <DialogContent>
+            <Box sx={{ mt: 2 }}>
+              <CustomTextField
+                fullWidth
+                size='small'
+                label='Nombre del Color'
+                value={newColor.name}
+                onChange={e => setNewColor({ ...newColor, name: e.target.value })}
+                placeholder='Ej: Verde Oliva'
+                sx={{ mb: 3 }}
               />
-              <Box>
-                <Box
-                  sx={{
-                    width: 40,
-                    height: 40,
-                    borderRadius: 1,
-                    backgroundColor: newColor.code,
-                    border: '2px solid #ddd',
-                    mb: 1
-                  }}
+
+              <Typography variant='subtitle2' gutterBottom>
+                Selector de Color
+              </Typography>
+              <Box display='flex' gap={2} alignItems='center'>
+                <HexColorPicker
+                  color={newColor.code}
+                  onChange={color => setNewColor({ ...newColor, code: color })}
+                  style={{ width: '120px', height: '120px' }}
                 />
-                <Typography variant='caption' color='text.secondary'>
-                  {newColor.code}
-                </Typography>
+                <Box>
+                  <Box
+                    sx={{
+                      width: 40,
+                      height: 40,
+                      borderRadius: 1,
+                      backgroundColor: newColor.code,
+                      border: '2px solid #ddd',
+                      mb: 1
+                    }}
+                  />
+                  <Typography variant='caption' color='text.secondary'>
+                    {newColor.code}
+                  </Typography>
+                </Box>
               </Box>
             </Box>
-          </Box>
-        </DialogContent>
-        <DialogActions>
-          <Button onClick={() => setColorModalOpen(false)} color='secondary'>
-            Cancelar
-          </Button>
-          <Button
-            onClick={() => {
-              try {
-                const validatedColor = newColorSchema.parse(newColor)
+          </DialogContent>
+          <DialogActions>
+            <Button onClick={() => setColorModalOpen(false)} color='secondary'>
+              Cancelar
+            </Button>
+            <Button
+              onClick={() => {
+                try {
+                  const validatedColor = newColorSchema.parse(newColor)
 
-                setVariantForm(prev => ({
-                  ...prev,
-                  colorId: 'custom',
-                  customColorName: validatedColor.name,
-                  customColorCode: validatedColor.code
-                }))
-                setNewColor({ name: '', code: '#8B7355' })
-                setColorModalOpen(false)
-                toast.success('Color configurado')
-              } catch (error) {
-                if (error instanceof z.ZodError) {
-                  toast.error(error.issues[0]?.message || 'Error de validación')
+                  setVariantForm(prev => ({
+                    ...prev,
+                    colorId: 'custom',
+                    customColorName: validatedColor.name,
+                    customColorCode: validatedColor.code
+                  }))
+                  setNewColor({ name: '', code: '#8B7355' })
+                  setColorModalOpen(false)
+                  showMessage('Color configurado', 'success')
+                } catch (error) {
+                  if (error instanceof z.ZodError) {
+                    showMessage(error.issues[0]?.message || 'Error de validación', 'error')
+                  }
                 }
+              }}
+              variant='contained'
+              disabled={!newColor.name}
+            >
+              Usar Color
+            </Button>
+          </DialogActions>
+        </Dialog>
+        {isEditing && variantForm.sizes.length > 0 && (
+          <AddStockModal
+            open={addStockModalOpen}
+            onClose={() => {
+              setAddStockModalOpen(false)
+
+              if (editingVariantId) {
+                setVariantToLoadId(editingVariantId)
               }
             }}
-            variant='contained'
-            disabled={!newColor.name}
+            variants={variantForm.sizes
+              .filter(s => s.id)
+              .map(s => ({
+                id: s.id!,
+                size: { name: s.size },
+                availableStock: s.quantity
+              }))}
+            variantId={editingVariantId!}
+          />
+        )}
+        {isEditing && variantForm.sizes.length > 0 && (
+          <SubtractStockModal
+            open={subtractStockModalOpen}
+            onClose={() => {
+              setSubtractStockModalOpen(false)
+
+              if (editingVariantId) {
+                setVariantToLoadId(editingVariantId)
+              }
+            }}
+            variants={variantForm.sizes
+              .filter(s => s.id)
+              .map(s => ({
+                id: s.id!,
+                size: { name: s.size },
+                availableStock: s.quantity
+              }))}
+            variantId={editingVariantId!}
+          />
+        )}
+
+        {/* Snackbar para mensajes */}
+        <Snackbar
+          open={snackbarOpen}
+          autoHideDuration={4000}
+          onClose={handleSnackbarClose}
+          TransitionProps={{ onExited: handleSnackbarExited }}
+          anchorOrigin={{ vertical: 'bottom', horizontal: 'right' }}
+          key={messageInfo ? messageInfo.key : undefined}
+        >
+          <Alert
+            variant='filled'
+            onClose={handleSnackbarClose}
+            severity={messageInfo?.severity || 'info'}
+            sx={{
+              width: '100%',
+              boxShadow: 'var(--mui-customShadows-lg)',
+              alignItems: 'center',
+              '& .MuiAlert-icon': {
+                fontSize: '1.25rem'
+              }
+            }}
           >
-            Usar Color
-          </Button>
-        </DialogActions>
-      </Dialog>
-      {isEditing && variantForm.sizes.length > 0 && (
-        <AddStockModal
-          open={addStockModalOpen}
-          onClose={() => {
-            setAddStockModalOpen(false)
-
-            if (editingVariantId) {
-              setVariantToLoadId(editingVariantId)
-            }
-          }}
-          variants={variantForm.sizes
-            .filter(s => s.id)
-            .map(s => ({
-              id: s.id!,
-              size: { name: s.size },
-              availableStock: s.quantity
-            }))}
-          variantId={editingVariantId!}
-        />
-      )}
-      {isEditing && variantForm.sizes.length > 0 && (
-        <SubtractStockModal
-          open={subtractStockModalOpen}
-          onClose={() => {
-            setSubtractStockModalOpen(false)
-
-            if (editingVariantId) {
-              setVariantToLoadId(editingVariantId)
-            }
-          }}
-          variants={variantForm.sizes
-            .filter(s => s.id)
-            .map(s => ({
-              id: s.id!,
-              size: { name: s.size },
-              availableStock: s.quantity
-            }))}
-          variantId={editingVariantId!}
-        />
-      )}
-    </Grid>
+            {messageInfo?.message}
+          </Alert>
+        </Snackbar>
+      </Grid>
+    </>
   )
 }
 

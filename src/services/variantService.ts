@@ -72,7 +72,8 @@ class VariantServiceClass {
     const response = await apiClient.post<MultimediaUploadResponse[]>('/api/multimedia', formData, {
       headers: {
         'Content-Type': 'multipart/form-data'
-      }
+      },
+      timeout: 300000
     })
 
     return response.data

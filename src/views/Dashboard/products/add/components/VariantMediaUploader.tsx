@@ -1,9 +1,11 @@
-import { useRef, useState } from 'react'
+import { useRef, useState, useEffect } from 'react'
 
 import Grid from '@mui/material/Grid2'
 import Box from '@mui/material/Box'
 import Typography from '@mui/material/Typography'
 import IconButton from '@mui/material/IconButton'
+import CircularProgress from '@mui/material/CircularProgress'
+import LinearProgress from '@mui/material/LinearProgress'
 import { toast } from 'react-toastify'
 
 import type { MediaFile } from '@/schemas/variant.schema'
@@ -14,11 +16,26 @@ type Props = {
   error?: string | null
   onErrorChange: (error: string | null) => void
   onDeleteExisting?: (url: string) => void
+  onUploadingChange?: (isUploading: boolean) => void
 }
 
-const VariantMediaUploader = ({ mediaFiles, onFilesChange, error, onErrorChange, onDeleteExisting }: Props) => {
+const VariantMediaUploader = ({
+  mediaFiles,
+  onFilesChange,
+  error,
+  onErrorChange,
+  onDeleteExisting,
+  onUploadingChange
+}: Props) => {
   const fileInputRef = useRef<HTMLInputElement>(null)
   const [isDragging, setIsDragging] = useState(false)
+  const [uploadingFiles, setUploadingFiles] = useState<Map<string, number>>(new Map())
+
+  const isUploading = uploadingFiles.size > 0
+
+  useEffect(() => {
+    onUploadingChange?.(isUploading)
+  }, [isUploading, onUploadingChange])
 
   const MAX_FILE_SIZE_MB = 3
   const MAX_FILE_SIZE_BYTES = MAX_FILE_SIZE_MB * 1024 * 1024
@@ -33,8 +50,8 @@ const VariantMediaUploader = ({ mediaFiles, onFilesChange, error, onErrorChange,
     return file.size <= MAX_FILE_SIZE_BYTES
   }
 
-  const processFiles = (files: FileList) => {
-    const newFiles: MediaFile[] = []
+  const processFiles = async (files: FileList) => {
+    const validFiles: File[] = []
     const invalidFiles: string[] = []
     const oversizedFiles: string[] = []
 
@@ -46,16 +63,7 @@ const VariantMediaUploader = ({ mediaFiles, onFilesChange, error, onErrorChange,
 
         oversizedFiles.push(`${file.name} (${sizeMB}MB)`)
       } else {
-        const mediaFile: MediaFile = {
-          id: Date.now() + Math.random().toString(),
-          file,
-          url: URL.createObjectURL(file),
-          type: file.type.startsWith('image/') ? 'image' : file.type.startsWith('video/') ? 'video' : 'document',
-          name: file.name,
-          source: 'new' as const
-        }
-
-        newFiles.push(mediaFile)
+        validFiles.push(file)
       }
     })
 
@@ -69,7 +77,54 @@ const VariantMediaUploader = ({ mediaFiles, onFilesChange, error, onErrorChange,
       toast.error(`${oversizedFiles.length} archivo(s) exceden el límite de ${MAX_FILE_SIZE_MB}MB`)
     }
 
-    if (newFiles.length > 0) {
+    if (validFiles.length > 0) {
+      const tempIds = validFiles.map(() => Date.now() + Math.random().toString())
+
+      setUploadingFiles(prev => {
+        const newMap = new Map(prev)
+
+        tempIds.forEach(id => newMap.set(id, 0))
+
+        return newMap
+      })
+
+      const newFiles: MediaFile[] = []
+
+      for (let i = 0; i < validFiles.length; i++) {
+        const file = validFiles[i]
+        const tempId = tempIds[i]
+
+        for (let progress = 0; progress <= 100; progress += 20) {
+          setUploadingFiles(prev => {
+            const newMap = new Map(prev)
+
+            newMap.set(tempId, progress)
+
+            return newMap
+          })
+          await new Promise(resolve => setTimeout(resolve, 50))
+        }
+
+        const mediaFile: MediaFile = {
+          id: tempId,
+          file,
+          url: URL.createObjectURL(file),
+          type: file.type.startsWith('image/') ? 'image' : file.type.startsWith('video/') ? 'video' : 'document',
+          name: file.name,
+          source: 'new' as const
+        }
+
+        newFiles.push(mediaFile)
+
+        setUploadingFiles(prev => {
+          const newMap = new Map(prev)
+
+          newMap.delete(tempId)
+
+          return newMap
+        })
+      }
+
       onFilesChange([...mediaFiles, ...newFiles])
       onErrorChange(null)
       toast.success(`${newFiles.length} archivo(s) agregado(s)`)
@@ -148,16 +203,24 @@ const VariantMediaUploader = ({ mediaFiles, onFilesChange, error, onErrorChange,
       <Box
         sx={{
           border: '2px dashed',
-          borderColor: error ? 'error.main' : isDragging ? 'primary.main' : 'divider',
+          borderColor: error ? 'error.main' : isUploading ? 'primary.main' : isDragging ? 'primary.main' : 'divider',
           borderRadius: 1,
           p: 3,
           textAlign: 'center',
-          backgroundColor: error ? 'rgba(211, 47, 47, 0.04)' : isDragging ? 'action.hover' : 'background.paper',
-          cursor: 'pointer',
+          backgroundColor: error
+            ? 'rgba(211, 47, 47, 0.04)'
+            : isUploading
+              ? 'rgba(25, 118, 210, 0.08)'
+              : isDragging
+                ? 'action.hover'
+                : 'background.paper',
+          cursor: isUploading ? 'not-allowed' : 'pointer',
           minHeight: '120px',
           display: 'flex',
           flexDirection: 'column',
-          justifyContent: 'center'
+          justifyContent: 'center',
+          position: 'relative',
+          pointerEvents: isUploading ? 'none' : 'auto'
         }}
         onDragEnter={handleDragEnter}
         onDragLeave={handleDragLeave}
@@ -165,19 +228,37 @@ const VariantMediaUploader = ({ mediaFiles, onFilesChange, error, onErrorChange,
         onDrop={handleDrop}
         onClick={handleFileInputClick}
       >
-        <i
-          className='tabler-cloud-upload'
-          style={{
-            fontSize: '2rem',
-            color: error ? 'var(--mui-palette-error-main)' : 'var(--mui-palette-primary-main)'
-          }}
-        />
-        <Typography variant='body2' color={error ? 'error' : 'text.secondary'} sx={{ mt: 1 }}>
-          {isDragging ? 'Suelta aquí los archivos' : 'Arrastra imágenes/videos o haz clic para seleccionar'}
-        </Typography>
-        <Typography variant='caption' color={error ? 'error' : 'text.secondary'}>
-          Formatos: JPG, JPEG, PNG, WEBP, MP4, PDF (máx. 3MB por archivo)
-        </Typography>
+        {isUploading ? (
+          <>
+            <CircularProgress size={32} sx={{ mb: 1 }} />
+            <Typography variant='body2' color='primary' sx={{ mt: 1, fontWeight: 600 }}>
+              Procesando {uploadingFiles.size} archivo(s)...
+            </Typography>
+            <Typography variant='caption' color='text.secondary'>
+              Por favor espera, no cierres esta ventana
+            </Typography>
+            <LinearProgress
+              sx={{ mt: 2, width: '80%', mx: 'auto', borderRadius: 1 }}
+              variant='indeterminate'
+            />
+          </>
+        ) : (
+          <>
+            <i
+              className='tabler-cloud-upload'
+              style={{
+                fontSize: '2rem',
+                color: error ? 'var(--mui-palette-error-main)' : 'var(--mui-palette-primary-main)'
+              }}
+            />
+            <Typography variant='body2' color={error ? 'error' : 'text.secondary'} sx={{ mt: 1 }}>
+              {isDragging ? 'Suelta aquí los archivos' : 'Arrastra imágenes/videos o haz clic para seleccionar'}
+            </Typography>
+            <Typography variant='caption' color={error ? 'error' : 'text.secondary'}>
+              Formatos: JPG, JPEG, PNG, WEBP, MP4, PDF (máx. 3MB por archivo)
+            </Typography>
+          </>
+        )}
       </Box>
 
       <input
@@ -219,7 +300,46 @@ const VariantMediaUploader = ({ mediaFiles, onFilesChange, error, onErrorChange,
                           style={{ width: '100%', height: '100%', objectFit: 'cover' }}
                         />
                       ) : (
-                        <video src={file.url} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                        <>
+                          <video src={file.url} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                          <Box
+                            sx={{
+                              position: 'absolute',
+                              top: '50%',
+                              left: '50%',
+                              transform: 'translate(-50%, -50%)',
+                              width: 40,
+                              height: 40,
+                              borderRadius: '50%',
+                              backgroundColor: 'rgba(0,0,0,0.6)',
+                              display: 'flex',
+                              alignItems: 'center',
+                              justifyContent: 'center',
+                              pointerEvents: 'none'
+                            }}
+                          >
+                            <i className='tabler-player-play-filled' style={{ fontSize: '20px', color: 'white' }} />
+                          </Box>
+                          <Box
+                            sx={{
+                              position: 'absolute',
+                              bottom: 4,
+                              left: 4,
+                              backgroundColor: 'rgba(0,0,0,0.7)',
+                              borderRadius: '4px',
+                              px: 0.75,
+                              py: 0.25,
+                              display: 'flex',
+                              alignItems: 'center',
+                              gap: 0.5
+                            }}
+                          >
+                            <i className='tabler-video' style={{ fontSize: '12px', color: 'white' }} />
+                            <Typography variant='caption' sx={{ color: 'white', fontSize: '10px', fontWeight: 600 }}>
+                              VIDEO
+                            </Typography>
+                          </Box>
+                        </>
                       )}
                       <IconButton
                         size='small'
