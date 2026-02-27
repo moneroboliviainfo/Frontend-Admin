@@ -88,7 +88,6 @@ const StepVariantDetails = ({ activeStep, handlePrev, steps, mode, productId, pr
   const [isSavingVariant, setIsSavingVariant] = useState(false)
   const [savingMessage, setSavingMessage] = useState('')
 
-  // Snackbar states
   const [snackbarOpen, setSnackbarOpen] = useState(false)
   const [snackPack, setSnackPack] = useState<SnackbarMessage[]>([])
   const [messageInfo, setMessageInfo] = useState<SnackbarMessage | undefined>(undefined)
@@ -114,7 +113,6 @@ const StepVariantDetails = ({ activeStep, handlePrev, steps, mode, productId, pr
   const deleteMultimedia = useDeleteMultimedia()
   const isCreateMode = mode === 'create'
 
-  // Snackbar logic
   useEffect(() => {
     if (snackPack.length && !messageInfo) {
       setSnackbarOpen(true)
@@ -259,7 +257,6 @@ const StepVariantDetails = ({ activeStep, handlePrev, steps, mode, productId, pr
         return
       }
 
-      // Activar overlay de carga
       setIsSavingVariant(true)
       setSavingMessage('Preparando archivos...')
 
@@ -358,14 +355,12 @@ const StepVariantDetails = ({ activeStep, handlePrev, steps, mode, productId, pr
 
       const apiError = error as any
 
-      // Detectar error de timeout
       if (apiError?.code === 'ECONNABORTED' || apiError?.message?.includes('timeout')) {
         showMessage('La conexión tardó demasiado. Verifica tu internet e intenta de nuevo.', 'error')
 
         return
       }
 
-      // Detectar error de red
       if (apiError?.code === 'ERR_NETWORK' || apiError?.message?.includes('Network Error')) {
         showMessage('Error de conexión. Verifica tu internet e inténtalo de nuevo.', 'error')
 
@@ -871,11 +866,6 @@ const StepVariantDetails = ({ activeStep, handlePrev, steps, mode, productId, pr
                   </Typography>
                 )}
               </Box>
-              {/* {formError && (
-              <Alert severity='error' sx={{ mb: 2 }} onClose={() => setFormError(null)}>
-                {formError}
-              </Alert>
-            )} */}
 
               <Button
                 fullWidth
@@ -1068,7 +1058,6 @@ const StepVariantDetails = ({ activeStep, handlePrev, steps, mode, productId, pr
           />
         )}
 
-        {/* Snackbar para mensajes */}
         <Snackbar
           open={snackbarOpen}
           autoHideDuration={4000}
