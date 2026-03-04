@@ -4,7 +4,6 @@ import { useState } from 'react'
 
 // MUI Imports
 import Card from '@mui/material/Card'
-import CardHeader from '@mui/material/CardHeader'
 import CardContent from '@mui/material/CardContent'
 import Typography from '@mui/material/Typography'
 import Skeleton from '@mui/material/Skeleton'
@@ -12,6 +11,7 @@ import Chip from '@mui/material/Chip'
 import Box from '@mui/material/Box'
 import Button from '@mui/material/Button'
 import CircularProgress from '@mui/material/CircularProgress'
+import Divider from '@mui/material/Divider'
 
 // Components Imports
 /* import OptionMenu from '@core/components/option-menu' */
@@ -24,6 +24,9 @@ const LowStock = () => {
   const { data: lowStockData, isLoading } = useLowStock()
   const [isExporting, setIsExporting] = useState(false)
   const [isExportingTransactions, setIsExportingTransactions] = useState(false)
+  const [isExportingCritical, setIsExportingCritical] = useState(false)
+
+  const isAnyExporting = isExporting || isExportingTransactions || isExportingCritical
 
   const handleExportExcel = async () => {
     setIsExporting(true)
@@ -67,45 +70,104 @@ const LowStock = () => {
     }
   }
 
+  const handleExportCriticalStock = async () => {
+    setIsExportingCritical(true)
+
+    try {
+      const blob = await variantService.exportCriticalStock()
+      const url = window.URL.createObjectURL(blob)
+      const link = document.createElement('a')
+
+      link.href = url
+      link.download = `stock-critico-${new Date().toISOString().split('T')[0]}.xlsx`
+      document.body.appendChild(link)
+      link.click()
+      document.body.removeChild(link)
+      window.URL.revokeObjectURL(url)
+    } catch (error) {
+      console.error('Error al exportar stock crítico:', error)
+    } finally {
+      setIsExportingCritical(false)
+    }
+  }
+
   return (
     <Card>
-      <CardHeader
-        title='Productos con Bajo Stock'
-        subheader='Productos que necesitan reabastecimiento'
-        action={
-          <Box sx={{ display: 'flex', gap: 1 }}>
-            <Button
-              variant='contained'
-              color='success'
-              size='small'
-              onClick={handleExportExcel}
-              disabled={isExporting || isExportingTransactions}
-              startIcon={
-                isExporting ? <CircularProgress size={16} color='inherit' /> : <i className='tabler-file-spreadsheet' />
-              }
-            >
-              {isExporting ? 'Exportando...' : 'Excel Stock'}
-            </Button>
-            <Button
-              variant='contained'
-              color='primary'
-              size='small'
-              onClick={handleExportTransactions}
-              disabled={isExporting || isExportingTransactions}
-              startIcon={
-                isExportingTransactions ? (
-                  <CircularProgress size={16} color='inherit' />
-                ) : (
-                  <i className='tabler-file-download' />
-                )
-              }
-            >
-              {isExportingTransactions ? 'Exportando...' : 'Excel/Transacciones'}
-            </Button>
-          </Box>
-        }
-      />
       <CardContent>
+        <Box sx={{ mb: 3 }}>
+          <Typography variant='h5' sx={{ mb: 0.5 }}>
+            Productos con Bajo Stock
+          </Typography>
+          <Typography variant='body2' color='text.secondary'>
+            Productos que necesitan reabastecimiento
+          </Typography>
+        </Box>
+
+        <Typography variant='subtitle2' color='text.secondary' sx={{ mb: 1.5 }}>
+          Exportar Reportes
+        </Typography>
+
+        <Box
+          sx={{
+            display: 'flex',
+            flexDirection: { xs: 'column', sm: 'row' },
+            gap: 1,
+            mb: 3
+          }}
+        >
+          <Button
+            variant='contained'
+            color='success'
+            size='small'
+            onClick={handleExportExcel}
+            disabled={isAnyExporting}
+            fullWidth
+            startIcon={
+              isExporting ? <CircularProgress size={14} color='inherit' /> : <i className='tabler-file-spreadsheet' />
+            }
+            sx={{ minHeight: 32, fontSize: '0.8rem', py: 0.5 }}
+          >
+            {isExporting ? 'Exportando...' : 'Excel Stock'}
+          </Button>
+          <Button
+            variant='contained'
+            color='primary'
+            size='small'
+            onClick={handleExportTransactions}
+            disabled={isAnyExporting}
+            fullWidth
+            startIcon={
+              isExportingTransactions ? (
+                <CircularProgress size={14} color='inherit' />
+              ) : (
+                <i className='tabler-file-download' />
+              )
+            }
+            sx={{ minHeight: 32, fontSize: '0.8rem', py: 0.5 }}
+          >
+            {isExportingTransactions ? 'Exportando...' : 'Excel Transacciones'}
+          </Button>
+          <Button
+            variant='contained'
+            color='error'
+            size='small'
+            onClick={handleExportCriticalStock}
+            disabled={isAnyExporting}
+            fullWidth
+            startIcon={
+              isExportingCritical ? (
+                <CircularProgress size={14} color='inherit' />
+              ) : (
+                <i className='tabler-alert-triangle' />
+              )
+            }
+            sx={{ minHeight: 32, fontSize: '0.8rem', py: 0.5 }}
+          >
+            {isExportingCritical ? 'Exportando...' : 'Stock Crítico'}
+          </Button>
+        </Box>
+
+        <Divider sx={{ mb: 3 }} />
         <Box
           sx={{
             maxHeight: '400px',

@@ -79,6 +79,7 @@ const CreateEditOutfitModal = ({ open, onClose, outfit, onSuccess, onError }: Cr
   const [imagePreviews, setImagePreviews] = useState<string[]>([])
   const [isDraggingImage, setIsDraggingImage] = useState(false)
   const [gender, setGender] = useState<Gender>('male')
+  const [urlsToDelete, setUrlsToDelete] = useState<string[]>([])
 
   const createOutfit = useCreateOutfit()
   const updateOutfit = useUpdateOutfit()
@@ -169,6 +170,7 @@ const CreateEditOutfitModal = ({ open, onClose, outfit, onSuccess, onError }: Cr
       }
 
       setSearchTerm('')
+      setUrlsToDelete([])
     }
   }, [open, fullOutfit])
 
@@ -289,31 +291,24 @@ const CreateEditOutfitModal = ({ open, onClose, outfit, onSuccess, onError }: Cr
   )
 
   const handleRemoveImage = useCallback(
-    async (index: number) => {
+    (index: number) => {
       const totalImages = images.length
       const isServerImage = index < totalImages
 
       if (isServerImage) {
-        // Eliminar imagen del servidor
         const imageUrl = images[index]
 
-        try {
-          await deleteMultimedia.mutateAsync([imageUrl])
-        } catch (error) {
-          console.error('Error deleting image:', error)
-        }
-
+        setUrlsToDelete(prev => [...prev, imageUrl])
         setImages(prev => prev.filter((_, i) => i !== index))
         setImagePreviews(prev => prev.filter((_, i) => i !== index))
       } else {
-        // Eliminar archivo local
         const localIndex = index - totalImages
 
         setImageFiles(prev => prev.filter((_, i) => i !== localIndex))
         setImagePreviews(prev => prev.filter((_, i) => i !== index))
       }
     },
-    [images, deleteMultimedia]
+    [images]
   )
 
   const handleVideoChange = useCallback(
@@ -329,29 +324,22 @@ const CreateEditOutfitModal = ({ open, onClose, outfit, onSuccess, onError }: Cr
   )
 
   const handleRemoveVideo = useCallback(
-    async (index: number) => {
+    (index: number) => {
       const totalVideos = videos.length
       const isServerVideo = index < totalVideos
 
       if (isServerVideo) {
-        // Eliminar video del servidor
         const videoUrl = videos[index]
 
-        try {
-          await deleteMultimedia.mutateAsync([videoUrl])
-        } catch (error) {
-          console.error('Error deleting video:', error)
-        }
-
+        setUrlsToDelete(prev => [...prev, videoUrl])
         setVideos(prev => prev.filter((_, i) => i !== index))
       } else {
-        // Eliminar archivo local
         const localIndex = index - totalVideos
 
         setVideoFiles(prev => prev.filter((_, i) => i !== localIndex))
       }
     },
-    [videos, deleteMultimedia]
+    [videos]
   )
 
   const handleSubmit = useCallback(async () => {
@@ -409,6 +397,15 @@ const CreateEditOutfitModal = ({ open, onClose, outfit, onSuccess, onError }: Cr
         onSuccess('Outfit creado correctamente')
       }
 
+      if (urlsToDelete.length > 0) {
+        try {
+          await deleteMultimedia.mutateAsync(urlsToDelete)
+          setUrlsToDelete([])
+        } catch (error) {
+          console.error('Error deleting old files:', error)
+        }
+      }
+
       onClose()
     } catch (error) {
       onError(error instanceof Error ? error.message : 'Error al guardar el outfit')
@@ -424,6 +421,8 @@ const CreateEditOutfitModal = ({ open, onClose, outfit, onSuccess, onError }: Cr
     fullOutfit,
     createOutfit,
     updateOutfit,
+    deleteMultimedia,
+    urlsToDelete,
     onSuccess,
     onError,
     onClose

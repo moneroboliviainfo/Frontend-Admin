@@ -87,6 +87,7 @@ const StepVariantDetails = ({ activeStep, handlePrev, steps, mode, productId, pr
   const [isMediaUploading, setIsMediaUploading] = useState(false)
   const [isSavingVariant, setIsSavingVariant] = useState(false)
   const [savingMessage, setSavingMessage] = useState('')
+  const [urlsToDelete, setUrlsToDelete] = useState<string[]>([])
 
   const [snackbarOpen, setSnackbarOpen] = useState(false)
   const [snackPack, setSnackPack] = useState<SnackbarMessage[]>([])
@@ -170,6 +171,7 @@ const StepVariantDetails = ({ activeStep, handlePrev, steps, mode, productId, pr
     setColorError(null)
     setFilesError(null)
     setSizesError(null)
+    setUrlsToDelete([])
   }
 
   const handleAddSize = () => {
@@ -344,6 +346,17 @@ const StepVariantDetails = ({ activeStep, handlePrev, steps, mode, productId, pr
         showMessage('Variante guardada exitosamente', 'success')
       }
 
+      if (urlsToDelete.length > 0) {
+        setSavingMessage('Limpiando archivos antiguos...')
+
+        try {
+          await deleteMultimedia.mutateAsync(urlsToDelete)
+          setUrlsToDelete([])
+        } catch (error) {
+          console.error('Error deleting old files:', error)
+        }
+      }
+
       handleClearForm()
     } catch (error) {
       if (error instanceof z.ZodError) {
@@ -425,18 +438,15 @@ const StepVariantDetails = ({ activeStep, handlePrev, steps, mode, productId, pr
     }
   }
 
-  const handleDeleteExistingFile = async (url: string) => {
-    try {
-      await deleteMultimedia.mutateAsync([url])
-      showMessage('Archivo eliminado', 'success')
+  const handleDeleteExistingFile = (url: string) => {
+    setUrlsToDelete(prev => [...prev, url])
 
-      setVariantForm(prev => ({
-        ...prev,
-        mediaFiles: prev.mediaFiles.filter(file => file.url !== url)
-      }))
-    } catch (error) {
-      showMessage('Error al eliminar el archivo', 'error')
-    }
+    setVariantForm(prev => ({
+      ...prev,
+      mediaFiles: prev.mediaFiles.filter(file => file.url !== url)
+    }))
+
+    showMessage('Archivo marcado para eliminar (se eliminará al guardar)', 'info')
   }
 
   useEffect(() => {

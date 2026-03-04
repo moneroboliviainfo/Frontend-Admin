@@ -160,6 +160,14 @@ class VariantServiceClass {
 
     return response.data
   }
+
+  async exportCriticalStock(): Promise<Blob> {
+    const response = await apiClient.get('/api/variants/export/stock-critico', {
+      responseType: 'blob'
+    })
+
+    return response.data
+  }
 }
 
 export const variantService = new VariantServiceClass()

@@ -73,6 +73,7 @@ const CreateEditCategoryModal = ({
   const [isProcessingImage, setIsProcessingImage] = useState(false)
   const [processingVideoIndex, setProcessingVideoIndex] = useState<number | null>(null)
   const [playingVideoIndex, setPlayingVideoIndex] = useState<number | null>(null)
+  const [urlsToDelete, setUrlsToDelete] = useState<string[]>([])
 
   const isEditMode = mode === 'edit' && categoryId
 
@@ -227,19 +228,15 @@ const CreateEditCategoryModal = ({
     [processImageFile]
   )
 
-  const handleRemoveImage = useCallback(async () => {
+  const handleRemoveImage = useCallback(() => {
     if (image && !imageFile) {
-      try {
-        await deleteMultimedia.mutateAsync([image])
-      } catch (error) {
-        console.error('Error deleting image:', error)
-      }
+      setUrlsToDelete(prev => [...prev, image])
     }
 
     setImageFile(null)
     setImagePreview('')
     setImage('')
-  }, [image, imageFile, deleteMultimedia])
+  }, [image, imageFile])
 
   const handleVideoChange = useCallback(
     (index: number, event: React.ChangeEvent<HTMLInputElement>) => {
@@ -272,7 +269,7 @@ const CreateEditCategoryModal = ({
   )
 
   const handleRemoveVideo = useCallback(
-    async (index: number) => {
+    (index: number) => {
       const subcategoria = subcategorias[index]
 
       if (subcategoria.videoPreview) {
@@ -280,11 +277,7 @@ const CreateEditCategoryModal = ({
       }
 
       if (subcategoria.videos && subcategoria.videos.length > 0 && !subcategoria.videoFiles) {
-        try {
-          await deleteMultimedia.mutateAsync(subcategoria.videos)
-        } catch (error) {
-          console.error('Error deleting video:', error)
-        }
+        setUrlsToDelete(prev => [...prev, ...subcategoria.videos!])
       }
 
       const nuevasSubcategorias = [...subcategorias]
@@ -297,7 +290,7 @@ const CreateEditCategoryModal = ({
       }
       setSubcategorias(nuevasSubcategorias)
     },
-    [subcategorias, deleteMultimedia]
+    [subcategorias]
   )
 
   const añadirSubcategoria = () => {
@@ -478,6 +471,16 @@ const CreateEditCategoryModal = ({
         onSuccess('Categoría creada exitosamente')
       }
 
+      if (urlsToDelete.length > 0) {
+        setSavingMessage('Limpiando archivos antiguos...')
+
+        try {
+          await deleteMultimedia.mutateAsync(urlsToDelete)
+        } catch (error) {
+          console.error('Error deleting old files:', error)
+        }
+      }
+
       handleReset()
     } catch (error) {
       console.error('Error creating/updating category:', error)
@@ -532,6 +535,7 @@ const CreateEditCategoryModal = ({
     setImageFile(null)
     setSubcategorias([{ name: '', enabled: true, isNew: true }])
     setPlayingVideoIndex(null)
+    setUrlsToDelete([])
   }
 
   const isProcessingFiles = isProcessingImage || processingVideoIndex !== null
