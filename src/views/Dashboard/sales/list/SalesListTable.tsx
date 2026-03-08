@@ -315,7 +315,9 @@ const OrdersListTable = () => {
                     </td>
                     <td className='p-4'>
                       <Typography variant='body2' color='text.secondary'>
-                        {order.customer?.name || 'N/A'}
+                        {order.customer?.email === 'guest@moneroget.com'
+                          ? (order.name || '-')
+                          : (order.customer?.name || 'N/A')}
                       </Typography>
                     </td>
                   </tr>
