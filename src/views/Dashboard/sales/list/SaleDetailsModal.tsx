@@ -368,66 +368,81 @@ const OrderDetailsModal = ({ open, onClose, order }: OrderDetailsModalProps) => 
                   Información del Cliente
                 </Typography>
                 <Grid container spacing={3}>
-                  {order.customer.name && (
-                    <Grid size={{ xs: 12, sm: 6 }}>
-                      <Typography variant='overline' className='text-textSecondary text-xs font-medium block'>
-                        Nombre
-                      </Typography>
-                      <Typography variant='body1' className='font-semibold mt-1'>
-                        {order.customer.name}
-                      </Typography>
-                    </Grid>
-                  )}
-                  {order.customer.email && (
-                    <Grid size={{ xs: 12, sm: 6 }}>
-                      <Typography variant='overline' className='text-textSecondary text-xs font-medium block'>
-                        Email
-                      </Typography>
-                      <Typography variant='body1' className='font-medium mt-1'>
-                        {order.customer.email}
-                      </Typography>
-                    </Grid>
-                  )}
-                  {order.customer.phone && (
-                    <Grid size={{ xs: 12, sm: 6 }}>
-                      <Typography variant='overline' className='text-textSecondary text-xs font-medium block'>
-                        Teléfono
-                      </Typography>
-                      <Box className='flex items-center gap-2 mt-1'>
-                        <Typography variant='body1' className='font-medium'>
-                          {order.customer.phone}
-                        </Typography>
-                        <IconButton
-                          size='small'
-                          color='success'
-                          href={`https://wa.me/${order.customer.phone.replace(/[^0-9]/g, '')}`}
-                          target='_blank'
-                          rel='noopener noreferrer'
-                          sx={{
-                            bgcolor: '#25D366',
-                            color: 'white',
-                            width: 32,
-                            height: 32,
-                            '&:hover': {
-                              bgcolor: '#128C7E'
-                            }
-                          }}
-                        >
-                          <i className='tabler-brand-whatsapp' style={{ fontSize: '1.25rem' }} />
-                        </IconButton>
-                      </Box>
-                    </Grid>
-                  )}
-                  {order.customer.type && (
-                    <Grid size={{ xs: 12, sm: 6 }}>
-                      <Typography variant='overline' className='text-textSecondary text-xs font-medium block'>
-                        Tipo de Cliente
-                      </Typography>
-                      <Typography variant='body1' className='font-medium mt-1'>
-                        {order.customer.type === 'registered' ? 'Registrado' : 'Suscriptor'}
-                      </Typography>
-                    </Grid>
-                  )}
+                  {(() => {
+                    const isGuestCustomer = order.customer.email === 'guest@moneroget.com'
+
+                    // Si es invitado, usar datos de la orden; si no, usar datos del customer
+                    const displayName = isGuestCustomer ? (order.name || '-') : order.customer.name
+                    const displayEmail = isGuestCustomer ? (order.email || '-') : order.customer.email
+                    const displayPhone = isGuestCustomer ? (order.phone || null) : order.customer.phone
+
+                    return (
+                      <>
+                        <Grid size={{ xs: 12, sm: 6 }}>
+                          <Typography variant='overline' className='text-textSecondary text-xs font-medium block'>
+                            Nombre
+                          </Typography>
+                          <Typography variant='body1' className='font-semibold mt-1'>
+                            {displayName || '-'}
+                          </Typography>
+                        </Grid>
+                        <Grid size={{ xs: 12, sm: 6 }}>
+                          <Typography variant='overline' className='text-textSecondary text-xs font-medium block'>
+                            Email
+                          </Typography>
+                          <Typography variant='body1' className='font-medium mt-1'>
+                            {displayEmail || '-'}
+                          </Typography>
+                        </Grid>
+                        <Grid size={{ xs: 12, sm: 6 }}>
+                          <Typography variant='overline' className='text-textSecondary text-xs font-medium block'>
+                            Teléfono
+                          </Typography>
+                          {displayPhone ? (
+                            <Box className='flex items-center gap-2 mt-1'>
+                              <Typography variant='body1' className='font-medium'>
+                                {displayPhone}
+                              </Typography>
+                              <IconButton
+                                size='small'
+                                color='success'
+                                href={`https://wa.me/${displayPhone.replace(/[^0-9]/g, '')}`}
+                                target='_blank'
+                                rel='noopener noreferrer'
+                                sx={{
+                                  bgcolor: '#25D366',
+                                  color: 'white',
+                                  width: 32,
+                                  height: 32,
+                                  '&:hover': {
+                                    bgcolor: '#128C7E'
+                                  }
+                                }}
+                              >
+                                <i className='tabler-brand-whatsapp' style={{ fontSize: '1.25rem' }} />
+                              </IconButton>
+                            </Box>
+                          ) : (
+                            <Typography variant='body1' className='font-medium mt-1'>
+                              -
+                            </Typography>
+                          )}
+                        </Grid>
+                        <Grid size={{ xs: 12, sm: 6 }}>
+                          <Typography variant='overline' className='text-textSecondary text-xs font-medium block'>
+                            Tipo de Cliente
+                          </Typography>
+                          <Typography variant='body1' className='font-medium mt-1'>
+                            {isGuestCustomer
+                              ? 'Invitado'
+                              : order.customer.type === 'registered'
+                                ? 'Registrado'
+                                : 'Suscriptor'}
+                          </Typography>
+                        </Grid>
+                      </>
+                    )
+                  })()}
                 </Grid>
               </CardContent>
             </Card>

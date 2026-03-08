@@ -176,9 +176,9 @@ const BannerCard = ({ banner, onVideoUpload, isUploading, getBannerLabel }: Bann
 
       const file = acceptedFiles[0]
 
-      // Validar tamaño (3MB máximo)
-      if (file.size > 3 * 1024 * 1024) {
-        alert('El archivo es demasiado grande. Máximo 3MB.')
+      // Validar tamaño (5MB máximo)
+      if (file.size > 5 * 1024 * 1024) {
+        alert('El archivo es demasiado grande. Máximo 5MB.')
 
         return
       }
@@ -310,7 +310,7 @@ const BannerCard = ({ banner, onVideoUpload, isUploading, getBannerLabel }: Bann
                 {isDragActive ? 'Suelta el archivo aquí' : 'Arrastra un video MP4 aquí o haz clic'}
               </Typography>
               <Typography variant='caption' color='text.secondary'>
-                Máximo 3MB
+                Máximo 5MB
               </Typography>
             </Box>
           )}

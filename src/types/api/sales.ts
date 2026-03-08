@@ -64,6 +64,10 @@ export interface Order {
   shipment_price?: number
   address_data?: any | null
   edited?: boolean
+  // Campos para órdenes de invitados (cuando customer.email es guest@moneroget.com)
+  email?: string | null
+  name?: string | null
+  phone?: string | null
 }
 
 export interface CreateOrderRequest {

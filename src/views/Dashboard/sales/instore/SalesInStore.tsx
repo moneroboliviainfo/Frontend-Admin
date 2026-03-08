@@ -417,10 +417,15 @@ const PointOfSale: React.FC = () => {
           setQrData(qrResponse)
           setIsVerifyingPayment(true)
 
-          const expirationDate = new Date()
+          // Usar expiresAt del backend si está disponible
+          if (orderData.expiresAt) {
+            setOrderExpiresAt(new Date(orderData.expiresAt))
+          } else {
+            const expirationDate = new Date()
 
-          expirationDate.setMinutes(expirationDate.getMinutes() + 15)
-          setOrderExpiresAt(expirationDate)
+            expirationDate.setMinutes(expirationDate.getMinutes() + 15)
+            setOrderExpiresAt(expirationDate)
+          }
         } catch (error: any) {
           setErrorMessage(error?.response?.data?.message || 'Error al generar código QR')
           setCurrentStep('ORDER_CREATED')
@@ -428,10 +433,15 @@ const PointOfSale: React.FC = () => {
           setSelectedPayment('')
         }
       } else {
-        const expirationDate = new Date()
+        // Usar expiresAt del backend si está disponible
+        if (orderData.expiresAt) {
+          setOrderExpiresAt(new Date(orderData.expiresAt))
+        } else {
+          const expirationDate = new Date()
 
-        expirationDate.setMinutes(expirationDate.getMinutes() + 25)
-        setOrderExpiresAt(expirationDate)
+          expirationDate.setMinutes(expirationDate.getMinutes() + 25)
+          setOrderExpiresAt(expirationDate)
+        }
       }
 
       return
@@ -449,15 +459,21 @@ const PointOfSale: React.FC = () => {
 
       setOrderData(order)
 
-      const expirationDate = new Date()
-
-      if (paymentType === 'qr') {
-        expirationDate.setMinutes(expirationDate.getMinutes() + 15)
+      // Usar expiresAt del backend si está disponible
+      if (order.expiresAt) {
+        setOrderExpiresAt(new Date(order.expiresAt))
       } else {
-        expirationDate.setMinutes(expirationDate.getMinutes() + 25)
-      }
+        // Fallback: crear fecha local si el backend no envía expiresAt
+        const expirationDate = new Date()
 
-      setOrderExpiresAt(expirationDate)
+        if (paymentType === 'qr') {
+          expirationDate.setMinutes(expirationDate.getMinutes() + 15)
+        } else {
+          expirationDate.setMinutes(expirationDate.getMinutes() + 25)
+        }
+
+        setOrderExpiresAt(expirationDate)
+      }
 
       if (paymentType === 'qr') {
         setCurrentStep('PAYMENT')
@@ -633,7 +649,20 @@ const PointOfSale: React.FC = () => {
     setVariantsPage(newPage + 1)
   }
 
-  const timerProgress = orderExpiresAt ? (timeRemaining / (selectedPayment === 'qr' ? 15 * 60 : 25 * 60)) * 100 : 100
+  // Calcular el tiempo total basado en los datos del backend
+  const totalDuration = useMemo(() => {
+    if (orderData?.createdAt && orderData?.expiresAt) {
+      const created = new Date(orderData.createdAt).getTime()
+      const expires = new Date(orderData.expiresAt).getTime()
+
+      return Math.floor((expires - created) / 1000)
+    }
+
+    // Fallback a valores por defecto
+    return selectedPayment === 'qr' ? 15 * 60 : 25 * 60
+  }, [orderData?.createdAt, orderData?.expiresAt, selectedPayment])
+
+  const timerProgress = orderExpiresAt ? (timeRemaining / totalDuration) * 100 : 100
 
   const handleSubmitDailyCash = async () => {
     setDailyCashError('')
