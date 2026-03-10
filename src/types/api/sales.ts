@@ -66,8 +66,10 @@ export interface Order {
   edited?: boolean
 
   email?: string | null
-  name?: string | null
-  phone?: string | null
+  name_phone?: {
+    name?: string | null
+    phone?: string | null
+  } | null
 }
 
 export interface CreateOrderRequest {

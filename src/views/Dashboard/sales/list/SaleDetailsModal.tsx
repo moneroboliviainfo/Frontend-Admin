@@ -372,9 +372,9 @@ const OrderDetailsModal = ({ open, onClose, order }: OrderDetailsModalProps) => 
                     const isGuestCustomer = order.customer.email === 'guest@moneroget.com'
 
                     // Si es invitado, usar datos de la orden; si no, usar datos del customer
-                    const displayName = isGuestCustomer ? (order.name || '-') : order.customer.name
+                    const displayName = isGuestCustomer ? (order.name_phone?.name || '-') : order.customer.name
                     const displayEmail = isGuestCustomer ? (order.email || '-') : order.customer.email
-                    const displayPhone = isGuestCustomer ? (order.phone || null) : order.customer.phone
+                    const displayPhone = isGuestCustomer ? (order.name_phone?.phone || null) : order.customer.phone
 
                     return (
                       <>
