@@ -219,10 +219,6 @@ const OrderDetailsModal = ({ open, onClose, order }: OrderDetailsModalProps) => 
 
     if (isToday) return false
 
-    const hasDiscount = order.items.some(item => item.discountValue > 0)
-
-    if (hasDiscount) return false
-
     return true
   }
 
