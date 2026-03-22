@@ -1,6 +1,8 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
+
+import { useSearchParams, useRouter } from 'next/navigation'
 
 import Card from '@mui/material/Card'
 import CardHeader from '@mui/material/CardHeader'
@@ -55,22 +57,27 @@ const getEstadoLabel = (estado: string): string => {
   return labels[estado] || estado
 }
 
-const getRowBackgroundColor = (estado: string): string => {
+const getRowBackgroundColor = (estado: string, edited?: boolean): string => {
+  if (estado === 'cancelled' || estado === 'expired') {
+    return 'bg-red-500/15 hover:bg-red-500/25'
+  }
+
+  if (edited) {
+    return 'bg-amber-400/20 hover:bg-amber-400/30'
+  }
+
   switch (estado) {
     case 'sent':
     case 'completed':
-      return 'bg-green-50 hover:bg-green-100'
+      return 'bg-green-500/10 hover:bg-green-500/20'
     case 'paid':
-      return 'bg-yellow-50 hover:bg-yellow-100'
-    case 'cancelled':
-    case 'expired':
-      return 'bg-red-50 hover:bg-red-100'
+      return 'bg-yellow-500/10 hover:bg-yellow-500/20'
     case 'cancelled_for_edit':
-      return 'bg-orange-50 hover:bg-orange-100'
+      return 'bg-amber-400/15 hover:bg-amber-400/25'
     case 'pending':
-      return 'bg-amber-50 hover:bg-amber-100'
+      return 'bg-amber-500/10 hover:bg-amber-500/20'
     case 'confirmed':
-      return 'bg-blue-50 hover:bg-blue-100'
+      return 'bg-blue-500/10 hover:bg-blue-500/20'
     default:
       return 'hover:bg-actionHover'
   }
@@ -103,6 +110,8 @@ const formatDate = (dateString: string): string => {
 }
 
 const OrdersListTable = () => {
+  const router = useRouter()
+  const searchParams = useSearchParams()
   const userEmail = authService.getUserEmail()
   const userRole = getRoleFromEmail(userEmail)
   const isCashier = userRole === 'CASHIER'
@@ -125,6 +134,24 @@ const OrdersListTable = () => {
     endDate: endDate || undefined,
     paymentType: paymentTypeFilter === 'all' ? undefined : (paymentTypeFilter as 'cash' | 'card' | 'qr')
   })
+
+  // Detectar parámetro showOrderId para abrir modal automáticamente (después de editar una orden)
+  useEffect(() => {
+    const showOrderId = searchParams.get('showOrderId')
+
+    if (showOrderId && data?.data) {
+      const orderId = parseInt(showOrderId, 10)
+      const orderToShow = data.data.find(order => order.id === orderId)
+
+      if (orderToShow) {
+        setSelectedOrder(orderToShow)
+        setModalOpen(true)
+
+        // Limpiar el parámetro de la URL sin recargar la página
+        router.replace('/sales/list', { scroll: false })
+      }
+    }
+  }, [searchParams, data?.data, router])
 
   const handleRowClick = (order: Order) => {
     setSelectedOrder(order)
@@ -277,11 +304,11 @@ const OrdersListTable = () => {
                   <tr
                     key={order.id}
                     onClick={() => handleRowClick(order)}
-                    className={`border-b cursor-pointer transition-colors ${getRowBackgroundColor(order.status)}`}
+                    className={`border-b cursor-pointer transition-colors ${getRowBackgroundColor(order.status, order.edited)}`}
                   >
                     <td className='p-4'>
                       <Typography variant='body2' className='font-medium'>
-                        #{order.id}
+                        #{order.inherited_id || order.id}
                       </Typography>
                     </td>
                     <td className='p-4'>
@@ -316,8 +343,8 @@ const OrdersListTable = () => {
                     <td className='p-4'>
                       <Typography variant='body2' color='text.secondary'>
                         {order.customer?.email === 'guest@moneroget.com'
-                          ? (order.name_phone?.name || '-')
-                          : (order.customer?.name || 'N/A')}
+                          ? order.name_phone?.name || '-'
+                          : order.customer?.name || 'N/A'}
                       </Typography>
                     </td>
                   </tr>

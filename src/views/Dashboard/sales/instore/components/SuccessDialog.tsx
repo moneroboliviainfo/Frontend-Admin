@@ -45,7 +45,7 @@ const SuccessDialog: React.FC<SuccessDialogProps> = ({
       </DialogContent>
       <DialogActions sx={{ p: 3, gap: 2, flexDirection: 'column' }}>
         <Button variant='contained' fullWidth size='large' onClick={onAccept} color={isEditingOrder ? 'warning' : 'primary'}>
-          {isEditingOrder ? 'Ir a Lista de Ventas' : 'Aceptar'}
+          {isEditingOrder ? 'Ver Detalles de la Orden' : 'Aceptar'}
         </Button>
         {!isEditingOrder && (
           <Button variant='outlined' fullWidth size='large' onClick={onViewSales}>

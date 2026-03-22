@@ -64,6 +64,7 @@ export interface Order {
   shipment_price?: number
   address_data?: any | null
   edited?: boolean
+  inherited_id?: number | null
 
   email?: string | null
   name_phone?: {

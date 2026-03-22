@@ -234,7 +234,7 @@ const OrderDetailsModal = ({ open, onClose, order }: OrderDetailsModalProps) => 
     <Dialog open={open} onClose={onClose} maxWidth='lg' fullWidth scroll='paper'>
       <DialogTitle className='flex justify-between items-center pb-4'>
         <Typography variant='h4' component='span' className='font-semibold'>
-          Detalles de la Orden #{order.id}
+          Detalles de la Orden #{order.inherited_id || order.id}
         </Typography>
         <IconButton onClick={onClose} size='small'>
           <i className='tabler-x text-xl' />
@@ -257,7 +257,7 @@ const OrderDetailsModal = ({ open, onClose, order }: OrderDetailsModalProps) => 
                         ID de Orden
                       </Typography>
                       <Typography variant='h6' className='font-bold mt-1'>
-                        #{order.id}
+                        #{order.inherited_id || order.id}
                       </Typography>
                     </Box>
 
@@ -830,7 +830,7 @@ const OrderDetailsModal = ({ open, onClose, order }: OrderDetailsModalProps) => 
         </DialogTitle>
         <DialogContent>
           <Typography>
-            ¿Estás seguro que deseas cancelar la orden #{order.id}? Esta acción no se puede deshacer.
+            ¿Estás seguro que deseas cancelar la orden #{order.inherited_id || order.id}? Esta acción no se puede deshacer.
           </Typography>
         </DialogContent>
         <DialogActions sx={{ p: 2, gap: 1 }}>

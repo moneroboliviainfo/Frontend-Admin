@@ -214,7 +214,6 @@ const PointOfSale: React.FC = () => {
     }
   }, [orderExpiresAt])
 
-  // Efecto para detectar cuando el pago con QR ha sido verificado exitosamente
   useEffect(() => {
     const isPaid =
       paymentVerification === true ||
@@ -667,7 +666,7 @@ const PointOfSale: React.FC = () => {
   const handleSubmitDailyCash = async () => {
     setDailyCashError('')
 
-    const amount = parseFloat(initialAmount)
+    const amount = parseInt(initialAmount, 10)
 
     if (isNaN(amount) || amount < 0) {
       setDailyCashError('Debe ingresar un monto válido (0 o mayor)')
@@ -677,7 +676,7 @@ const PointOfSale: React.FC = () => {
 
     try {
       await createDailyCash.mutateAsync({
-        quantity: amount.toFixed(2)
+        quantity: String(amount)
       })
 
       setDailyCashModalOpen(false)
@@ -733,14 +732,21 @@ const PointOfSale: React.FC = () => {
 
               <TextField
                 label='Monto Inicial (Bs)'
-                type='number'
+                type='text'
+                inputMode='numeric'
                 value={initialAmount}
-                onChange={e => setInitialAmount(e.target.value)}
+                onChange={e => {
+                  // Solo permitir enteros
+                  const value = e.target.value.replace(/[^0-9]/g, '')
+
+                  setInitialAmount(value)
+                }}
                 fullWidth
                 autoFocus
-                inputProps={{
-                  min: 0,
-                  step: 0.01
+                slotProps={{
+                  htmlInput: {
+                    pattern: '[0-9]*'
+                  }
                 }}
                 error={!!dailyCashError}
                 helperText={dailyCashError}
@@ -848,8 +854,8 @@ const PointOfSale: React.FC = () => {
         onAccept={() => {
           setShowSuccessDialog(false)
 
-          if (isEditingOrder) {
-            router.push('/sales/list')
+          if (isEditingOrder && editingOrderId) {
+            router.push(`/sales/list?showOrderId=${editingOrderId}`)
           } else {
             clearCart()
           }
