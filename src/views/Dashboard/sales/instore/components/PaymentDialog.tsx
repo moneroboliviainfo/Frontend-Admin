@@ -122,9 +122,9 @@ const PaymentDialog: React.FC<PaymentDialogProps> = ({
       <DialogTitle>
         <Typography variant='h5' fontWeight='bold'>
           {isEditingOrder
-            ? `Confirmar Edición - Orden #${editingOrderId}`
+            ? `Confirmar Edición - Orden #${orderData?.inherited_id || editingOrderId}`
             : orderData
-              ? `Método de Pago - Orden #${orderData.id}`
+              ? `Método de Pago - Orden #${orderData.inherited_id || orderData.id}`
               : 'Seleccione Método de Pago'}
           {timeRemaining > 0 && orderData && !isEditingOrder && (
             <Paper sx={{ p: 2, mb: 3, bgcolor: 'warning.lighter', border: 1, borderColor: 'warning.main' }}>
