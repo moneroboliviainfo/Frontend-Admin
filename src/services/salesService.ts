@@ -36,12 +36,7 @@ class CartServiceClass {
   //Crear orden
 
   async createOrder(data: CreateOrderRequest): Promise<Order> {
-    const payload = {
-      items: data.token,
-      payment_type: data.payment_type
-    }
-
-    const response = await apiClient.post<Order>('/api/orders/in-store', payload)
+    const response = await apiClient.post<Order>('/api/orders/in-store', data)
 
     return response.data
   }

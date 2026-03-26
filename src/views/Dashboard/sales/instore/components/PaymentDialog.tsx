@@ -18,7 +18,7 @@ import {
 } from '@mui/material'
 import Grid from '@mui/material/Grid2'
 
-import type { Order, RepriceResponse, GenerateQRResponse } from '@/types/api/sales'
+import type { Order, RepriceResponse, GenerateQRResponse, BillingInfo } from '@/types/api/sales'
 
 interface PaymentMethod {
   id: string
@@ -44,6 +44,8 @@ interface PaymentDialogProps {
   onCancelOrder: () => void
   isEditingOrder?: boolean
   editingOrderId?: number | null
+  billing: BillingInfo
+  onBillingChange: (billing: BillingInfo) => void
 }
 
 const PaymentDialog: React.FC<PaymentDialogProps> = ({
@@ -62,9 +64,20 @@ const PaymentDialog: React.FC<PaymentDialogProps> = ({
   onConfirmPayment,
   onCancelOrder,
   isEditingOrder = false,
-  editingOrderId = null
+  editingOrderId = null,
+  billing,
+  onBillingChange
 }) => {
   const [cashReceived, setCashReceived] = useState<string>('')
+
+  const handleBillingFieldChange = (field: keyof BillingInfo, value: string) => {
+    onBillingChange({
+      ...billing,
+      [field]: value
+    })
+  }
+
+  const isBillingValid = billing.ci.trim().length > 0
 
   const totalToPay = useMemo(() => {
     if (orderData) {
@@ -166,33 +179,95 @@ const PaymentDialog: React.FC<PaymentDialogProps> = ({
         </Paper>
 
         {!orderData && !isEditingOrder && (
-          <Grid container spacing={2}>
-            {paymentMethods.map(method => (
-              <Grid size={{ xs: 6 }} key={method.id}>
-                <Card
-                  sx={{
-                    cursor: 'pointer',
-                    border: 2,
-                    borderColor: selectedPayment === method.id ? method.color : 'divider',
-                    textAlign: 'center',
-                    transition: 'all 0.2s',
-                    '&:hover': {
-                      borderColor: method.color,
-                      boxShadow: 2
-                    }
-                  }}
-                  onClick={() => !isLoading && onPaymentSelect(method.id as 'cash' | 'card' | 'qr')}
-                >
-                  <CardContent>
-                    <Box sx={{ fontSize: '3rem', mb: 1 }}>{method.icon}</Box>
-                    <Typography variant='h6' fontWeight='medium'>
-                      {method.name}
-                    </Typography>
-                  </CardContent>
-                </Card>
-              </Grid>
-            ))}
-          </Grid>
+          <Paper sx={{ p: 2, mb: 3, bgcolor: 'action.hover' }}>
+            <Typography variant='subtitle2' fontWeight='bold' sx={{ mb: 2 }}>
+              Datos de Facturación
+            </Typography>
+            <TextField
+              fullWidth
+              size='small'
+              label='CI / NIT *'
+              value={billing.ci}
+              onChange={e => handleBillingFieldChange('ci', e.target.value)}
+              sx={{ mb: 1.5 }}
+              required
+              error={billing.ci.length > 0 && !isBillingValid}
+            />
+            <TextField
+              fullWidth
+              size='small'
+              label='Nombre'
+              value={billing.name || ''}
+              onChange={e => handleBillingFieldChange('name', e.target.value)}
+              sx={{ mb: 1.5 }}
+            />
+            <Box sx={{ display: 'flex', gap: 1, mb: 1.5 }}>
+              <TextField
+                size='small'
+                label='Teléfono'
+                value={billing.phone || ''}
+                onChange={e => handleBillingFieldChange('phone', e.target.value)}
+                sx={{ flex: 1 }}
+              />
+              <TextField
+                size='small'
+                label='Complemento'
+                value={billing.complemento || ''}
+                onChange={e => handleBillingFieldChange('complemento', e.target.value)}
+                sx={{ width: 120 }}
+                placeholder='Ej: LP'
+              />
+            </Box>
+            <TextField
+              fullWidth
+              size='small'
+              label='Email'
+              type='email'
+              value={billing.email || ''}
+              onChange={e => handleBillingFieldChange('email', e.target.value)}
+            />
+          </Paper>
+        )}
+
+        {!orderData && !isEditingOrder && (
+          <>
+            <Typography variant='subtitle2' fontWeight='bold' sx={{ mb: 2 }}>
+              Seleccione Método de Pago
+            </Typography>
+            <Grid container spacing={2}>
+              {paymentMethods.map(method => (
+                <Grid size={{ xs: 6 }} key={method.id}>
+                  <Card
+                    sx={{
+                      cursor: isBillingValid && !isLoading ? 'pointer' : 'not-allowed',
+                      border: 2,
+                      borderColor: selectedPayment === method.id ? method.color : 'divider',
+                      textAlign: 'center',
+                      transition: 'all 0.2s',
+                      opacity: isBillingValid ? 1 : 0.5,
+                      '&:hover': {
+                        borderColor: isBillingValid ? method.color : 'divider',
+                        boxShadow: isBillingValid ? 2 : 0
+                      }
+                    }}
+                    onClick={() => isBillingValid && !isLoading && onPaymentSelect(method.id as 'cash' | 'card' | 'qr')}
+                  >
+                    <CardContent>
+                      <Box sx={{ fontSize: '3rem', mb: 1 }}>{method.icon}</Box>
+                      <Typography variant='h6' fontWeight='medium'>
+                        {method.name}
+                      </Typography>
+                    </CardContent>
+                  </Card>
+                </Grid>
+              ))}
+            </Grid>
+            {!isBillingValid && (
+              <Typography variant='caption' color='error' sx={{ mt: 2, display: 'block', textAlign: 'center' }}>
+                Ingrese el CI/NIT para seleccionar método de pago
+              </Typography>
+            )}
+          </>
         )}
 
         {orderData && selectedPayment && (

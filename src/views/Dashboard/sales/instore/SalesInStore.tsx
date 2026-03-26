@@ -31,7 +31,7 @@ import {
 } from '@/hooks/useSales'
 import { useDailyCash, useCreateDailyCash } from '@/hooks/useDailyCash'
 import { useVariants } from '@/hooks/useVariants'
-import type { CartItem, RepriceResponse, Order, GenerateQRResponse } from '@/types/api/sales'
+import type { CartItem, RepriceResponse, Order, GenerateQRResponse, BillingInfo } from '@/types/api/sales'
 import type { Variant, VariantSize } from '@/types/api/variants'
 import ProductCatalog from './components/ProductCatalog'
 import ShoppingCart from './components/ShoppingCart'
@@ -91,6 +91,14 @@ const PointOfSale: React.FC = () => {
 
   const [isEditingOrder, setIsEditingOrder] = useState(false)
   const [editingOrderId, setEditingOrderId] = useState<number | null>(null)
+  const [billing, setBilling] = useState<BillingInfo>({
+    ci: '',
+    name: '',
+    phone: '',
+    email: '',
+    complemento: '',
+    codigoTipoDocumentoIdentidad: 1
+  })
 
   const debounceTimerRef = useRef<NodeJS.Timeout>()
   const timerIntervalRef = useRef<NodeJS.Timeout>()
@@ -330,6 +338,14 @@ const PointOfSale: React.FC = () => {
     setOrderExpiresAt(null)
     setQrData(null)
     setIsVerifyingPayment(false)
+    setBilling({
+      ci: '',
+      name: '',
+      phone: '',
+      email: '',
+      complemento: '',
+      codigoTipoDocumentoIdentidad: 1
+    })
 
     if (timerIntervalRef.current) {
       clearInterval(timerIntervalRef.current)
@@ -450,8 +466,9 @@ const PointOfSale: React.FC = () => {
       setErrorMessage('')
 
       const payload = {
-        token: cartToken,
-        payment_type: paymentType
+        items: cartToken,
+        payment_type: paymentType,
+        billing
       }
 
       const order = await createOrderMutation.mutateAsync(payload)
@@ -838,6 +855,8 @@ const PointOfSale: React.FC = () => {
         onCancelOrder={() => setShowCancelDialog(true)}
         isEditingOrder={isEditingOrder}
         editingOrderId={editingOrderId}
+        billing={billing}
+        onBillingChange={setBilling}
       />
 
       <CancelDialog

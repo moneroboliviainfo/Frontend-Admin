@@ -73,10 +73,19 @@ export interface Order {
   } | null
 }
 
+export interface BillingInfo {
+  ci: string
+  name?: string
+  phone?: string
+  email?: string
+  complemento?: string
+  codigoTipoDocumentoIdentidad: number
+}
+
 export interface CreateOrderRequest {
-  token: string
+  items: string
   payment_type: 'cash' | 'card' | 'qr'
-  customerId?: string | number
+  billing: BillingInfo
 }
 
 export interface ConfirmOrderRequest {
