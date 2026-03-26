@@ -91,6 +91,7 @@ const PointOfSale: React.FC = () => {
 
   const [isEditingOrder, setIsEditingOrder] = useState(false)
   const [editingOrderId, setEditingOrderId] = useState<number | null>(null)
+
   const [billing, setBilling] = useState<BillingInfo>({
     ci: '',
     name: '',
