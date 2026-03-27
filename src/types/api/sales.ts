@@ -71,6 +71,16 @@ export interface Order {
     name?: string | null
     phone?: string | null
   } | null
+  billing?: {
+    id: number
+    ci: string
+    name?: string | null
+    phone?: string | null
+    email?: string | null
+    complemento?: string | null
+    codigoTipoDocumentoIdentidad: number
+    createdAt: string
+  } | null
 }
 
 export interface BillingInfo {
