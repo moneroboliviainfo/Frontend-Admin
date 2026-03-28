@@ -206,18 +206,7 @@ const OrderDetailsModal = ({ open, onClose, order }: OrderDetailsModalProps) => 
 
   const canEditOrder = () => {
     if (order.status === 'cancelled_for_edit') return true
-
     if (!['paid', 'sent'].includes(order.status)) return false
-
-    const orderDate = new Date(order.createdAt)
-    const today = new Date()
-
-    const isToday =
-      orderDate.getDate() === today.getDate() &&
-      orderDate.getMonth() === today.getMonth() &&
-      orderDate.getFullYear() === today.getFullYear()
-
-    if (isToday) return false
 
     return true
   }
