@@ -126,8 +126,7 @@ export const useGetOrder = (orderId: number | null, enabled: boolean = true) => 
 // Hook para actualizar orden (editar items)
 export const useUpdateOrder = () => {
   return useMutation({
-    mutationFn: ({ orderId, items }: { orderId: number; items: string }) =>
-      cartService.updateOrder(orderId, items),
+    mutationFn: ({ orderId, items }: { orderId: number; items: string }) => cartService.updateOrder(orderId, items),
     onError: (error: any) => {
       console.error('Error updating order:', error)
       throw error

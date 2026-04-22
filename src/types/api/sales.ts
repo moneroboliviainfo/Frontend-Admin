@@ -140,6 +140,9 @@ export interface OrdersListParams {
   startDate?: string
   endDate?: string
   paymentType?: 'cash' | 'card' | 'qr'
+  orderId?: number
+  name?: string
+  ci?: string
 }
 
 export interface OrdersListMeta {

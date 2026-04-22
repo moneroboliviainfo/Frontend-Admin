@@ -11,6 +11,8 @@ import Typography from '@mui/material/Typography'
 import TablePagination from '@mui/material/TablePagination'
 import CircularProgress from '@mui/material/CircularProgress'
 import Button from '@mui/material/Button'
+import TextField from '@mui/material/TextField'
+import Box from '@mui/material/Box'
 
 import { useOrders } from '@/hooks/useSales'
 import { authService } from '@/services/authService'
@@ -126,13 +128,22 @@ const OrdersListTable = () => {
   const [paymentTypeFilter, setPaymentTypeFilter] = useState('all')
   const [isExporting, setIsExporting] = useState(false)
 
+  // Estados para búsqueda por billing
+  const [searchOrderId, setSearchOrderId] = useState('')
+  const [searchName, setSearchName] = useState('')
+  const [searchCi, setSearchCi] = useState('')
+  const [appliedSearch, setAppliedSearch] = useState<{ orderId?: string; name?: string; ci?: string }>({})
+
   const { data, isLoading, isError } = useOrders({
     page: page + 1,
     limit,
     type: typeFilter === 'all' ? undefined : (typeFilter as 'in_store' | 'online'),
     startDate: startDate || undefined,
     endDate: endDate || undefined,
-    paymentType: paymentTypeFilter === 'all' ? undefined : (paymentTypeFilter as 'cash' | 'card' | 'qr')
+    paymentType: paymentTypeFilter === 'all' ? undefined : (paymentTypeFilter as 'cash' | 'card' | 'qr'),
+    orderId: appliedSearch.orderId ? parseInt(appliedSearch.orderId, 10) : undefined,
+    name: appliedSearch.name || undefined,
+    ci: appliedSearch.ci || undefined
   })
 
   // Detectar parámetro showOrderId para abrir modal automáticamente (después de editar una orden)
@@ -201,6 +212,26 @@ const OrdersListTable = () => {
     }
   }
 
+  const handleSearch = () => {
+    setAppliedSearch({
+      orderId: searchOrderId || undefined,
+      name: searchName || undefined,
+      ci: searchCi || undefined
+    })
+    setPage(0)
+  }
+
+  const handleClearSearch = () => {
+    setSearchOrderId('')
+    setSearchName('')
+    setSearchCi('')
+    setAppliedSearch({})
+    setPage(0)
+  }
+
+  const activeSearchField = searchOrderId ? 'orderId' : searchName ? 'name' : searchCi ? 'ci' : null
+  const hasActiveSearch = appliedSearch.orderId || appliedSearch.name || appliedSearch.ci
+
   if (isLoading) {
     return (
       <Card className='flex justify-center items-center p-10'>
@@ -245,6 +276,46 @@ const OrdersListTable = () => {
           paymentTypeFilter={paymentTypeFilter}
           setPaymentTypeFilter={setPaymentTypeFilter}
         />
+
+        <Box className='flex flex-wrap gap-3 p-6 pt-0 items-end'>
+          <TextField
+            size='small'
+            label='Buscar por ID Orden'
+            value={searchOrderId}
+            onChange={e => setSearchOrderId(e.target.value.replace(/[^0-9]/g, ''))}
+            disabled={!!activeSearchField && activeSearchField !== 'orderId'}
+            className='w-[150px]'
+          />
+          <TextField
+            size='small'
+            label='Buscar por Nombre'
+            value={searchName}
+            onChange={e => setSearchName(e.target.value)}
+            disabled={!!activeSearchField && activeSearchField !== 'name'}
+            className='w-[180px]'
+          />
+          <TextField
+            size='small'
+            label='Buscar por CI'
+            value={searchCi}
+            onChange={e => setSearchCi(e.target.value)}
+            disabled={!!activeSearchField && activeSearchField !== 'ci'}
+            className='w-[150px]'
+          />
+          <Button
+            variant='contained'
+            size='small'
+            onClick={handleSearch}
+            disabled={!activeSearchField}
+          >
+            Buscar
+          </Button>
+          {hasActiveSearch && (
+            <Button variant='outlined' size='small' color='secondary' onClick={handleClearSearch}>
+              Limpiar
+            </Button>
+          )}
+        </Box>
 
         <div className='overflow-x-auto'>
           <table className='w-full'>
