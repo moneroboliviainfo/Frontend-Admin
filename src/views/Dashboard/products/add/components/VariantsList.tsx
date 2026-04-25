@@ -72,7 +72,7 @@ const VariantsList = ({ variants, isLoading, editingVariantId, onVariantClick }:
                 </TableRow>
               </TableHead>
               <TableBody>
-                {variants.map(variant => {
+                {[...variants].sort((a, b) => Number(a.id) - Number(b.id)).map(variant => {
                   const colorName = variant.color?.name || variant.colorName || ''
                   const colorCode = variant.color?.code || variant.colorCode || '#000'
 
