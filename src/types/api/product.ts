@@ -31,6 +31,8 @@ export interface CreateProductDto {
   subcategory: number
   brand?: number
   discount?: number
+  codigoProductoSin?: number
+  unidadMedida?: number
 }
 
 export interface UpdateProductDto extends Partial<CreateProductDto> {}
@@ -59,4 +61,34 @@ export interface ProductsApiResponse {
     hasNextPage: boolean
     hasPreviousPage: boolean
   }
+}
+
+// Tipos para productos SIN (SIAT)
+export interface ProductoSIN {
+  codigoProducto: number
+  codigoActividad: string
+  descripcionProducto: string
+  nandina?: string[]
+}
+
+export interface ListaProductosSINResponse {
+  id: number
+  codigoAmbiente: number
+  codigoPuntoVenta: number
+  codigoSistema: string
+  codigoSucursal: number
+  codigoCuis: string
+  nit: string
+  createdAt: string
+  listas: {
+    id: number
+    methodName: string
+    payload: {
+      RespuestaListaProductos: {
+        transaccion: boolean
+        listaCodigos: ProductoSIN[]
+      }
+    }
+    createdAt: string
+  }[]
 }

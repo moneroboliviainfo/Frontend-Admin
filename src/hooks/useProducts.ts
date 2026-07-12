@@ -64,3 +64,13 @@ export const useDeleteProduct = () => {
     }
   })
 }
+
+// Hook para obtener lista de productos SIN (SIAT)
+export const useProductosSIN = () => {
+  return useQuery({
+    queryKey: ['productos-sin'],
+    queryFn: () => productService.getProductosSIN(),
+    staleTime: 1000 * 60 * 60, // Cache 1 hora
+    retry: 2
+  })
+}

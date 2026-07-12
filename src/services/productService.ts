@@ -5,7 +5,8 @@ import type {
   UpdateProductDto,
   ProductsParams,
   ProductsResponse,
-  ProductsApiResponse
+  ProductsApiResponse,
+  ListaProductosSINResponse
 } from '@/types/api/product'
 
 class ProductServiceClass {
@@ -51,6 +52,17 @@ class ProductServiceClass {
 
   async deleteProduct(id: number): Promise<void> {
     await apiClient.delete(`/api/products/${id}`)
+  }
+
+  // Obtener lista de productos SIN (SIAT)
+  async getProductosSIN(): Promise<ListaProductosSINResponse> {
+    const response = await apiClient.post<ListaProductosSINResponse>(
+      '/api/catalogos/listas',
+      { metodo: 'sincronizarListaProductosServicios' },
+      { params: { codigoSucursal: 0, codigoPuntoVenta: 0 } }
+    )
+
+    return response.data
   }
 }
 

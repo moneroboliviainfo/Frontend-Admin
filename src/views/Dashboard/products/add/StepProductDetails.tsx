@@ -14,14 +14,17 @@ import DialogTitle from '@mui/material/DialogTitle'
 import DialogContent from '@mui/material/DialogContent'
 import DialogActions from '@mui/material/DialogActions'
 import CircularProgress from '@mui/material/CircularProgress'
+import Autocomplete from '@mui/material/Autocomplete'
+import TextField from '@mui/material/TextField'
 import { toast } from 'react-toastify'
 import { useForm, Controller, useWatch } from 'react-hook-form'
 
 import DirectionalIcon from '@components/DirectionalIcon'
 import CustomTextField from '@core/components/mui/TextField'
 import { useCategories } from '@/hooks/useCategory'
-import { useCreateProduct, useProduct, useUpdateProduct } from '@/hooks/useProducts'
+import { useCreateProduct, useProduct, useUpdateProduct, useProductosSIN } from '@/hooks/useProducts'
 import { useBrands, useCreateBrand } from '@/hooks/useVariants'
+import type { ProductoSIN } from '@/types/api/product'
 
 type Props = {
   activeStep: number
@@ -42,6 +45,7 @@ type FormValues = {
   descripcion: string
   brand: string
   discount: string
+  codigoProductoSin: ProductoSIN | null
 }
 
 type BrandFormValues = {
@@ -65,7 +69,8 @@ const StepProductDetails = ({ activeStep, handleNext, handlePrev, mode, productI
       precio: '',
       descripcion: '',
       brand: '',
-      discount: '1'
+      discount: '1',
+      codigoProductoSin: null
     }
   })
 
@@ -89,6 +94,29 @@ const StepProductDetails = ({ activeStep, handleNext, handlePrev, mode, productI
   const { data: categoriesData, isLoading: categoriesLoading } = useCategories()
 
   const { data: brandsData, isLoading: brandsLoading } = useBrands()
+
+  // Obtener productos SIN para facturación
+  const { data: productosSINData, isLoading: productosSINLoading } = useProductosSIN()
+
+  // Extraer lista de productos SIN (solo actividad 4771100)
+  const productosSIN: ProductoSIN[] = useMemo(() => {
+    if (productosSINData?.listas?.[0]?.payload?.RespuestaListaProductos?.listaCodigos) {
+      // Filtrar por codigoActividad y eliminar duplicados
+      const uniqueProducts = new Map<number, ProductoSIN>()
+
+      productosSINData.listas[0].payload.RespuestaListaProductos.listaCodigos
+        .filter(producto => producto.codigoActividad === '4771100')
+        .forEach(producto => {
+          if (!uniqueProducts.has(producto.codigoProducto)) {
+            uniqueProducts.set(producto.codigoProducto, producto)
+          }
+        })
+
+      return Array.from(uniqueProducts.values())
+    }
+
+    return []
+  }, [productosSINData])
 
   const { data: productData, isLoading: productLoading } = useProduct(
     mode === 'edit' && productId ? parseInt(productId) : 0
@@ -176,7 +204,9 @@ const StepProductDetails = ({ activeStep, handleNext, handlePrev, mode, productI
         description: data.descripcion,
         price: Number(data.precio).toFixed(2),
         enabled: true,
-        subcategory: parseInt(data.subcategoria)
+        subcategory: parseInt(data.subcategoria),
+        codigoProductoSin: data.codigoProductoSin?.codigoProducto,
+        unidadMedida: 57
       }
 
       if (data.brand) {
@@ -358,6 +388,52 @@ const StepProductDetails = ({ activeStep, handleNext, handlePrev, mode, productI
                   label='Descripción'
                   placeholder='Descripción detallada del producto'
                   {...(errors.descripcion && { error: true, helperText: 'Este campo es requerido.' })}
+                />
+              )}
+            />
+          </Grid>
+
+          <Grid size={{ xs: 12 }}>
+            <Controller
+              name='codigoProductoSin'
+              control={control}
+              rules={{ required: true }}
+              render={({ field: { onChange, value, ...field } }) => (
+                <Autocomplete
+                  {...field}
+                  value={value}
+                  onChange={(_, newValue) => onChange(newValue)}
+                  options={productosSIN}
+                  loading={productosSINLoading}
+                  getOptionLabel={option => option.descripcionProducto}
+                  isOptionEqualToValue={(option, value) => option.codigoProducto === value?.codigoProducto}
+                  renderInput={params => (
+                    <TextField
+                      {...params}
+                      label='Producto SIN *'
+                      placeholder='Buscar producto SIN...'
+                      error={Boolean(errors.codigoProductoSin)}
+                      helperText={errors.codigoProductoSin ? 'Este campo es requerido.' : 'Seleccione el producto para facturación'}
+                      slotProps={{
+                        input: {
+                          ...params.InputProps,
+                          endAdornment: (
+                            <>
+                              {productosSINLoading ? <CircularProgress color='inherit' size={20} /> : null}
+                              {params.InputProps.endAdornment}
+                            </>
+                          )
+                        }
+                      }}
+                    />
+                  )}
+                  renderOption={(props, option) => (
+                    <li {...props} key={option.codigoProducto}>
+                      {option.descripcionProducto}
+                    </li>
+                  )}
+                  noOptionsText='No se encontraron productos'
+                  loadingText='Cargando productos SIN...'
                 />
               )}
             />
