@@ -14,11 +14,18 @@ import {
   CircularProgress,
   LinearProgress,
   TextField,
-  Alert
+  Alert,
+  FormControl,
+  InputLabel,
+  Select,
+  MenuItem,
+  IconButton,
+  InputAdornment
 } from '@mui/material'
 import Grid from '@mui/material/Grid2'
 
-import type { Order, RepriceResponse, GenerateQRResponse, BillingInfo } from '@/types/api/sales'
+import type { Order, RepriceResponse, GenerateQRResponse, BillingInfo, TipoDocumentoIdentidad } from '@/types/api/sales'
+import { useSearchBilling, useTiposDocumentoIdentidad, useVerificarNit } from '@/hooks/useSales'
 
 interface PaymentMethod {
   id: string
@@ -69,6 +76,157 @@ const PaymentDialog: React.FC<PaymentDialogProps> = ({
   onBillingChange
 }) => {
   const [cashReceived, setCashReceived] = useState<string>('')
+  const [searchCi, setSearchCi] = useState<string>('')
+  const [showBillingResults, setShowBillingResults] = useState<boolean>(false)
+  const [nitValidationStatus, setNitValidationStatus] = useState<'idle' | 'valid' | 'invalid'>('idle')
+  const [nitValidationMessage, setNitValidationMessage] = useState<string>('')
+
+  // Limpiar formulario cuando se cierra el modal
+  useEffect(() => {
+    if (!open) {
+      setCashReceived('')
+      setSearchCi('')
+      setShowBillingResults(false)
+      setNitValidationStatus('idle')
+      setNitValidationMessage('')
+      onBillingChange({
+        ci: '',
+        name: '',
+        phone: '',
+        email: '',
+        complemento: '',
+        codigoTipoDocumentoIdentidad: 1
+      })
+    }
+  }, [open])
+
+  // Obtener tipos de documento del SIAT
+  const { data: tiposDocumentoData, isLoading: isLoadingTiposDocumento } = useTiposDocumentoIdentidad()
+
+  // Mutation para verificar NIT
+  const verificarNitMutation = useVerificarNit()
+
+  // Extraer lista de tipos de documento
+  const tiposDocumento: TipoDocumentoIdentidad[] = useMemo(() => {
+    if (tiposDocumentoData?.parametrica?.[0]?.payload) {
+      return tiposDocumentoData.parametrica[0].payload
+    }
+
+    return []
+  }, [tiposDocumentoData])
+
+  // Obtener nombre corto del tipo de documento seleccionado
+  const tipoDocumentoNombre = useMemo(() => {
+    const tipo = tiposDocumento.find(t => t.codigoClasificador === billing.codigoTipoDocumentoIdentidad)
+
+    if (tipo) {
+      // Extraer solo la sigla (antes del guión)
+      const match = tipo.descripcion.match(/^(\w+)/)
+
+      return match ? match[1] : 'documento'
+    }
+
+    return 'documento'
+  }, [tiposDocumento, billing.codigoTipoDocumentoIdentidad])
+
+  // Validar si el tipo seleccionado requiere solo números (CI=1, NIT=5)
+  const requiresOnlyNumbers = billing.codigoTipoDocumentoIdentidad === 1 || billing.codigoTipoDocumentoIdentidad === 5
+  const isNitSelected = billing.codigoTipoDocumentoIdentidad === 5
+
+  // Validar formato del CI/NIT
+  const isCiFormatValid = useMemo(() => {
+    if (!billing.ci.trim()) return true // Vacío es válido (se valida por separado)
+    if (requiresOnlyNumbers) {
+      return /^\d+$/.test(billing.ci)
+    }
+
+    return true // Otros documentos pueden tener letras
+  }, [billing.ci, requiresOnlyNumbers])
+
+  // Función para ejecutar búsqueda manual
+  const handleSearchBilling = () => {
+    if (billing.ci.length >= 5 && isCiFormatValid) {
+      setSearchCi(billing.ci)
+      setShowBillingResults(true)
+    }
+  }
+
+  // Limpiar formulario cuando se borra el CI
+  const handleCiChange = (value: string) => {
+    // Si requiere solo números, filtrar letras
+    const newValue = requiresOnlyNumbers ? value.replace(/\D/g, '') : value
+
+    // Si se está borrando (el nuevo valor es más corto o vacío)
+    if (newValue.length < billing.ci.length || newValue === '') {
+      // Limpiar los otros campos del formulario
+      onBillingChange({
+        ci: newValue,
+        name: '',
+        phone: '',
+        email: '',
+        complemento: '',
+        codigoTipoDocumentoIdentidad: billing.codigoTipoDocumentoIdentidad
+      })
+      setShowBillingResults(false)
+      setSearchCi('')
+    } else {
+      onBillingChange({
+        ...billing,
+        ci: newValue
+      })
+    }
+  }
+
+  // Verificar NIT cuando cambia y es válido
+  useEffect(() => {
+    if (isNitSelected && billing.ci.length >= 5 && /^\d+$/.test(billing.ci)) {
+      setNitValidationStatus('idle')
+      const timer = setTimeout(() => {
+        verificarNitMutation.mutate(parseInt(billing.ci), {
+          onSuccess: data => {
+            if (data.success && data.data.RespuestaVerificarNit.transaccion) {
+              setNitValidationStatus('valid')
+              setNitValidationMessage(data.data.RespuestaVerificarNit.mensajesList[0]?.descripcion || 'NIT válido')
+            } else {
+              setNitValidationStatus('invalid')
+              setNitValidationMessage(
+                data.data.RespuestaVerificarNit.mensajesList[0]?.descripcion || 'NIT no válido'
+              )
+            }
+          },
+          onError: () => {
+            setNitValidationStatus('invalid')
+            setNitValidationMessage('Error al verificar NIT')
+          }
+        })
+      }, 500)
+
+      return () => clearTimeout(timer)
+    } else {
+      setNitValidationStatus('idle')
+      setNitValidationMessage('')
+    }
+  }, [billing.ci, isNitSelected])
+
+  // Búsqueda de datos de facturación (solo cuando searchCi cambia - búsqueda manual)
+  const { data: billingData, isFetching: isSearchingBilling } = useSearchBilling(searchCi)
+
+  // Handler para seleccionar un resultado de billing
+  const handleSelectBilling = (data: typeof billingData) => {
+    if (data) {
+      onBillingChange({
+        ...billing,
+        ci: data.ci,
+        name: data.name || '',
+        phone: data.phone || '',
+        email: data.email || '',
+        complemento: data.complemento || '',
+        codigoTipoDocumentoIdentidad: data.codigoTipoDocumentoIdentidad || billing.codigoTipoDocumentoIdentidad
+      })
+      setShowBillingResults(false)
+      setSearchCi('')
+    }
+  }
 
   const handleBillingFieldChange = (field: keyof BillingInfo, value: string) => {
     onBillingChange({
@@ -77,7 +235,24 @@ const PaymentDialog: React.FC<PaymentDialogProps> = ({
     })
   }
 
-  const isBillingValid = billing.ci.trim().length > 0
+  const handleTipoDocumentoChange = (codigo: number) => {
+    onBillingChange({
+      ci: '',
+      name: '',
+      phone: '',
+      email: '',
+      complemento: '',
+      codigoTipoDocumentoIdentidad: codigo
+    })
+    setNitValidationStatus('idle')
+    setNitValidationMessage('')
+    setShowBillingResults(false)
+    setSearchCi('')
+  }
+
+  // Validación completa del billing
+  const isBillingValid =
+    billing.ci.trim().length > 0 && isCiFormatValid && (isNitSelected ? nitValidationStatus === 'valid' : true)
 
   const totalToPay = useMemo(() => {
     if (orderData) {
@@ -183,16 +358,168 @@ const PaymentDialog: React.FC<PaymentDialogProps> = ({
             <Typography variant='subtitle2' fontWeight='bold' sx={{ mb: 2 }}>
               Datos de Facturación
             </Typography>
-            <TextField
-              fullWidth
-              size='small'
-              label='CI / NIT *'
-              value={billing.ci}
-              onChange={e => handleBillingFieldChange('ci', e.target.value)}
-              sx={{ mb: 1.5 }}
-              required
-              error={billing.ci.length > 0 && !isBillingValid}
-            />
+
+            {/* Select Tipo de Documento */}
+            <FormControl fullWidth size='small' sx={{ mb: 1.5 }}>
+              <InputLabel>Tipo de Documento *</InputLabel>
+              <Select
+                value={billing.codigoTipoDocumentoIdentidad}
+                label='Tipo de Documento *'
+                onChange={e => handleTipoDocumentoChange(e.target.value as number)}
+                disabled={isLoadingTiposDocumento}
+              >
+                {isLoadingTiposDocumento ? (
+                  <MenuItem value={1}>Cargando...</MenuItem>
+                ) : (
+                  tiposDocumento.map(tipo => (
+                    <MenuItem key={tipo.codigoClasificador} value={tipo.codigoClasificador}>
+                      {tipo.descripcion}
+                    </MenuItem>
+                  ))
+                )}
+              </Select>
+            </FormControl>
+
+            <Box sx={{ position: 'relative', mb: 1.5 }}>
+              <TextField
+                fullWidth
+                size='small'
+                label={isNitSelected ? 'NIT *' : 'Número de Documento *'}
+                value={billing.ci}
+                onChange={e => handleCiChange(e.target.value)}
+                onKeyDown={e => {
+                  if (e.key === 'Enter') {
+                    e.preventDefault()
+                    handleSearchBilling()
+                  }
+                }}
+                required
+                error={(billing.ci.length > 0 && !isCiFormatValid) || nitValidationStatus === 'invalid'}
+                helperText={
+                  !isCiFormatValid
+                    ? 'Solo se permiten números'
+                    : nitValidationStatus === 'invalid'
+                      ? `✗ ${nitValidationMessage}`
+                      : nitValidationStatus === 'valid'
+                        ? `✓ ${nitValidationMessage}`
+                        : billing.ci.length >= 5
+                          ? `Presione Enter o click en buscar`
+                          : undefined
+                }
+                slotProps={{
+                  input: {
+                    endAdornment: (
+                      <InputAdornment position='end'>
+                        {isSearchingBilling || verificarNitMutation.isPending ? (
+                          <CircularProgress size={18} />
+                        ) : (
+                          <IconButton
+                            size='small'
+                            onClick={handleSearchBilling}
+                            disabled={billing.ci.length < 5 || !isCiFormatValid}
+                            sx={{ p: 0.5 }}
+                          >
+                            <i className='tabler-search' style={{ fontSize: '18px' }} />
+                          </IconButton>
+                        )}
+                      </InputAdornment>
+                    )
+                  },
+                  formHelperText: {
+                    sx: {
+                      color:
+                        nitValidationStatus === 'valid'
+                          ? 'success.main'
+                          : nitValidationStatus === 'invalid'
+                            ? 'error.main'
+                            : undefined
+                    }
+                  }
+                }}
+                placeholder={requiresOnlyNumbers ? 'Solo números' : 'Número de documento'}
+              />
+              {/* Lista de resultados de búsqueda */}
+              {showBillingResults && billingData && !isSearchingBilling && (
+                <Paper
+                  elevation={3}
+                  sx={{
+                    position: 'absolute',
+                    top: '100%',
+                    left: 0,
+                    right: 0,
+                    zIndex: 10,
+                    mt: 0.5,
+                    maxHeight: 200,
+                    overflow: 'auto'
+                  }}
+                >
+                  <Box
+                    sx={{
+                      p: 1.5,
+                      cursor: 'pointer',
+                      '&:hover': { bgcolor: 'action.hover' },
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'space-between'
+                    }}
+                  >
+                    <Box onClick={() => handleSelectBilling(billingData)} sx={{ flex: 1 }}>
+                      <Typography variant='body2' fontWeight='bold'>
+                        {billingData.name || 'Sin nombre'}
+                      </Typography>
+                      <Typography variant='caption' color='text.secondary'>
+                        {tipoDocumentoNombre}: {billingData.ci}
+                        {billingData.complemento && ` - ${billingData.complemento}`}
+                        {billingData.phone && ` • Tel: ${billingData.phone}`}
+                      </Typography>
+                    </Box>
+                    <IconButton
+                      size='small'
+                      onClick={e => {
+                        e.stopPropagation()
+                        setShowBillingResults(false)
+                        setSearchCi('')
+                      }}
+                      sx={{ p: 0.25 }}
+                    >
+                      <i className='tabler-x' style={{ fontSize: '14px' }} />
+                    </IconButton>
+                  </Box>
+                </Paper>
+              )}
+              {/* Mensaje cuando no hay resultados */}
+              {showBillingResults && !billingData && !isSearchingBilling && searchCi.length >= 5 && (
+                <Paper
+                  elevation={3}
+                  sx={{
+                    position: 'absolute',
+                    top: '100%',
+                    left: 0,
+                    right: 0,
+                    zIndex: 10,
+                    mt: 0.5,
+                    p: 1.5,
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'space-between'
+                  }}
+                >
+                  <Typography variant='body2' color='text.secondary'>
+                    No se encontró registro para este {tipoDocumentoNombre}
+                  </Typography>
+                  <IconButton
+                    size='small'
+                    onClick={() => {
+                      setShowBillingResults(false)
+                      setSearchCi('')
+                    }}
+                    sx={{ p: 0.25 }}
+                  >
+                    <i className='tabler-x' style={{ fontSize: '14px' }} />
+                  </IconButton>
+                </Paper>
+              )}
+            </Box>
             <TextField
               fullWidth
               size='small'
@@ -264,7 +591,13 @@ const PaymentDialog: React.FC<PaymentDialogProps> = ({
             </Grid>
             {!isBillingValid && (
               <Typography variant='caption' color='error' sx={{ mt: 2, display: 'block', textAlign: 'center' }}>
-                Ingrese el CI/NIT para seleccionar método de pago
+                {!billing.ci.trim()
+                  ? 'Ingrese el número de documento para seleccionar método de pago'
+                  : !isCiFormatValid
+                    ? 'El formato del documento no es válido'
+                    : isNitSelected && nitValidationStatus !== 'valid'
+                      ? 'El NIT debe ser verificado y válido'
+                      : 'Complete los datos de facturación'}
               </Typography>
             )}
           </>

@@ -133,3 +133,34 @@ export const useUpdateOrder = () => {
     }
   })
 }
+
+// Hook para buscar datos de facturación por CI
+export const useSearchBilling = (ci: string) => {
+  return useQuery({
+    queryKey: ['billing', ci],
+    queryFn: () => cartService.searchBilling(ci),
+    enabled: ci.length >= 5,
+    staleTime: 1000 * 60 * 5,
+    retry: false
+  })
+}
+
+// Hook para obtener tipos de documento de identidad del SIAT
+export const useTiposDocumentoIdentidad = () => {
+  return useQuery({
+    queryKey: ['tipos-documento-identidad'],
+    queryFn: () => cartService.getTiposDocumentoIdentidad(),
+    staleTime: 1000 * 60 * 60, // Cache 1 hora
+    retry: 2
+  })
+}
+
+// Hook para verificar NIT con el SIAT
+export const useVerificarNit = () => {
+  return useMutation({
+    mutationFn: (nit: number) => cartService.verificarNit(nit),
+    onError: (error: any) => {
+      console.error('Error verificando NIT:', error)
+    }
+  })
+}

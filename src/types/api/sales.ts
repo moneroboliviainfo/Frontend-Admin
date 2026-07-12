@@ -92,6 +92,67 @@ export interface BillingInfo {
   codigoTipoDocumentoIdentidad: number
 }
 
+export interface BillingSearchResponse {
+  id: number
+  ci: string
+  name: string
+  phone: string
+  email: string
+  complemento: string
+  codigoTipoDocumentoIdentidad: number
+  createdAt: string
+}
+
+// Tipos para parametricas SIAT
+export interface TipoDocumentoIdentidad {
+  descripcion: string
+  codigoClasificador: number
+}
+
+export interface ParametricaItem {
+  id: number
+  methodName: string
+  payload: TipoDocumentoIdentidad[]
+  createdAt: string
+}
+
+export interface ParametricasResponse {
+  id: number
+  codigoAmbiente: number
+  codigoPuntoVenta: number
+  codigoSistema: string
+  codigoSucursal: number
+  codigoCuis: string
+  nit: string
+  createdAt: string
+  parametrica: ParametricaItem[]
+}
+
+export interface ParametricasRequest {
+  metodo: string
+}
+
+// Tipos para verificar NIT
+export interface VerificarNitRequest {
+  nitParaVerificacion: number
+}
+
+export interface VerificarNitMensaje {
+  codigo: number
+  descripcion: string
+}
+
+export interface VerificarNitResponse {
+  success: boolean
+  data: {
+    RespuestaVerificarNit: {
+      mensajesList: VerificarNitMensaje[]
+      transaccion: boolean
+    }
+  }
+  timestamp: string
+}
+
 export interface CreateOrderRequest {
   items: string
   payment_type: 'cash' | 'card' | 'qr'

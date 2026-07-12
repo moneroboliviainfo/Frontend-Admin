@@ -14,7 +14,12 @@ import type {
   OrdersListResponse,
   GenerateQRRequest,
   GenerateQRResponse,
-  VerifyPaymentResponse
+  VerifyPaymentResponse,
+  BillingSearchResponse,
+  ParametricasResponse,
+  ParametricasRequest,
+  VerificarNitResponse,
+  VerificarNitRequest
 } from '@/types/api/sales'
 
 class CartServiceClass {
@@ -109,6 +114,35 @@ class CartServiceClass {
   // Actualizar orden (editar items)
   async updateOrder(orderId: number, items: string): Promise<Order> {
     const response = await apiClient.patch<Order>(`/api/orders/${orderId}`, { items })
+
+    return response.data
+  }
+
+  // Buscar datos de facturación por CI
+  async searchBilling(ci: string): Promise<BillingSearchResponse | null> {
+    const response = await apiClient.get<BillingSearchResponse>(`/api/billing/${ci}`)
+
+    return response.data
+  }
+
+  // Obtener tipos de documento de identidad del SIAT
+  async getTiposDocumentoIdentidad(): Promise<ParametricasResponse> {
+    const response = await apiClient.post<ParametricasResponse>(
+      '/api/catalogos/parametricas',
+      { metodo: 'sincronizarParametricaTipoDocumentoIdentidad' } as ParametricasRequest,
+      { params: { codigoSucursal: 0, codigoPuntoVenta: 0 } }
+    )
+
+    return response.data
+  }
+
+  // Verificar NIT con el SIAT
+  async verificarNit(nit: number): Promise<VerificarNitResponse> {
+    const response = await apiClient.post<VerificarNitResponse>(
+      '/api/codigos/verificar-nit',
+      { nitParaVerificacion: nit } as VerificarNitRequest,
+      { params: { codigoSucursal: 0, codigoPuntoVenta: 0 } }
+    )
 
     return response.data
   }
