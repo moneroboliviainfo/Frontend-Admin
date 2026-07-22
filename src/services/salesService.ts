@@ -19,7 +19,10 @@ import type {
   ParametricasResponse,
   ParametricasRequest,
   VerificarNitResponse,
-  VerificarNitRequest
+  VerificarNitRequest,
+  Branch,
+  FacturarRequest,
+  FacturarResponse
 } from '@/types/api/sales'
 
 class CartServiceClass {
@@ -143,6 +146,20 @@ class CartServiceClass {
       { nitParaVerificacion: nit } as VerificarNitRequest,
       { params: { codigoSucursal: 0, codigoPuntoVenta: 0 } }
     )
+
+    return response.data
+  }
+
+  // Obtener lista de sucursales
+  async getBranches(): Promise<Branch[]> {
+    const response = await apiClient.get<Branch[]>('/api/branches')
+
+    return response.data
+  }
+
+  // Emitir factura para una orden
+  async facturar(orderId: number, data: FacturarRequest): Promise<FacturarResponse> {
+    const response = await apiClient.post<FacturarResponse>(`/api/orders/${orderId}/facturar`, data)
 
     return response.data
   }

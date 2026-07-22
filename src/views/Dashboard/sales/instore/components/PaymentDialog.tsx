@@ -81,7 +81,7 @@ const PaymentDialog: React.FC<PaymentDialogProps> = ({
   const [nitValidationStatus, setNitValidationStatus] = useState<'idle' | 'valid' | 'invalid'>('idle')
   const [nitValidationMessage, setNitValidationMessage] = useState<string>('')
 
-  // Limpiar formulario cuando se cierra el modal
+  // Limpiar estados locales cuando se cierra el modal (excepto billing que se limpia en clearCart)
   useEffect(() => {
     if (!open) {
       setCashReceived('')
@@ -89,14 +89,6 @@ const PaymentDialog: React.FC<PaymentDialogProps> = ({
       setShowBillingResults(false)
       setNitValidationStatus('idle')
       setNitValidationMessage('')
-      onBillingChange({
-        ci: '',
-        name: '',
-        phone: '',
-        email: '',
-        complemento: '',
-        codigoTipoDocumentoIdentidad: 1
-      })
     }
   }, [open])
 

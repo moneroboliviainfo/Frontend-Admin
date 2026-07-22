@@ -6,7 +6,8 @@ import type {
   CreateOrderRequest,
   ConfirmOrderRequest,
   OrdersListParams,
-  GenerateQRRequest
+  GenerateQRRequest,
+  FacturarRequest
 } from '@/types/api/sales'
 
 export const useAddToCart = () => {
@@ -161,6 +162,27 @@ export const useVerificarNit = () => {
     mutationFn: (nit: number) => cartService.verificarNit(nit),
     onError: (error: any) => {
       console.error('Error verificando NIT:', error)
+    }
+  })
+}
+
+// Hook para obtener sucursales
+export const useBranches = () => {
+  return useQuery({
+    queryKey: ['branches'],
+    queryFn: () => cartService.getBranches(),
+    staleTime: 1000 * 60 * 60, // Cache 1 hora
+    retry: 2
+  })
+}
+
+// Hook para emitir factura
+export const useFacturar = () => {
+  return useMutation({
+    mutationFn: ({ orderId, data }: { orderId: number; data: FacturarRequest }) =>
+      cartService.facturar(orderId, data),
+    onError: (error: any) => {
+      console.error('Error emitiendo factura:', error)
     }
   })
 }

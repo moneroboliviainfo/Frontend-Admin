@@ -413,7 +413,11 @@ const StepProductDetails = ({ activeStep, handleNext, handlePrev, mode, productI
                       label='Producto SIN *'
                       placeholder='Buscar producto SIN...'
                       error={Boolean(errors.codigoProductoSin)}
-                      helperText={errors.codigoProductoSin ? 'Este campo es requerido.' : 'Seleccione el producto para facturación'}
+                      helperText={
+                        errors.codigoProductoSin
+                          ? 'Este campo es requerido.'
+                          : 'Seleccione el producto para facturación'
+                      }
                       slotProps={{
                         input: {
                           ...params.InputProps,

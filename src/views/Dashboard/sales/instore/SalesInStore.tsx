@@ -883,6 +883,7 @@ const PointOfSale: React.FC = () => {
         onViewSales={() => router.push('/sales/list')}
         isEditingOrder={isEditingOrder}
         editingOrderId={editingOrderId}
+        billing={billing}
       />
     </Box>
   )

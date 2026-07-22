@@ -243,3 +243,108 @@ export type VerifyPaymentResponse =
       paid: boolean
       message?: string
     }
+
+// Tipos para sucursales
+export interface Branch {
+  id: number
+  codigoSucursal: number
+  name: string
+  alias: string
+  razonSocial: string
+  actividadEconomica: string
+  address: string
+  departamento: string
+  municipio: string
+  telefono: string
+  active: boolean
+  createdAt: string
+}
+
+// Tipos para facturación
+export interface FacturarRequest {
+  branchId: number
+  tipoFacturaDocumento: number
+  codigoDocumentoSector: number
+  codigoMoneda: number
+  tipoCambio: number
+  nombreRazonSocial: string
+  numeroDocumento: string
+  complemento: string
+  codigoTipoDocumentoIdentidad: number
+  usuario: string
+  emails: string[]
+  descuentoAdicional: number
+}
+
+export interface FacturaDetalle {
+  id: number
+  actividadEconomica: string
+  codigoProductoSin: number
+  codigoProducto: string
+  descripcion: string
+  cantidad: number
+  unidadMedida: number
+  precioUnitario: number
+  montoDescuento: number | null
+  numeroSerie: string | null
+  numeroImei: string | null
+  subTotal: number
+}
+
+export interface Factura {
+  id: number
+  nitEmisor: number
+  razonSocialEmisor: string
+  municipio: string
+  telefono: string
+  numeroFactura: number
+  cuf: string
+  cufd: string
+  codigoSucursal: number
+  nombreSucursal: string
+  direccion: string
+  codigoPuntoVenta: number
+  tipoFacturaDocumento: number
+  fechaEmision: string
+  nombreRazonSocial: string
+  codigoTipoDocumentoIdentidad: number
+  numeroDocumento: string
+  complemento: string
+  codigoCliente: string
+  codigoMetodoPago: number
+  numeroTarjeta: string | null
+  montoTotal: number
+  montoTotalSujetoIva: number
+  codigoMoneda: number
+  tipoCambio: number
+  montoTotalMoneda: number
+  montoGiftCard: number | null
+  descuentoAdicional: number
+  codigoExcepcion: number
+  leyenda: string
+  usuario: string
+  emails: string[]
+  codigoDocumentoSector: number
+  estado: string
+  xml: string
+  codigoEmision: number
+  createdAt: string
+  codigoDescripcion: string
+  codigoEstado: number
+  codigoRecepcion: string
+  mensajesList: any[] | null
+  transaccion: boolean
+  fechaRespuesta: string
+  detalles: FacturaDetalle[]
+  order?: Order
+}
+
+export interface FacturarResponse {
+  response: {
+    codigoDescripcion: string
+    codigoEstado: number
+    codigoRecepcion: string
+    transaccion: boolean
+  }
+  factura: Factura
+}
