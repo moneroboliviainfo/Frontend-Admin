@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useMemo } from 'react'
 
 import { useRouter } from 'next/navigation'
 
@@ -27,11 +27,31 @@ import TextField from '@mui/material/TextField'
 import CircularProgress from '@mui/material/CircularProgress'
 import Alert from '@mui/material/Alert'
 import Snackbar from '@mui/material/Snackbar'
+import FormControl from '@mui/material/FormControl'
+import InputLabel from '@mui/material/InputLabel'
+import Select from '@mui/material/Select'
+import MenuItem from '@mui/material/MenuItem'
+import Collapse from '@mui/material/Collapse'
+import Divider from '@mui/material/Divider'
+import dayjs from 'dayjs'
+import 'dayjs/locale/es'
 
 import { useQueryClient } from '@tanstack/react-query'
 
-import { useCancelOrder, useSendOrder, useCancelOrderForEdit } from '@/hooks/useSales'
-import type { Order } from '@/types/api/sales'
+import {
+  useCancelOrder,
+  useSendOrder,
+  useCancelOrderForEdit,
+  useBranches,
+  useFacturar,
+  useCafcs,
+  useCufds,
+  useFacturarContingencia,
+  useAnularFactura,
+  useRevertirAnulacion
+} from '@/hooks/useSales'
+import { printInvoice } from '@/utils/invoicePrinter'
+import type { Order, Branch, Cafc, Cufd, Factura } from '@/types/api/sales'
 
 interface SnackbarMessage {
   message: string
@@ -119,11 +139,66 @@ const OrderDetailsModal = ({ open, onClose, order }: OrderDetailsModalProps) => 
   const [messageInfo, setMessageInfo] = useState<SnackbarMessage | undefined>(undefined)
   const [snackbarOpen, setSnackbarOpen] = useState(false)
 
+  // Estados para facturación
+  const [showFacturacion, setShowFacturacion] = useState(false)
+  const [selectedBranchId, setSelectedBranchId] = useState<number | ''>('')
+  const [facturaError, setFacturaError] = useState<string>('')
+  const [facturaSuccess, setFacturaSuccess] = useState(false)
+  const [facturaData, setFacturaData] = useState<Factura | null>(null)
+  const [showContingencia, setShowContingencia] = useState(false)
+  const [selectedCafcId, setSelectedCafcId] = useState<number | ''>('')
+  const [selectedCufdId, setSelectedCufdId] = useState<number | ''>('')
+
+  // Estados para anular factura
+  const [showAnularConfirm, setShowAnularConfirm] = useState(false)
+  const [motivoAnulacion, setMotivoAnulacion] = useState<number>(1)
+
+  // Estados para revertir anulación
+  const [showRevertirConfirm, setShowRevertirConfirm] = useState(false)
+
+  // Estado para confirmar emisión de factura
+  const [showEmitirConfirm, setShowEmitirConfirm] = useState(false)
+
   const cancelOrderMutation = useCancelOrder()
   const sendOrderMutation = useSendOrder()
   const cancelForEditMutation = useCancelOrderForEdit()
 
-  if (!open || !order) return null
+  // Hooks de facturación
+  const { data: branchesData, isLoading: isLoadingBranches } = useBranches()
+  const facturarMutation = useFacturar()
+  const facturarContingenciaMutation = useFacturarContingencia()
+  const anularFacturaMutation = useAnularFactura()
+  const revertirAnulacionMutation = useRevertirAnulacion()
+
+  // Hooks para contingencia
+  const { data: cafcsData } = useCafcs()
+
+  // Obtener sucursal seleccionada
+  const selectedBranch = useMemo(() => {
+    if (!branchesData || !selectedBranchId) return null
+
+    return branchesData.find((b: Branch) => b.id === selectedBranchId)
+  }, [branchesData, selectedBranchId])
+
+  // CUFDs disponibles para la sucursal seleccionada
+  const { data: cufdsData, isLoading: isLoadingCufds } = useCufds(
+    selectedBranch?.codigoSucursal ?? 0,
+    0, // codigoPuntoVenta
+    showContingencia && !!selectedBranch
+  )
+
+  // CAFCs disponibles
+  const availableCafcs = useMemo(() => {
+    if (!cafcsData) return []
+
+    return cafcsData.filter((cafc: Cafc) => parseInt(cafc.ultimoNumero) < parseInt(cafc.numeroFinal))
+  }, [cafcsData])
+
+  if (!open || !order) {
+    return null
+  }
+
+  const billingInfo = order.billing
 
   const showMessage = (message: string, severity: 'success' | 'error' | 'info' | 'warning') => {
     setSnackPack(prev => [...prev, { message, severity, key: new Date().getTime() }])
@@ -208,8 +283,210 @@ const OrderDetailsModal = ({ open, onClose, order }: OrderDetailsModalProps) => 
     if (order.status === 'cancelled_for_edit') return true
     if (!['paid', 'sent'].includes(order.status)) return false
 
+    // No permitir editar si tiene factura activa (VALIDADA, PENDIENTE o REVERTIDA)
+    if (order.factura && ['VALIDADA', 'PENDIENTE', 'REVERTIDA'].includes(order.factura.estado)) {
+      return false
+    }
+
     return true
   }
+
+  // Verificar si se puede cancelar la orden (bloquear si tiene factura activa)
+  const canCancelOrder = () => {
+    if (order.factura && ['VALIDADA', 'PENDIENTE', 'REVERTIDA'].includes(order.factura.estado)) {
+      return false
+    }
+
+    return true
+  }
+
+  // Verificar si la factura está bloqueando acciones
+  const hasBlockingFactura = order.factura && ['VALIDADA', 'PENDIENTE', 'REVERTIDA'].includes(order.factura.estado)
+
+  // Handlers de facturación
+  const getFacturaBaseData = () => ({
+    branchId: selectedBranchId as number,
+    tipoFacturaDocumento: 1,
+    codigoDocumentoSector: 1,
+    codigoMoneda: 1,
+    tipoCambio: 1,
+    nombreRazonSocial: billingInfo?.name || '',
+    numeroDocumento: billingInfo?.ci || '',
+    complemento: billingInfo?.complemento || '',
+    codigoTipoDocumentoIdentidad: billingInfo?.codigoTipoDocumentoIdentidad || 1,
+    usuario: 'MoneroAdmin',
+    ...(billingInfo?.email ? { emails: [billingInfo.email] } : {}),
+    descuentoAdicional: 0
+  })
+
+  const handleEmitirFactura = async () => {
+    if (!order.id || !selectedBranchId || !billingInfo) {
+      setFacturaError('Faltan datos para emitir la factura')
+
+      return
+    }
+
+    setFacturaError('')
+
+    facturarMutation.mutate(
+      { orderId: order.id, data: getFacturaBaseData() },
+      {
+        onSuccess: response => {
+          setFacturaSuccess(true)
+          setFacturaData(response.factura)
+          queryClient.invalidateQueries({ queryKey: ['orders'] })
+          showMessage('¡Factura emitida exitosamente!', 'success')
+        },
+        onError: (error: any) => {
+          setFacturaError(error?.response?.data?.message || 'Error al emitir la factura')
+        }
+      }
+    )
+  }
+
+  const handleEmitirContingencia = async () => {
+    if (!order.id || !selectedBranchId || !billingInfo || !selectedCufdId || !selectedCafcId) {
+      setFacturaError('Faltan datos para emitir la factura por contingencia')
+
+      return
+    }
+
+    const selectedCafc = cafcsData?.find((c: Cafc) => c.id === selectedCafcId)
+
+    if (!selectedCafc) {
+      setFacturaError('CAFC no encontrado')
+
+      return
+    }
+
+    setFacturaError('')
+
+    const contingenciaData = {
+      ...getFacturaBaseData(),
+      cafc: selectedCafc.codigo,
+      cufdId: selectedCufdId as number,
+      numeroTarjeta: null,
+      montoGiftCard: 0
+    }
+
+    facturarContingenciaMutation.mutate(
+      { orderId: order.id, data: contingenciaData },
+      {
+        onSuccess: factura => {
+          setFacturaSuccess(true)
+          setFacturaData(factura)
+          queryClient.invalidateQueries({ queryKey: ['orders'] })
+          showMessage('¡Factura por contingencia emitida!', 'success')
+        },
+        onError: (error: any) => {
+          setFacturaError(error?.response?.data?.message || 'Error al emitir factura por contingencia')
+        }
+      }
+    )
+  }
+
+  const handlePrintInvoice = () => {
+    if (facturaData) {
+      printInvoice(facturaData)
+    } else if (order.factura) {
+      // Convertir OrderFactura a Factura (convertir tipos y manejar nulls)
+      const facturaForPrint: Factura = {
+        ...order.factura,
+        nitEmisor: parseInt(order.factura.nitEmisor),
+        montoTotal: parseFloat(order.factura.montoTotal),
+        montoTotalSujetoIva: parseFloat(order.factura.montoTotalSujetoIva),
+        tipoCambio: parseFloat(order.factura.tipoCambio),
+        montoTotalMoneda: parseFloat(order.factura.montoTotalMoneda),
+        montoGiftCard: order.factura.montoGiftCard ? parseFloat(order.factura.montoGiftCard) : null,
+        descuentoAdicional: parseFloat(order.factura.descuentoAdicional),
+        codigoEmision: parseInt(order.factura.codigoEmision),
+        codigoDescripcion: order.factura.codigoDescripcion || '',
+        codigoEstado: order.factura.codigoEstado || 0,
+        codigoRecepcion: order.factura.codigoRecepcion || '',
+        transaccion: order.factura.transaccion || false,
+        fechaRespuesta: order.factura.fechaRespuesta || '',
+        detalles: []
+      }
+
+      printInvoice(facturaForPrint)
+    }
+  }
+
+  const resetFacturaState = () => {
+    setShowFacturacion(false)
+    setSelectedBranchId('')
+    setFacturaError('')
+    setFacturaSuccess(false)
+    setFacturaData(null)
+    setShowContingencia(false)
+    setSelectedCafcId('')
+    setSelectedCufdId('')
+  }
+
+  const handleAnularFactura = async () => {
+    if (!order.factura) return
+
+    anularFacturaMutation.mutate(
+      { facturaId: order.factura.id, codigoMotivo: motivoAnulacion },
+      {
+        onSuccess: () => {
+          setShowAnularConfirm(false)
+          queryClient.invalidateQueries({ queryKey: ['orders'] })
+          showMessage('Factura anulada exitosamente', 'success')
+          setTimeout(() => onClose(), 1500)
+        },
+        onError: (error: any) => {
+          showMessage(error?.response?.data?.message || 'Error al anular la factura', 'error')
+        }
+      }
+    )
+  }
+
+  const handleRevertirAnulacion = async () => {
+    if (!order.factura) return
+
+    revertirAnulacionMutation.mutate(order.factura.id, {
+      onSuccess: () => {
+        setShowRevertirConfirm(false)
+        queryClient.invalidateQueries({ queryKey: ['orders'] })
+        showMessage('Anulación revertida exitosamente. La factura ahora está REVERTIDA.', 'success')
+        setTimeout(() => onClose(), 1500)
+      },
+      onError: (error: any) => {
+        showMessage(
+          error?.response?.data?.message ||
+            'Error al revertir la anulación. Esta acción solo puede realizarse una vez.',
+          'error'
+        )
+      }
+    })
+  }
+
+  const handleConfirmarEmision = () => {
+    setShowEmitirConfirm(false)
+
+    if (showContingencia) {
+      handleEmitirContingencia()
+    } else {
+      handleEmitirFactura()
+    }
+  }
+
+  const isPendingFactura = facturarMutation.isPending || facturarContingenciaMutation.isPending
+
+  // Permitir facturar si:
+  // - Status es 'sent' (no cancelled_for_edit ni otros)
+  // - NO hay factura (si existe factura, aunque esté anulada, no se puede emitir nueva)
+  // - Tiene datos de facturación
+  // NOTA: Cuando se edita una orden, se crea una NUEVA orden. La original queda cancelled_for_edit.
+  // NOTA: Después de anular, solo se puede REVERTIR, no emitir nueva factura en la misma orden.
+  const canInvoice = order.status === 'sent' && !order.factura && billingInfo
+
+  // Se puede anular solo si la factura está VALIDADA (no REVERTIDA, ya que la reversión es única)
+  const canAnular = order.factura && order.factura.estado === 'VALIDADA'
+
+  // Solo se puede revertir si la factura está ANULADA y la orden no fue editada (cancelled_for_edit)
+  const canRevertir = order.factura && order.factura.estado === 'ANULADA' && order.status !== 'cancelled_for_edit'
 
   if (snackPack.length && !messageInfo) {
     setMessageInfo({ ...snackPack[0] })
@@ -406,6 +683,448 @@ const OrderDetailsModal = ({ open, onClose, order }: OrderDetailsModalProps) => 
             </Card>
           )}
 
+          {order.factura && (
+            <Card variant='outlined'>
+              <CardContent>
+                <Box className='flex justify-between items-start mb-4'>
+                  <Typography variant='h6' className='text-textPrimary'>
+                    Factura SIAT
+                  </Typography>
+                  <Chip
+                    label={order.factura.estado}
+                    color={
+                      order.factura.estado === 'VALIDADA' || order.factura.estado === 'REVERTIDA'
+                        ? 'success'
+                        : order.factura.estado === 'PENDIENTE'
+                          ? 'warning'
+                          : order.factura.estado === 'ANULADA'
+                            ? 'error'
+                            : 'default'
+                    }
+                    variant='tonal'
+                    size='small'
+                  />
+                </Box>
+                <Grid container spacing={3}>
+                  <Grid size={{ xs: 12, sm: 6 }}>
+                    <Typography variant='overline' className='text-textSecondary text-xs font-medium block'>
+                      Número de Factura
+                    </Typography>
+                    <Typography variant='body1' className='font-bold mt-1'>
+                      #{order.factura.numeroFactura}
+                    </Typography>
+                  </Grid>
+                  <Grid size={{ xs: 12, sm: 6 }}>
+                    <Typography variant='overline' className='text-textSecondary text-xs font-medium block'>
+                      Fecha de Emisión
+                    </Typography>
+                    <Typography variant='body1' className='font-medium mt-1'>
+                      {formatDate(order.factura.fechaEmision)}
+                    </Typography>
+                  </Grid>
+                  <Grid size={{ xs: 12 }}>
+                    <Typography variant='overline' className='text-textSecondary text-xs font-medium block'>
+                      CUF
+                    </Typography>
+                    <Typography variant='body2' className='font-mono mt-1' sx={{ wordBreak: 'break-all' }}>
+                      {order.factura.cuf}
+                    </Typography>
+                  </Grid>
+                  <Grid size={{ xs: 12, sm: 6 }}>
+                    <Typography variant='overline' className='text-textSecondary text-xs font-medium block'>
+                      Razón Social
+                    </Typography>
+                    <Typography variant='body1' className='font-semibold mt-1'>
+                      {order.factura.nombreRazonSocial}
+                    </Typography>
+                  </Grid>
+                  <Grid size={{ xs: 12, sm: 6 }}>
+                    <Typography variant='overline' className='text-textSecondary text-xs font-medium block'>
+                      Documento
+                    </Typography>
+                    <Typography variant='body1' className='font-medium mt-1'>
+                      {order.factura.numeroDocumento}
+                      {order.factura.complemento && `-${order.factura.complemento}`}
+                    </Typography>
+                  </Grid>
+                  <Grid size={{ xs: 12, sm: 6 }}>
+                    <Typography variant='overline' className='text-textSecondary text-xs font-medium block'>
+                      Monto Total
+                    </Typography>
+                    <Typography variant='h6' className='font-bold text-primary mt-1'>
+                      Bs. {parseFloat(order.factura.montoTotal).toFixed(2)}
+                    </Typography>
+                  </Grid>
+                  <Grid size={{ xs: 12, sm: 6 }}>
+                    <Typography variant='overline' className='text-textSecondary text-xs font-medium block'>
+                      Tipo de Emisión
+                    </Typography>
+                    <Typography variant='body1' className='font-medium mt-1'>
+                      {order.factura.codigoEmision === '1' ? 'En línea' : 'Contingencia (fuera de línea)'}
+                    </Typography>
+                  </Grid>
+                  {order.factura.codigoRecepcion && (
+                    <Grid size={{ xs: 12 }}>
+                      <Typography variant='overline' className='text-textSecondary text-xs font-medium block'>
+                        Código Recepción SIAT
+                      </Typography>
+                      <Typography variant='body2' className='font-mono mt-1'>
+                        {order.factura.codigoRecepcion}
+                      </Typography>
+                    </Grid>
+                  )}
+                  <Grid size={{ xs: 12 }}>
+                    <Box sx={{ display: 'flex', gap: 2, flexDirection: 'column' }}>
+                      <Box sx={{ display: 'flex', gap: 2 }}>
+                        <Button
+                          variant='contained'
+                          color='primary'
+                          onClick={handlePrintInvoice}
+                          startIcon={<i className='tabler-printer' />}
+                          fullWidth
+                        >
+                          Imprimir Factura
+                        </Button>
+                        {canAnular && (
+                          <Button
+                            variant='outlined'
+                            color='error'
+                            onClick={() => setShowAnularConfirm(true)}
+                            startIcon={<i className='tabler-x' />}
+                            fullWidth
+                          >
+                            Anular
+                          </Button>
+                        )}
+                        {canRevertir && (
+                          <Button
+                            variant='outlined'
+                            color='warning'
+                            onClick={() => setShowRevertirConfirm(true)}
+                            startIcon={<i className='tabler-restore' />}
+                            fullWidth
+                          >
+                            Revertir Anulación
+                          </Button>
+                        )}
+                      </Box>
+                      {order.factura.estado === 'ANULADA' && order.status === 'sent' && (
+                        <Alert severity='info'>
+                          Esta factura fue anulada. Puede revertir la anulación para restaurarla (solo una vez).
+                        </Alert>
+                      )}
+                      {order.factura.estado === 'ANULADA' && order.status === 'cancelled_for_edit' && (
+                        <Alert severity='warning'>
+                          Esta orden fue editada. La factura anulada pertenece a la orden original. La nueva orden debe
+                          ser facturada por separado.
+                        </Alert>
+                      )}
+                    </Box>
+                  </Grid>
+                </Grid>
+              </CardContent>
+            </Card>
+          )}
+
+          {/* Alerta cuando hay factura activa que bloquea acciones */}
+          {hasBlockingFactura && (
+            <Alert severity='warning' sx={{ mt: 2 }}>
+              <Typography variant='body2' fontWeight='medium'>
+                Esta orden tiene una factura{' '}
+                {order.factura?.estado === 'VALIDADA'
+                  ? 'validada'
+                  : order.factura?.estado === 'REVERTIDA'
+                    ? 'revertida'
+                    : 'pendiente'}
+                .
+              </Typography>
+              <Typography variant='body2'>Para editar o cancelar la orden, primero debe anular la factura.</Typography>
+            </Alert>
+          )}
+
+          {/* Sección de facturación para órdenes sin factura */}
+          {canInvoice && (
+            <Card variant='outlined'>
+              <CardContent>
+                <Box className='flex justify-between items-center mb-4'>
+                  <Typography variant='h6' className='text-textPrimary'>
+                    Emitir Factura
+                  </Typography>
+                  {!showFacturacion && (
+                    <Button
+                      variant='contained'
+                      color='primary'
+                      onClick={() => setShowFacturacion(true)}
+                      startIcon={<i className='tabler-file-invoice' />}
+                    >
+                      Facturar
+                    </Button>
+                  )}
+                </Box>
+
+                <Collapse in={showFacturacion}>
+                  {facturaError && (
+                    <Alert severity='error' sx={{ mb: 2 }}>
+                      {facturaError}
+                    </Alert>
+                  )}
+
+                  {facturaSuccess && facturaData ? (
+                    <Box>
+                      <Alert severity={facturaData.codigoEmision === 2 ? 'warning' : 'success'} sx={{ mb: 2 }}>
+                        {facturaData.codigoEmision === 2 ? (
+                          <>
+                            Factura por contingencia generada
+                            <Chip label='PENDIENTE ENVÍO' size='small' color='warning' sx={{ ml: 1 }} />
+                          </>
+                        ) : (
+                          '¡Factura emitida exitosamente!'
+                        )}
+                      </Alert>
+
+                      <Paper
+                        variant='outlined'
+                        sx={{
+                          p: 2,
+                          bgcolor: facturaData.codigoEmision === 2 ? 'warning.lighter' : 'success.lighter',
+                          mb: 2
+                        }}
+                      >
+                        <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 1 }}>
+                          <Typography variant='caption' color='text.secondary'>
+                            Nro. Factura
+                          </Typography>
+                          <Typography variant='body2' fontWeight='bold'>
+                            {facturaData.numeroFactura}
+                          </Typography>
+                        </Box>
+                        <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 1 }}>
+                          <Typography variant='caption' color='text.secondary'>
+                            Estado
+                          </Typography>
+                          <Typography
+                            variant='body2'
+                            fontWeight='bold'
+                            color={facturaData.estado === 'PENDIENTE' ? 'warning.main' : 'success.main'}
+                          >
+                            {facturaData.estado}
+                          </Typography>
+                        </Box>
+                        <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 1 }}>
+                          <Typography variant='caption' color='text.secondary'>
+                            Monto Total
+                          </Typography>
+                          <Typography variant='body2' fontWeight='bold'>
+                            Bs {facturaData.montoTotal.toFixed(2)}
+                          </Typography>
+                        </Box>
+                        <Divider sx={{ my: 1 }} />
+                        <Typography
+                          variant='caption'
+                          color='text.secondary'
+                          sx={{ wordBreak: 'break-all', fontSize: '9px' }}
+                        >
+                          CUF: {facturaData.cuf}
+                        </Typography>
+                      </Paper>
+
+                      <Box sx={{ display: 'flex', gap: 2 }}>
+                        <Button
+                          variant='contained'
+                          color='primary'
+                          onClick={handlePrintInvoice}
+                          startIcon={<i className='tabler-printer' />}
+                          fullWidth
+                        >
+                          Imprimir
+                        </Button>
+                        <Button variant='outlined' onClick={resetFacturaState} fullWidth>
+                          Cerrar
+                        </Button>
+                      </Box>
+                    </Box>
+                  ) : (
+                    <>
+                      {/* Selector de sucursal */}
+                      <FormControl fullWidth size='small' sx={{ mb: 2 }}>
+                        <InputLabel>Sucursal *</InputLabel>
+                        <Select
+                          value={selectedBranchId}
+                          label='Sucursal *'
+                          onChange={e => {
+                            setSelectedBranchId(e.target.value as number)
+                            setSelectedCufdId('')
+                          }}
+                          disabled={isLoadingBranches}
+                        >
+                          {isLoadingBranches ? (
+                            <MenuItem value=''>Cargando...</MenuItem>
+                          ) : (
+                            branchesData
+                              ?.filter((b: Branch) => b.active)
+                              .map((branch: Branch) => (
+                                <MenuItem key={branch.id} value={branch.id}>
+                                  {branch.alias}
+                                </MenuItem>
+                              ))
+                          )}
+                        </Select>
+                      </FormControl>
+
+                      {/* Sección de contingencia */}
+                      <Collapse in={showContingencia}>
+                        <Paper variant='outlined' sx={{ p: 2, mb: 2, bgcolor: 'warning.lighter' }}>
+                          <Typography variant='subtitle2' fontWeight='bold' sx={{ mb: 2 }}>
+                            Facturación por Contingencia
+                          </Typography>
+
+                          <FormControl fullWidth size='small' sx={{ mb: 2 }}>
+                            <InputLabel>CAFC *</InputLabel>
+                            <Select
+                              value={selectedCafcId}
+                              label='CAFC *'
+                              onChange={e => setSelectedCafcId(e.target.value as number)}
+                            >
+                              {availableCafcs.map((cafc: Cafc) => (
+                                <MenuItem key={cafc.id} value={cafc.id}>
+                                  {cafc.codigo} ({cafc.ultimoNumero}/{cafc.numeroFinal})
+                                </MenuItem>
+                              ))}
+                            </Select>
+                          </FormControl>
+
+                          <FormControl fullWidth size='small' disabled={isLoadingCufds || !selectedBranchId}>
+                            <InputLabel>CUFD *</InputLabel>
+                            <Select
+                              value={selectedCufdId}
+                              label='CUFD *'
+                              onChange={e => setSelectedCufdId(e.target.value as number)}
+                            >
+                              {isLoadingCufds ? (
+                                <MenuItem value=''>Cargando CUFDs...</MenuItem>
+                              ) : !cufdsData || cufdsData.length === 0 ? (
+                                <MenuItem value=''>No hay CUFDs disponibles</MenuItem>
+                              ) : (
+                                cufdsData.map((cufd: Cufd) => (
+                                  <MenuItem key={cufd.id} value={cufd.id}>
+                                    <Box sx={{ display: 'flex', flexDirection: 'column' }}>
+                                      <Typography variant='body2' fontWeight='medium'>
+                                        {cufd.codigo.substring(0, 20)}...
+                                      </Typography>
+                                      <Typography variant='caption' color='text.secondary'>
+                                        Desde: {dayjs(cufd.createdAt).format('DD/MM/YYYY HH:mm')} - Hasta: {dayjs(cufd.fechaVigencia).format('DD/MM/YYYY HH:mm')}
+                                      </Typography>
+                                    </Box>
+                                  </MenuItem>
+                                ))
+                              )}
+                            </Select>
+                          </FormControl>
+                        </Paper>
+                      </Collapse>
+
+                      {/* Preview datos factura */}
+                      <Paper variant='outlined' sx={{ p: 2, bgcolor: 'action.hover', mb: 2 }}>
+                        <Typography variant='caption' color='text.secondary' sx={{ mb: 1, display: 'block' }}>
+                          Datos de la Factura
+                        </Typography>
+
+                        <Box sx={{ mb: 1 }}>
+                          <Typography variant='caption' color='text.secondary'>
+                            Razón Social
+                          </Typography>
+                          <Typography variant='body2' fontWeight='medium'>
+                            {billingInfo?.name || '-'}
+                          </Typography>
+                        </Box>
+
+                        <Box sx={{ display: 'flex', gap: 3, mb: 1 }}>
+                          <Box sx={{ flex: 1 }}>
+                            <Typography variant='caption' color='text.secondary'>
+                              Nro. Documento
+                            </Typography>
+                            <Typography variant='body2' fontWeight='medium'>
+                              {billingInfo?.ci || '-'}
+                            </Typography>
+                          </Box>
+                          {billingInfo?.complemento && (
+                            <Box>
+                              <Typography variant='caption' color='text.secondary'>
+                                Complemento
+                              </Typography>
+                              <Typography variant='body2' fontWeight='medium'>
+                                {billingInfo.complemento}
+                              </Typography>
+                            </Box>
+                          )}
+                        </Box>
+
+                        <Box>
+                          <Typography variant='caption' color='text.secondary'>
+                            Email
+                          </Typography>
+                          <Typography variant='body2' fontWeight='medium'>
+                            {billingInfo?.email || 'Sin email'}
+                          </Typography>
+                        </Box>
+                      </Paper>
+
+                      {/* Botones de facturación */}
+                      <Box sx={{ display: 'flex', gap: 2, mb: 2 }}>
+                        <Button
+                          variant='contained'
+                          color='primary'
+                          onClick={() => setShowEmitirConfirm(true)}
+                          disabled={
+                            !selectedBranchId ||
+                            isPendingFactura ||
+                            !billingInfo?.ci ||
+                            (showContingencia && (!selectedCufdId || !selectedCafcId))
+                          }
+                          startIcon={
+                            isPendingFactura ? (
+                              <CircularProgress size={20} color='inherit' />
+                            ) : (
+                              <i className='tabler-file-invoice' />
+                            )
+                          }
+                          fullWidth
+                        >
+                          {isPendingFactura
+                            ? 'Emitiendo...'
+                            : showContingencia
+                              ? 'Emitir Contingencia'
+                              : 'Emitir Factura'}
+                        </Button>
+                      </Box>
+
+                      <Box sx={{ display: 'flex', gap: 2 }}>
+                        <Button
+                          variant='text'
+                          color='warning'
+                          onClick={() => setShowContingencia(!showContingencia)}
+                          fullWidth
+                          size='small'
+                        >
+                          {showContingencia ? 'Cancelar contingencia' : '⚠️ Facturar por Contingencia'}
+                        </Button>
+                        <Button variant='outlined' onClick={resetFacturaState} fullWidth size='small'>
+                          Cancelar
+                        </Button>
+                      </Box>
+                    </>
+                  )}
+                </Collapse>
+
+                {!showFacturacion && (
+                  <Alert severity='info' sx={{ mt: 2 }}>
+                    Esta orden está lista para ser facturada. Haga clic en Facturar para emitir la factura electrónica.
+                  </Alert>
+                )}
+              </CardContent>
+            </Card>
+          )}
+
           {order.customer && (
             <Card variant='outlined'>
               <CardContent>
@@ -416,10 +1135,14 @@ const OrderDetailsModal = ({ open, onClose, order }: OrderDetailsModalProps) => 
                   {(() => {
                     const isGuestCustomer = order.customer.email === 'guest@moneroget.com'
 
-                    // Si es invitado, usar datos de la orden; si no, usar datos del customer
-                    const displayName = isGuestCustomer ? (order.name_phone?.name || '-') : order.customer.name
-                    const displayEmail = isGuestCustomer ? (order.email || '-') : order.customer.email
-                    const displayPhone = isGuestCustomer ? (order.name_phone?.phone || null) : order.customer.phone
+                    // Si es invitado, usar datos del billing; si no, usar datos del customer
+                    const displayName = isGuestCustomer ? order.billing?.name || '-' : order.customer.name
+
+                    const displayEmail = isGuestCustomer
+                      ? order.billing?.email || order.email || '-'
+                      : order.customer.email
+
+                    const displayPhone = isGuestCustomer ? order.billing?.phone || null : order.customer.phone
 
                     return (
                       <>
@@ -771,7 +1494,7 @@ const OrderDetailsModal = ({ open, onClose, order }: OrderDetailsModalProps) => 
           )}
 
           <Box className='flex gap-3 flex-wrap'>
-            {order.status === 'pending' && (
+            {order.status === 'pending' && canCancelOrder() && (
               <Button
                 variant='contained'
                 color='error'
@@ -785,15 +1508,17 @@ const OrderDetailsModal = ({ open, onClose, order }: OrderDetailsModalProps) => 
 
             {order.status === 'paid' && (
               <>
-                <Button
-                  variant='outlined'
-                  color='error'
-                  onClick={() => setShowCancelConfirm(true)}
-                  disabled={cancelOrderMutation.isPending || sendOrderMutation.isPending}
-                  startIcon={<i className='tabler-x' />}
-                >
-                  Cancelar Orden
-                </Button>
+                {canCancelOrder() && (
+                  <Button
+                    variant='outlined'
+                    color='error'
+                    onClick={() => setShowCancelConfirm(true)}
+                    disabled={cancelOrderMutation.isPending || sendOrderMutation.isPending}
+                    startIcon={<i className='tabler-x' />}
+                  >
+                    Cancelar Orden
+                  </Button>
+                )}
 
                 {!showDhlInput && (
                   <Button
@@ -851,7 +1576,7 @@ const OrderDetailsModal = ({ open, onClose, order }: OrderDetailsModalProps) => 
               </>
             )}
 
-            {order.status === 'sent' && (
+            {order.status === 'sent' && canCancelOrder() && (
               <Button
                 variant='contained'
                 color='error'
@@ -879,7 +1604,8 @@ const OrderDetailsModal = ({ open, onClose, order }: OrderDetailsModalProps) => 
         </DialogTitle>
         <DialogContent>
           <Typography>
-            ¿Estás seguro que deseas cancelar la orden #{order.inherited_id || order.id}? Esta acción no se puede deshacer.
+            ¿Estás seguro que deseas cancelar la orden #{order.inherited_id || order.id}? Esta acción no se puede
+            deshacer.
           </Typography>
         </DialogContent>
         <DialogActions sx={{ p: 2, gap: 1 }}>
@@ -940,6 +1666,166 @@ const OrderDetailsModal = ({ open, onClose, order }: OrderDetailsModalProps) => 
               : order.status === 'cancelled_for_edit'
                 ? 'Sí, Continuar'
                 : 'Sí, Editar'}
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      {/* Modal de confirmación de anulación de factura */}
+      <Dialog open={showAnularConfirm} onClose={() => setShowAnularConfirm(false)} maxWidth='xs' fullWidth>
+        <DialogTitle>
+          <Typography fontWeight='bold' color='error'>
+            ¿Anular Factura?
+          </Typography>
+        </DialogTitle>
+        <DialogContent>
+          <Typography sx={{ mb: 2 }}>
+            Esta acción anulará la factura #{order.factura?.numeroFactura} de forma permanente en el SIAT.
+          </Typography>
+
+          <FormControl fullWidth size='small'>
+            <InputLabel>Motivo de Anulación *</InputLabel>
+            <Select
+              value={motivoAnulacion}
+              label='Motivo de Anulación *'
+              onChange={e => setMotivoAnulacion(e.target.value as number)}
+            >
+              <MenuItem value={1}>FACTURA MAL EMITIDA</MenuItem>
+              <MenuItem value={2}>NOTA DE CREDITO-DEBITO MAL EMITIDA</MenuItem>
+              <MenuItem value={3}>DATOS DE EMISION INCORRECTOS</MenuItem>
+              <MenuItem value={4}>FACTURA O NOTA DE CREDITO-DEBITO DEVUELTA</MenuItem>
+            </Select>
+          </FormControl>
+        </DialogContent>
+        <DialogActions sx={{ p: 2, gap: 1 }}>
+          <Button
+            onClick={() => setShowAnularConfirm(false)}
+            disabled={anularFacturaMutation.isPending}
+            variant='outlined'
+            fullWidth
+          >
+            Cancelar
+          </Button>
+          <Button
+            onClick={handleAnularFactura}
+            color='error'
+            variant='contained'
+            disabled={anularFacturaMutation.isPending}
+            startIcon={
+              anularFacturaMutation.isPending ? (
+                <CircularProgress size={20} color='inherit' />
+              ) : (
+                <i className='tabler-x' />
+              )
+            }
+            fullWidth
+          >
+            {anularFacturaMutation.isPending ? 'Anulando...' : 'Sí, Anular Factura'}
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      {/* Modal de confirmación de revertir anulación */}
+      <Dialog open={showRevertirConfirm} onClose={() => setShowRevertirConfirm(false)} maxWidth='xs' fullWidth>
+        <DialogTitle>
+          <Typography fontWeight='bold' color='warning.main'>
+            ¿Revertir Anulación?
+          </Typography>
+        </DialogTitle>
+        <DialogContent>
+          <Alert severity='error' sx={{ mb: 2 }}>
+            Esta acción solo puede realizarse UNA VEZ por factura. Una vez revertida, la orden no podrá ser editada ni
+            cancelada.
+          </Alert>
+          <Typography>
+            Al revertir la anulación, la factura #{order.factura?.numeroFactura} volverá a estado activo (REVERTIDA) en
+            el SIAT.
+          </Typography>
+        </DialogContent>
+        <DialogActions sx={{ p: 2, gap: 1 }}>
+          <Button
+            onClick={() => setShowRevertirConfirm(false)}
+            disabled={revertirAnulacionMutation.isPending}
+            variant='outlined'
+            fullWidth
+          >
+            Cancelar
+          </Button>
+          <Button
+            onClick={handleRevertirAnulacion}
+            color='warning'
+            variant='contained'
+            disabled={revertirAnulacionMutation.isPending}
+            startIcon={
+              revertirAnulacionMutation.isPending ? (
+                <CircularProgress size={20} color='inherit' />
+              ) : (
+                <i className='tabler-restore' />
+              )
+            }
+            fullWidth
+          >
+            {revertirAnulacionMutation.isPending ? 'Revirtiendo...' : 'Sí, Revertir Anulación'}
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      {/* Modal de confirmación de emisión de factura */}
+      <Dialog open={showEmitirConfirm} onClose={() => setShowEmitirConfirm(false)} maxWidth='xs' fullWidth>
+        <DialogTitle>
+          <Typography fontWeight='bold' color='primary'>
+            {showContingencia ? '¿Emitir Factura por Contingencia?' : '¿Emitir Factura?'}
+          </Typography>
+        </DialogTitle>
+        <DialogContent>
+          {showContingencia && (
+            <Alert severity='warning' sx={{ mb: 2 }}>
+              Esta factura se emitirá en modo contingencia (fuera de línea).
+            </Alert>
+          )}
+          <Typography sx={{ mb: 2 }}>Se emitirá una factura electrónica al SIAT con los siguientes datos:</Typography>
+          <Paper variant='outlined' sx={{ p: 2, bgcolor: 'action.hover' }}>
+            <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 1 }}>
+              <Typography variant='caption' color='text.secondary'>
+                Razón Social
+              </Typography>
+              <Typography variant='body2' fontWeight='medium'>
+                {billingInfo?.name || '-'}
+              </Typography>
+            </Box>
+            <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 1 }}>
+              <Typography variant='caption' color='text.secondary'>
+                Documento
+              </Typography>
+              <Typography variant='body2' fontWeight='medium'>
+                {billingInfo?.ci}
+                {billingInfo?.complemento ? `-${billingInfo.complemento}` : ''}
+              </Typography>
+            </Box>
+            <Box sx={{ display: 'flex', justifyContent: 'space-between' }}>
+              <Typography variant='caption' color='text.secondary'>
+                Monto Total
+              </Typography>
+              <Typography variant='body2' fontWeight='bold' color='primary'>
+                Bs. {parseFloat(order.totalPrice).toFixed(2)}
+              </Typography>
+            </Box>
+          </Paper>
+        </DialogContent>
+        <DialogActions sx={{ p: 2, gap: 1 }}>
+          <Button onClick={() => setShowEmitirConfirm(false)} disabled={isPendingFactura} variant='outlined' fullWidth>
+            Cancelar
+          </Button>
+          <Button
+            onClick={handleConfirmarEmision}
+            color='primary'
+            variant='contained'
+            disabled={isPendingFactura}
+            startIcon={
+              isPendingFactura ? <CircularProgress size={20} color='inherit' /> : <i className='tabler-file-invoice' />
+            }
+            fullWidth
+          >
+            {isPendingFactura ? 'Emitiendo...' : 'Sí, Emitir Factura'}
           </Button>
         </DialogActions>
       </Dialog>

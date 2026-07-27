@@ -358,6 +358,11 @@ const OrdersListTable = () => {
                 </th>
                 <th className='text-left p-4'>
                   <Typography variant='body2' className='font-semibold'>
+                    Factura
+                  </Typography>
+                </th>
+                <th className='text-left p-4'>
+                  <Typography variant='body2' className='font-semibold'>
                     Cliente
                   </Typography>
                 </th>
@@ -366,7 +371,7 @@ const OrdersListTable = () => {
             <tbody>
               {orders.length === 0 ? (
                 <tr>
-                  <td colSpan={8} className='text-center p-8'>
+                  <td colSpan={9} className='text-center p-8'>
                     <Typography color='text.secondary'>No hay órdenes disponibles</Typography>
                   </td>
                 </tr>
@@ -412,10 +417,32 @@ const OrdersListTable = () => {
                       <Typography variant='body2'>{order.items.length} productos</Typography>
                     </td>
                     <td className='p-4'>
+                      {order.factura ? (
+                        <Chip
+                          label={
+                            order.factura.estado === 'VALIDADA' ? 'Validada' :
+                            order.factura.estado === 'PENDIENTE' ? 'Pendiente' :
+                            order.factura.estado === 'REVERTIDA' ? 'Revertida' :
+                            order.factura.estado
+                          }
+                          variant='tonal'
+                          color={
+                            order.factura.estado === 'VALIDADA' ? 'success' :
+                            order.factura.estado === 'REVERTIDA' ? 'success' :
+                            order.factura.estado === 'PENDIENTE' ? 'warning' :
+                            'error'
+                          }
+                          size='small'
+                        />
+                      ) : (
+                        <Typography variant='body2' color='text.secondary'>
+                          -
+                        </Typography>
+                      )}
+                    </td>
+                    <td className='p-4'>
                       <Typography variant='body2' color='text.secondary'>
-                        {order.customer?.email === 'guest@moneroget.com'
-                          ? order.name_phone?.name || '-'
-                          : order.customer?.name || 'N/A'}
+                        {order.billing?.name || order.customer?.name || 'N/A'}
                       </Typography>
                     </td>
                   </tr>

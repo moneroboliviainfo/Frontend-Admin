@@ -1,4 +1,4 @@
-import React, { useState } from 'react'
+import React, { useState, useMemo } from 'react'
 
 import {
   Dialog,
@@ -16,11 +16,15 @@ import {
   IconButton,
   Alert,
   Paper,
-  Divider
+  Divider,
+  Collapse,
+  Chip
 } from '@mui/material'
+import dayjs from 'dayjs'
+import 'dayjs/locale/es'
 
-import type { Order, BillingInfo, Branch, Factura } from '@/types/api/sales'
-import { useBranches, useFacturar } from '@/hooks/useSales'
+import type { Order, BillingInfo, Branch, Factura, Cafc, Cufd } from '@/types/api/sales'
+import { useBranches, useFacturar, useCafcs, useCufds, useFacturarContingencia } from '@/hooks/useSales'
 import { printInvoice } from '@/utils/invoicePrinter'
 
 interface SuccessDialogProps {
@@ -42,30 +46,80 @@ const SuccessDialog: React.FC<SuccessDialogProps> = ({
   editingOrderId = null,
   billing
 }) => {
+  // Estados generales
   const [selectedBranchId, setSelectedBranchId] = useState<number | ''>('')
   const [facturaError, setFacturaError] = useState<string>('')
   const [facturaSuccess, setFacturaSuccess] = useState<boolean>(false)
   const [facturaData, setFacturaData] = useState<Factura | null>(null)
 
-  // Hooks para facturación
+  // Estados para contingencia
+  const [showContingencia, setShowContingencia] = useState(false)
+  const [selectedCafcId, setSelectedCafcId] = useState<number | ''>('')
+  const [selectedCufdId, setSelectedCufdId] = useState<number | ''>('')
+
+  // Hooks
   const { data: branchesData, isLoading: isLoadingBranches } = useBranches()
   const facturarMutation = useFacturar()
+  const facturarContingenciaMutation = useFacturarContingencia()
+  const { data: cafcsData } = useCafcs()
 
   const orderId = isEditingOrder ? editingOrderId : orderData?.id
-
-  // Obtener billing info del orden si no viene como prop
   const billingInfo = billing || orderData?.billing
 
-  // Handler para cerrar sin emitir factura
+  // Obtener sucursal seleccionada
+  const selectedBranch = useMemo(() => {
+    if (!branchesData || !selectedBranchId) return null
+
+    return branchesData.find((b: Branch) => b.id === selectedBranchId)
+  }, [branchesData, selectedBranchId])
+
+  // CUFDs disponibles para la sucursal seleccionada
+  const { data: cufdsData, isLoading: isLoadingCufds } = useCufds(
+    selectedBranch?.codigoSucursal ?? 0,
+    0, // codigoPuntoVenta
+    showContingencia && !!selectedBranch
+  )
+
+  // CAFCs disponibles (con números restantes)
+  const availableCafcs = useMemo(() => {
+    if (!cafcsData) return []
+
+    return cafcsData.filter((cafc: Cafc) => parseInt(cafc.ultimoNumero) < parseInt(cafc.numeroFinal))
+  }, [cafcsData])
+
+  // Handlers
   const handleCloseWithoutInvoice = () => {
+    resetState()
+    onAccept()
+  }
+
+  const resetState = () => {
     setSelectedBranchId('')
     setFacturaError('')
     setFacturaSuccess(false)
     setFacturaData(null)
-    onAccept()
+    setShowContingencia(false)
+    setSelectedCafcId('')
+    setSelectedCufdId('')
   }
 
-  // Handler para emitir factura
+  // Datos base para facturación (usados en normal y contingencia)
+  const getFacturaBaseData = () => ({
+    branchId: selectedBranchId as number,
+    tipoFacturaDocumento: 1,
+    codigoDocumentoSector: 1,
+    codigoMoneda: 1,
+    tipoCambio: 1,
+    nombreRazonSocial: billingInfo?.name || '',
+    numeroDocumento: billingInfo?.ci || '',
+    complemento: billingInfo?.complemento || '',
+    codigoTipoDocumentoIdentidad: billingInfo?.codigoTipoDocumentoIdentidad || 1,
+    usuario: 'MoneroAdmin',
+    ...(billingInfo?.email ? { emails: [billingInfo.email] } : {}),
+    descuentoAdicional: 0
+  })
+
+  // Handler factura normal
   const handleEmitirFactura = async () => {
     if (!orderId || !selectedBranchId || !billingInfo) {
       setFacturaError('Faltan datos para emitir la factura')
@@ -75,30 +129,12 @@ const SuccessDialog: React.FC<SuccessDialogProps> = ({
 
     setFacturaError('')
 
-    const facturaRequestData = {
-      branchId: selectedBranchId as number,
-      tipoFacturaDocumento: 1,
-      codigoDocumentoSector: 1,
-      codigoMoneda: 1,
-      tipoCambio: 1,
-      nombreRazonSocial: billingInfo.name || '',
-      numeroDocumento: billingInfo.ci,
-      complemento: billingInfo.complemento || '',
-      codigoTipoDocumentoIdentidad: billingInfo.codigoTipoDocumentoIdentidad,
-      usuario: 'MoneroAdmin',
-      emails: billingInfo.email ? [billingInfo.email] : [],
-      descuentoAdicional: 0
-    }
-
     facturarMutation.mutate(
-      { orderId: orderId as number, data: facturaRequestData },
+      { orderId: orderId as number, data: getFacturaBaseData() },
       {
         onSuccess: response => {
           setFacturaSuccess(true)
           setFacturaData(response.factura)
-
-          // Abrir ventana de impresión automáticamente
-          printInvoice(response.factura)
         },
         onError: (error: any) => {
           setFacturaError(error?.response?.data?.message || 'Error al emitir la factura')
@@ -107,23 +143,58 @@ const SuccessDialog: React.FC<SuccessDialogProps> = ({
     )
   }
 
-  // Handler para imprimir factura nuevamente
+  // Handler factura contingencia
+  const handleEmitirContingencia = async () => {
+    if (!orderId || !selectedBranchId || !billingInfo || !selectedCufdId || !selectedCafcId) {
+      setFacturaError('Faltan datos para emitir la factura por contingencia')
+
+      return
+    }
+
+    const selectedCafc = cafcsData?.find((c: Cafc) => c.id === selectedCafcId)
+
+    if (!selectedCafc) {
+      setFacturaError('CAFC no encontrado')
+
+      return
+    }
+
+    setFacturaError('')
+
+    const contingenciaData = {
+      ...getFacturaBaseData(),
+      cafc: selectedCafc.codigo,
+      cufdId: selectedCufdId as number,
+      numeroTarjeta: null,
+      montoGiftCard: 0
+    }
+
+    facturarContingenciaMutation.mutate(
+      { orderId: orderId as number, data: contingenciaData },
+      {
+        onSuccess: factura => {
+          setFacturaSuccess(true)
+          setFacturaData(factura)
+        },
+        onError: (error: any) => {
+          setFacturaError(error?.response?.data?.message || 'Error al emitir factura por contingencia')
+        }
+      }
+    )
+  }
+
   const handlePrintAgain = () => {
     if (facturaData) {
       printInvoice(facturaData)
     }
   }
 
-  // Handler para cerrar después de facturar
   const handleCloseAfterInvoice = () => {
-    setSelectedBranchId('')
-    setFacturaError('')
-    setFacturaSuccess(false)
-    setFacturaData(null)
+    resetState()
     onAccept()
   }
 
-  // Si es modo edición, mostrar el dialog simple original
+  // Dialog para modo edición
   if (isEditingOrder) {
     return (
       <Dialog open={open} maxWidth='xs' fullWidth disableEscapeKeyDown>
@@ -156,6 +227,8 @@ const SuccessDialog: React.FC<SuccessDialogProps> = ({
     )
   }
 
+  const isPending = facturarMutation.isPending || facturarContingenciaMutation.isPending
+
   return (
     <Dialog open={open} maxWidth='sm' fullWidth>
       <DialogTitle sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
@@ -169,6 +242,7 @@ const SuccessDialog: React.FC<SuccessDialogProps> = ({
           <i className='tabler-x' style={{ fontSize: '20px' }} />
         </IconButton>
       </DialogTitle>
+
       <DialogContent>
         <Box sx={{ textAlign: 'center', mb: 3 }}>
           <Typography variant='body1' color='text.secondary' gutterBottom>
@@ -182,37 +256,50 @@ const SuccessDialog: React.FC<SuccessDialogProps> = ({
         </Box>
 
         {facturaSuccess && facturaData ? (
+          // Vista de factura emitida
           <Box>
-            <Alert severity='success' sx={{ mb: 2 }}>
-              ¡Factura emitida exitosamente!
+            <Alert
+              severity={facturaData.codigoEmision === 2 ? 'warning' : 'success'}
+              sx={{ mb: 2 }}
+            >
+              {facturaData.codigoEmision === 2 ? (
+                <>
+                  Factura por contingencia generada
+                  <Chip label='PENDIENTE ENVÍO' size='small' color='warning' sx={{ ml: 1 }} />
+                </>
+              ) : (
+                '¡Factura emitida exitosamente!'
+              )}
             </Alert>
 
-            {/* Información de la factura emitida */}
-            <Paper variant='outlined' sx={{ p: 2, bgcolor: 'success.lighter' }}>
+            <Paper
+              variant='outlined'
+              sx={{ p: 2, bgcolor: facturaData.codigoEmision === 2 ? 'warning.lighter' : 'success.lighter' }}
+            >
               <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 1 }}>
-                <Typography variant='caption' color='text.secondary'>
-                  Nro. Factura
-                </Typography>
-                <Typography variant='body2' fontWeight='bold'>
-                  {facturaData.numeroFactura}
-                </Typography>
+                <Typography variant='caption' color='text.secondary'>Nro. Factura</Typography>
+                <Typography variant='body2' fontWeight='bold'>{facturaData.numeroFactura}</Typography>
               </Box>
               <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 1 }}>
-                <Typography variant='caption' color='text.secondary'>
-                  Estado
-                </Typography>
-                <Typography variant='body2' fontWeight='bold' color='success.main'>
+                <Typography variant='caption' color='text.secondary'>Estado</Typography>
+                <Typography
+                  variant='body2'
+                  fontWeight='bold'
+                  color={facturaData.estado === 'PENDIENTE' ? 'warning.main' : 'success.main'}
+                >
                   {facturaData.estado}
                 </Typography>
               </Box>
               <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 1 }}>
-                <Typography variant='caption' color='text.secondary'>
-                  Monto Total
-                </Typography>
-                <Typography variant='body2' fontWeight='bold'>
-                  Bs {facturaData.montoTotal.toFixed(2)}
-                </Typography>
+                <Typography variant='caption' color='text.secondary'>Monto Total</Typography>
+                <Typography variant='body2' fontWeight='bold'>Bs {facturaData.montoTotal.toFixed(2)}</Typography>
               </Box>
+              {facturaData.codigoEmision === 2 && (
+                <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 1 }}>
+                  <Typography variant='caption' color='text.secondary'>Tipo</Typography>
+                  <Typography variant='body2' fontWeight='bold' color='warning.main'>CONTINGENCIA</Typography>
+                </Box>
+              )}
               <Divider sx={{ my: 1 }} />
               <Typography variant='caption' color='text.secondary' sx={{ wordBreak: 'break-all', fontSize: '9px' }}>
                 CUF: {facturaData.cuf}
@@ -221,123 +308,141 @@ const SuccessDialog: React.FC<SuccessDialogProps> = ({
           </Box>
         ) : (
           <>
-            {/* Título */}
+            {/* Formulario de facturación */}
             <Typography variant='subtitle1' fontWeight='bold' sx={{ mb: 2 }}>
               Emitir Factura
             </Typography>
 
             {facturaError && (
-              <Alert severity='error' sx={{ mb: 2 }}>
-                {facturaError}
-              </Alert>
+              <Alert severity='error' sx={{ mb: 2 }}>{facturaError}</Alert>
             )}
 
-            {/* Sucursal - único campo editable */}
-            <FormControl fullWidth size='small' sx={{ mb: 3 }}>
+            {/* Selector de sucursal */}
+            <FormControl fullWidth size='small' sx={{ mb: 2 }}>
               <InputLabel>Sucursal *</InputLabel>
               <Select
                 value={selectedBranchId}
                 label='Sucursal *'
-                onChange={e => setSelectedBranchId(e.target.value as number)}
+                onChange={e => {
+                  setSelectedBranchId(e.target.value as number)
+                  setSelectedCufdId('')
+                }}
                 disabled={isLoadingBranches}
               >
                 {isLoadingBranches ? (
                   <MenuItem value=''>Cargando...</MenuItem>
                 ) : (
-                  branchesData
-                    ?.filter((b: Branch) => b.active)
-                    .map((branch: Branch) => (
-                      <MenuItem key={branch.id} value={branch.id}>
-                        {branch.alias}
-                      </MenuItem>
-                    ))
+                  branchesData?.filter((b: Branch) => b.active).map((branch: Branch) => (
+                    <MenuItem key={branch.id} value={branch.id}>{branch.alias}</MenuItem>
+                  ))
                 )}
               </Select>
             </FormControl>
 
-            {/* Preview de datos de factura */}
+            {/* Sección de contingencia */}
+            <Collapse in={showContingencia}>
+              <Paper variant='outlined' sx={{ p: 2, mb: 2, bgcolor: 'warning.lighter' }}>
+                <Typography variant='subtitle2' fontWeight='bold' sx={{ mb: 2 }}>
+                  Facturación por Contingencia
+                </Typography>
+
+                {/* Selector de CAFC */}
+                <FormControl fullWidth size='small' sx={{ mb: 2 }}>
+                  <InputLabel>CAFC *</InputLabel>
+                  <Select
+                    value={selectedCafcId}
+                    label='CAFC *'
+                    onChange={e => setSelectedCafcId(e.target.value as number)}
+                  >
+                    {availableCafcs.map((cafc: Cafc) => (
+                      <MenuItem key={cafc.id} value={cafc.id}>
+                        {cafc.codigo} ({cafc.ultimoNumero}/{cafc.numeroFinal})
+                      </MenuItem>
+                    ))}
+                  </Select>
+                </FormControl>
+
+                {/* Selector de CUFD */}
+                <FormControl fullWidth size='small' disabled={isLoadingCufds || !selectedBranchId}>
+                  <InputLabel>CUFD *</InputLabel>
+                  <Select
+                    value={selectedCufdId}
+                    label='CUFD *'
+                    onChange={e => setSelectedCufdId(e.target.value as number)}
+                  >
+                    {isLoadingCufds ? (
+                      <MenuItem value=''>Cargando CUFDs...</MenuItem>
+                    ) : !cufdsData || cufdsData.length === 0 ? (
+                      <MenuItem value=''>No hay CUFDs disponibles</MenuItem>
+                    ) : (
+                      cufdsData.map((cufd: Cufd) => (
+                        <MenuItem key={cufd.id} value={cufd.id}>
+                          <Box sx={{ display: 'flex', flexDirection: 'column' }}>
+                            <Typography variant='body2' fontWeight='medium'>
+                              {cufd.codigo.substring(0, 20)}...
+                            </Typography>
+                            <Typography variant='caption' color='text.secondary'>
+                              Desde: {dayjs(cufd.createdAt).format('DD/MM/YYYY HH:mm')} - Hasta: {dayjs(cufd.fechaVigencia).format('DD/MM/YYYY HH:mm')}
+                            </Typography>
+                          </Box>
+                        </MenuItem>
+                      ))
+                    )}
+                  </Select>
+                </FormControl>
+              </Paper>
+            </Collapse>
+
+            {/* Preview datos factura */}
             <Paper variant='outlined' sx={{ p: 2, bgcolor: 'action.hover' }}>
               <Typography variant='caption' color='text.secondary' sx={{ mb: 1, display: 'block' }}>
                 Datos de la Factura
               </Typography>
 
-              {/* Tipo de Factura */}
               <Box sx={{ mb: 1.5 }}>
-                <Typography variant='caption' color='text.secondary'>
-                  Tipo de Factura
-                </Typography>
-                <Typography variant='body2' fontWeight='medium'>
-                  FACTURA CON DERECHO A CRÉDITO FISCAL
-                </Typography>
+                <Typography variant='caption' color='text.secondary'>Tipo de Factura</Typography>
+                <Typography variant='body2' fontWeight='medium'>FACTURA CON DERECHO A CRÉDITO FISCAL</Typography>
               </Box>
 
-              {/* Documento Sector */}
               <Box sx={{ mb: 1.5 }}>
-                <Typography variant='caption' color='text.secondary'>
-                  Documento Sector
-                </Typography>
-                <Typography variant='body2' fontWeight='medium'>
-                  FACTURA COMPRA-VENTA
-                </Typography>
+                <Typography variant='caption' color='text.secondary'>Documento Sector</Typography>
+                <Typography variant='body2' fontWeight='medium'>FACTURA COMPRA-VENTA</Typography>
               </Box>
 
-              {/* Moneda */}
               <Box sx={{ mb: 1.5 }}>
-                <Typography variant='caption' color='text.secondary'>
-                  Moneda
-                </Typography>
-                <Typography variant='body2' fontWeight='medium'>
-                  BOLIVIANOS (BOB)
-                </Typography>
+                <Typography variant='caption' color='text.secondary'>Moneda</Typography>
+                <Typography variant='body2' fontWeight='medium'>BOLIVIANOS (BOB)</Typography>
               </Box>
 
               <Divider sx={{ my: 1.5 }} />
 
-              {/* Razón Social */}
               <Box sx={{ mb: 1.5 }}>
-                <Typography variant='caption' color='text.secondary'>
-                  Razón Social
-                </Typography>
-                <Typography variant='body2' fontWeight='medium'>
-                  {billingInfo?.name || '-'}
-                </Typography>
+                <Typography variant='caption' color='text.secondary'>Razón Social</Typography>
+                <Typography variant='body2' fontWeight='medium'>{billingInfo?.name || '-'}</Typography>
               </Box>
 
-              {/* Documento */}
               <Box sx={{ display: 'flex', gap: 3, mb: 1.5 }}>
                 <Box sx={{ flex: 1 }}>
-                  <Typography variant='caption' color='text.secondary'>
-                    Nro. Documento
-                  </Typography>
-                  <Typography variant='body2' fontWeight='medium'>
-                    {billingInfo?.ci || '-'}
-                  </Typography>
+                  <Typography variant='caption' color='text.secondary'>Nro. Documento</Typography>
+                  <Typography variant='body2' fontWeight='medium'>{billingInfo?.ci || '-'}</Typography>
                 </Box>
                 {billingInfo?.complemento && (
                   <Box>
-                    <Typography variant='caption' color='text.secondary'>
-                      Complemento
-                    </Typography>
-                    <Typography variant='body2' fontWeight='medium'>
-                      {billingInfo.complemento}
-                    </Typography>
+                    <Typography variant='caption' color='text.secondary'>Complemento</Typography>
+                    <Typography variant='body2' fontWeight='medium'>{billingInfo.complemento}</Typography>
                   </Box>
                 )}
               </Box>
 
-              {/* Email */}
               <Box>
-                <Typography variant='caption' color='text.secondary'>
-                  Email
-                </Typography>
-                <Typography variant='body2' fontWeight='medium'>
-                  {billingInfo?.email || 'Sin email registrado'}
-                </Typography>
+                <Typography variant='caption' color='text.secondary'>Email</Typography>
+                <Typography variant='body2' fontWeight='medium'>{billingInfo?.email || 'Sin email registrado'}</Typography>
               </Box>
             </Paper>
           </>
         )}
       </DialogContent>
+
       <DialogActions sx={{ p: 3, gap: 2, flexDirection: 'column' }}>
         {facturaSuccess && facturaData ? (
           <>
@@ -349,7 +454,7 @@ const SuccessDialog: React.FC<SuccessDialogProps> = ({
               fullWidth
               size='large'
             >
-              Imprimir Nuevamente
+              Imprimir Factura
             </Button>
             <Button variant='contained' color='success' fullWidth size='large' onClick={handleCloseAfterInvoice}>
               Finalizar
@@ -357,17 +462,37 @@ const SuccessDialog: React.FC<SuccessDialogProps> = ({
           </>
         ) : (
           <>
+            {/* Botones de facturación */}
+            <Box sx={{ display: 'flex', gap: 2, width: '100%' }}>
+              <Button
+                variant='contained'
+                color='primary'
+                onClick={showContingencia ? handleEmitirContingencia : handleEmitirFactura}
+                disabled={
+                  !selectedBranchId ||
+                  isPending ||
+                  !billingInfo?.ci ||
+                  (showContingencia && (!selectedCufdId || !selectedCafcId))
+                }
+                startIcon={isPending ? <CircularProgress size={20} color='inherit' /> : <span>📄</span>}
+                fullWidth
+                size='large'
+              >
+                {isPending ? 'Emitiendo...' : showContingencia ? 'Emitir Contingencia' : 'Emitir Factura'}
+              </Button>
+            </Box>
+
+            {/* Toggle contingencia */}
             <Button
-              variant='contained'
-              color='primary'
-              onClick={handleEmitirFactura}
-              disabled={!selectedBranchId || facturarMutation.isPending || !billingInfo?.ci}
-              startIcon={facturarMutation.isPending ? <CircularProgress size={20} color='inherit' /> : <span>📄</span>}
+              variant='text'
+              color='warning'
+              onClick={() => setShowContingencia(!showContingencia)}
               fullWidth
-              size='large'
+              size='small'
             >
-              {facturarMutation.isPending ? 'Emitiendo...' : 'Emitir Factura'}
+              {showContingencia ? 'Cancelar contingencia' : '⚠️ Facturar por Contingencia'}
             </Button>
+
             <Button variant='outlined' fullWidth size='large' onClick={onViewSales}>
               Ver lista de ventas
             </Button>

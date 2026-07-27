@@ -158,6 +158,28 @@ const getFullMenuData = (): VerticalMenuDataType[] => [
     label: 'Banners',
     icon: 'tabler-video',
     href: '/banners/'
+  },
+
+  // MÓDULO SIAT
+  {
+    isSection: true,
+    label: 'FACTURACIÓN SIAT'
+  },
+  {
+    label: 'SIAT',
+    icon: 'tabler-file-invoice',
+    children: [
+      {
+        label: 'Paquetes Contingencia',
+        icon: 'tabler-package',
+        href: '/siat/paquetes/'
+      },
+      {
+        label: 'Códigos CAFC',
+        icon: 'tabler-shield-lock',
+        href: '/siat/cafc/'
+      }
+    ]
   }
 ]
 

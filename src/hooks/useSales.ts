@@ -7,7 +7,12 @@ import type {
   ConfirmOrderRequest,
   OrdersListParams,
   GenerateQRRequest,
-  FacturarRequest
+  FacturarRequest,
+  FacturarContingenciaRequest,
+  EventoSignificativoRequest,
+  PaqueteContingenciaRequest,
+  PaquetesListParams,
+  CafcCreateRequest
 } from '@/types/api/sales'
 
 export const useAddToCart = () => {
@@ -156,6 +161,16 @@ export const useTiposDocumentoIdentidad = () => {
   })
 }
 
+// Hook para obtener tipos de eventos significativos del catálogo SIAT
+export const useEventosSignificativosParametricas = () => {
+  return useQuery({
+    queryKey: ['eventos-significativos-parametricas'],
+    queryFn: () => cartService.getEventosSignificativosParametricas(),
+    staleTime: 1000 * 60 * 60, // Cache 1 hora
+    retry: 2
+  })
+}
+
 // Hook para verificar NIT con el SIAT
 export const useVerificarNit = () => {
   return useMutation({
@@ -183,6 +198,147 @@ export const useFacturar = () => {
       cartService.facturar(orderId, data),
     onError: (error: any) => {
       console.error('Error emitiendo factura:', error)
+    }
+  })
+}
+
+// Hook para obtener CUFDs
+export const useCufds = (codigoSucursal: number, codigoPuntoVenta: number, enabled: boolean = true) => {
+  return useQuery({
+    queryKey: ['cufds', codigoSucursal, codigoPuntoVenta],
+    queryFn: () => cartService.getCufds(codigoSucursal, codigoPuntoVenta),
+    enabled,
+    staleTime: 1000 * 60 * 5
+  })
+}
+
+// Hook para obtener CAFCs
+export const useCafcs = () => {
+  return useQuery({
+    queryKey: ['cafcs'],
+    queryFn: () => cartService.getCafcs(),
+    staleTime: 1000 * 60 * 5
+  })
+}
+
+// Hook para crear CAFC
+export const useCreateCafc = () => {
+  return useMutation({
+    mutationFn: (data: CafcCreateRequest) => cartService.createCafc(data),
+    onError: (error: any) => {
+      console.error('Error creando CAFC:', error)
+    }
+  })
+}
+
+// Hook para emitir factura por contingencia
+export const useFacturarContingencia = () => {
+  return useMutation({
+    mutationFn: ({ orderId, data }: { orderId: number; data: FacturarContingenciaRequest }) =>
+      cartService.facturarContingencia(orderId, data),
+    onError: (error: any) => {
+      console.error('Error emitiendo factura por contingencia:', error)
+    }
+  })
+}
+
+// ============ SIAT: Eventos Significativos ============
+
+// Hook para obtener eventos significativos
+export const useEventosSignificativos = () => {
+  return useQuery({
+    queryKey: ['eventos-significativos'],
+    queryFn: () => cartService.getEventosSignificativos(),
+    staleTime: 1000 * 60 * 5
+  })
+}
+
+// Hook para crear evento significativo
+export const useCrearEventoSignificativo = () => {
+  return useMutation({
+    mutationFn: ({
+      data,
+      codigoSucursal,
+      codigoPuntoVenta
+    }: {
+      data: EventoSignificativoRequest
+      codigoSucursal?: number
+      codigoPuntoVenta?: number
+    }) => cartService.crearEventoSignificativo(data, codigoSucursal, codigoPuntoVenta),
+    onError: (error: any) => {
+      console.error('Error creando evento significativo:', error)
+    }
+  })
+}
+
+// ============ SIAT: Paquetes de Contingencia ============
+
+// Hook para obtener paquetes
+export const usePaquetes = (params: PaquetesListParams = {}) => {
+  return useQuery({
+    queryKey: ['paquetes', params],
+    queryFn: () => cartService.getPaquetes(params),
+    staleTime: 1000 * 60 * 2
+  })
+}
+
+// Hook para obtener un paquete específico
+export const usePaquete = (id: number, enabled: boolean = true) => {
+  return useQuery({
+    queryKey: ['paquete', id],
+    queryFn: () => cartService.getPaquete(id),
+    enabled: enabled && !!id,
+    staleTime: 1000 * 60 * 5
+  })
+}
+
+// Hook para crear paquete de contingencia
+export const useCrearPaqueteContingencia = () => {
+  return useMutation({
+    mutationFn: (data: PaqueteContingenciaRequest) => cartService.crearPaqueteContingencia(data),
+    onError: (error: any) => {
+      console.error('Error creando paquete de contingencia:', error)
+    }
+  })
+}
+
+// Hook para obtener CUFDs disponibles por CAFC
+export const useCufdsByCafc = (cafc: string, enabled: boolean = true) => {
+  return useQuery({
+    queryKey: ['cufds-by-cafc', cafc],
+    queryFn: () => cartService.getCufdsByCafc(cafc),
+    enabled: enabled && !!cafc,
+    staleTime: 1000 * 60 * 2
+  })
+}
+
+// Hook para validar paquete (enviar a SIAT)
+export const useValidarPaquete = () => {
+  return useMutation({
+    mutationFn: (paqueteId: number) => cartService.validarPaquete(paqueteId),
+    onError: (error: any) => {
+      console.error('Error validando paquete:', error)
+    }
+  })
+}
+
+// Hook para anular factura
+export const useAnularFactura = () => {
+  return useMutation({
+    mutationFn: ({ facturaId, codigoMotivo }: { facturaId: number; codigoMotivo: number }) =>
+      cartService.anularFactura(facturaId, codigoMotivo),
+    onError: (error: any) => {
+      console.error('Error anulando factura:', error)
+    }
+  })
+}
+
+// Hook para revertir anulación de factura (solo una vez por factura)
+export const useRevertirAnulacion = () => {
+  return useMutation({
+    mutationFn: (facturaId: number) => cartService.revertirAnulacion(facturaId),
+    onError: (error: any) => {
+      console.error('Error revirtiendo anulación:', error)
     }
   })
 }

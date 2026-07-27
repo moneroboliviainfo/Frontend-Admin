@@ -22,7 +22,19 @@ import type {
   VerificarNitRequest,
   Branch,
   FacturarRequest,
-  FacturarResponse
+  FacturarResponse,
+  Factura,
+  Cufd,
+  Cafc,
+  CafcCreateRequest,
+  FacturarContingenciaRequest,
+  EventoSignificativo,
+  EventoSignificativoRequest,
+  Paquete,
+  PaqueteContingenciaRequest,
+  PaquetesListResponse,
+  PaquetesListParams,
+  CufdByCafc
 } from '@/types/api/sales'
 
 class CartServiceClass {
@@ -139,6 +151,17 @@ class CartServiceClass {
     return response.data
   }
 
+  // Obtener tipos de eventos significativos del SIAT
+  async getEventosSignificativosParametricas(): Promise<ParametricasResponse> {
+    const response = await apiClient.post<ParametricasResponse>(
+      '/api/catalogos/parametricas',
+      { metodo: 'sincronizarParametricaEventosSignificativos' } as ParametricasRequest,
+      { params: { codigoSucursal: 0, codigoPuntoVenta: 0 } }
+    )
+
+    return response.data
+  }
+
   // Verificar NIT con el SIAT
   async verificarNit(nit: number): Promise<VerificarNitResponse> {
     const response = await apiClient.post<VerificarNitResponse>(
@@ -160,6 +183,121 @@ class CartServiceClass {
   // Emitir factura para una orden
   async facturar(orderId: number, data: FacturarRequest): Promise<FacturarResponse> {
     const response = await apiClient.post<FacturarResponse>(`/api/orders/${orderId}/facturar`, data)
+
+    return response.data
+  }
+
+  // Obtener lista de CUFDs
+  async getCufds(codigoSucursal: number, codigoPuntoVenta: number, soloVigentes?: boolean): Promise<Cufd[]> {
+    const response = await apiClient.get<Cufd[]>('/api/codigos/cufd/all', {
+      params: { codigoSucursal, codigoPuntoVenta, soloVigentes }
+    })
+
+    return response.data
+  }
+
+  // Obtener lista de CAFCs
+  async getCafcs(): Promise<Cafc[]> {
+    const response = await apiClient.get<Cafc[]>('/api/cafc')
+
+    return response.data
+  }
+
+  // Crear nuevo CAFC
+  async createCafc(data: CafcCreateRequest): Promise<Cafc> {
+    const response = await apiClient.post<Cafc>('/api/cafc', data)
+
+    return response.data
+  }
+
+  // Emitir factura por contingencia
+  async facturarContingencia(orderId: number, data: FacturarContingenciaRequest): Promise<Factura> {
+    const response = await apiClient.post<Factura>(`/api/orders/${orderId}/facturar-contingencia`, data)
+
+    return response.data
+  }
+
+  // ============ SIAT: Eventos Significativos ============
+
+  // Obtener lista de eventos significativos
+  async getEventosSignificativos(): Promise<EventoSignificativo[]> {
+    const response = await apiClient.get<EventoSignificativo[]>('/api/operaciones/evento-significativo')
+
+    return response.data
+  }
+
+  // Registrar nuevo evento significativo
+  async crearEventoSignificativo(
+    data: EventoSignificativoRequest,
+    codigoSucursal: number = 0,
+    codigoPuntoVenta: number = 0
+  ): Promise<EventoSignificativo> {
+    const response = await apiClient.post<EventoSignificativo>('/api/operaciones/evento-significativo', data, {
+      params: { codigoSucursal, codigoPuntoVenta }
+    })
+
+    return response.data
+  }
+
+  // ============ SIAT: Paquetes de Contingencia ============
+
+  // Obtener lista de paquetes
+  async getPaquetes(params: PaquetesListParams = {}): Promise<PaquetesListResponse> {
+    const response = await apiClient.get<PaquetesListResponse>('/api/paquetes', {
+      params: {
+        codigoSucursal: params.codigoSucursal ?? 0,
+        codigoPuntoVenta: params.codigoPuntoVenta ?? 0,
+        page: params.page ?? 1,
+        limit: params.limit ?? 10
+      }
+    })
+
+    return response.data
+  }
+
+  // Obtener un paquete específico
+  async getPaquete(id: number): Promise<Paquete> {
+    const response = await apiClient.get<Paquete>(`/api/paquetes/${id}`)
+
+    return response.data
+  }
+
+  // Crear paquete de contingencia
+  async crearPaqueteContingencia(data: PaqueteContingenciaRequest): Promise<Paquete> {
+    const response = await apiClient.post<Paquete>('/api/paquetes/contingencia', data)
+
+    return response.data
+  }
+
+  // Obtener CUFDs disponibles por CAFC para paquetes de contingencia
+  async getCufdsByCafc(cafc: string): Promise<CufdByCafc[]> {
+    const response = await apiClient.get<CufdByCafc[]>(`/api/paquetes/contingencia/${cafc}/cufds`)
+
+    return response.data
+  }
+
+  // Enviar paquete a SIAT para validación
+  async validarPaquete(paqueteId: number): Promise<Paquete> {
+    const response = await apiClient.post<Paquete>(`/api/paquetes/validacion/${paqueteId}`)
+
+    return response.data
+  }
+
+  // Anular factura
+  async anularFactura(facturaId: number, codigoMotivo: number): Promise<Factura> {
+    const response = await apiClient.post<Factura>('/api/facturacion/facturacion/anulacion', {
+      codigoMotivo,
+      facturaId
+    })
+
+    return response.data
+  }
+
+  // Revertir anulación de factura (solo se puede usar una vez por factura)
+  async revertirAnulacion(facturaId: number): Promise<Factura> {
+    const response = await apiClient.post<Factura>('/api/facturacion/facturacion/reversion', {
+      facturaId
+    })
 
     return response.data
   }
