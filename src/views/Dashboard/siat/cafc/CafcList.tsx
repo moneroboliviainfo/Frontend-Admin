@@ -26,8 +26,26 @@ import {
   useReactTable,
   getSortedRowModel
 } from '@tanstack/react-table'
-import type { ColumnDef } from '@tanstack/react-table'
+import type { ColumnDef, FilterFn } from '@tanstack/react-table'
+import { rankItem, type RankingInfo } from '@tanstack/match-sorter-utils'
 import classnames from 'classnames'
+
+declare module '@tanstack/table-core' {
+  interface FilterFns {
+    fuzzy: FilterFn<unknown>
+  }
+  interface FilterMeta {
+    itemRank: RankingInfo
+  }
+}
+
+const fuzzyFilter: FilterFn<any> = (row, columnId, value, addMeta) => {
+  const itemRank = rankItem(row.getValue(columnId), value)
+
+  addMeta({ itemRank })
+
+  return itemRank.passed
+}
 
 import { useCafcs } from '@/hooks/useSales'
 import type { Cafc } from '@/types/api/sales'
@@ -70,19 +88,11 @@ const CafcList = () => {
       }),
       columnHelper.accessor('numeroInicial', {
         header: 'Rango Inicial',
-        cell: ({ row }) => (
-          <Typography variant='body2'>
-            {row.original.numeroInicial}
-          </Typography>
-        )
+        cell: ({ row }) => <Typography variant='body2'>{row.original.numeroInicial}</Typography>
       }),
       columnHelper.accessor('numeroFinal', {
         header: 'Rango Final',
-        cell: ({ row }) => (
-          <Typography variant='body2'>
-            {row.original.numeroFinal}
-          </Typography>
-        )
+        cell: ({ row }) => <Typography variant='body2'>{row.original.numeroFinal}</Typography>
       }),
       columnHelper.accessor('ultimoNumero', {
         header: 'Uso',
@@ -94,7 +104,9 @@ const CafcList = () => {
           return (
             <Box sx={{ minWidth: 120 }}>
               <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 0.5 }}>
-                <Typography variant='caption'>{usado} / {total}</Typography>
+                <Typography variant='caption'>
+                  {usado} / {total}
+                </Typography>
               </Box>
               <LinearProgress
                 variant='determinate'
@@ -104,7 +116,8 @@ const CafcList = () => {
                   borderRadius: 3,
                   backgroundColor: 'action.hover',
                   '& .MuiLinearProgress-bar': {
-                    backgroundColor: porcentajeUsado > 90 ? 'error.main' : porcentajeUsado > 70 ? 'warning.main' : 'success.main'
+                    backgroundColor:
+                      porcentajeUsado > 90 ? 'error.main' : porcentajeUsado > 70 ? 'warning.main' : 'success.main'
                   }
                 }}
               />
@@ -148,11 +161,7 @@ const CafcList = () => {
       }),
       columnHelper.accessor('createdAt', {
         header: 'Fecha Registro',
-        cell: ({ row }) => (
-          <Typography variant='body2'>
-            {dayjs(row.original.createdAt).format('DD/MM/YYYY')}
-          </Typography>
-        )
+        cell: ({ row }) => <Typography variant='body2'>{dayjs(row.original.createdAt).format('DD/MM/YYYY')}</Typography>
       })
     ],
     []
@@ -171,6 +180,7 @@ const CafcList = () => {
   const table = useReactTable({
     data: paginatedData,
     columns,
+    filterFns: { fuzzy: fuzzyFilter },
     getCoreRowModel: getCoreRowModel(),
     getSortedRowModel: getSortedRowModel()
   })
@@ -282,7 +292,8 @@ const CafcList = () => {
 
         <CardContent>
           <Alert severity='info'>
-            Los códigos CAFC son autorizaciones para facturar en modo contingencia (offline). Cuando los números se agoten, deberás solicitar un nuevo CAFC al SIAT.
+            Los códigos CAFC son autorizaciones para facturar en modo contingencia (offline). Cuando los números se
+            agoten, deberás solicitar un nuevo CAFC al SIAT.
           </Alert>
         </CardContent>
       </Card>

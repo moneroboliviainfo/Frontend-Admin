@@ -15,7 +15,12 @@ import Typography from '@mui/material/Typography'
 import dayjs from 'dayjs'
 import 'dayjs/locale/es'
 
-import { useCrearPaqueteContingencia, useCafcs, useCufdsByCafc, useEventosSignificativosParametricas } from '@/hooks/useSales'
+import {
+  useCrearPaqueteContingencia,
+  useCafcs,
+  useCufdsByCafc,
+  useEventosSignificativosParametricas
+} from '@/hooks/useSales'
 import type { Cafc, CufdByCafc, EventoSignificativoParametrica } from '@/types/api/sales'
 
 interface PaqueteFormProps {
@@ -37,21 +42,20 @@ const PaqueteForm = ({ onSuccess, onCancel }: PaqueteFormProps) => {
   // CAFCs disponibles (con números restantes)
   const availableCafcs = useMemo(() => {
     if (!cafcs) return []
+
     return cafcs.filter((cafc: Cafc) => parseInt(cafc.ultimoNumero) < parseInt(cafc.numeroFinal))
   }, [cafcs])
 
   const selectedCafc = cafcs?.find((c: Cafc) => c.id === selectedCafcId)
 
   // Obtener CUFDs disponibles para el CAFC seleccionado
-  const { data: cufdsList, isLoading: isLoadingCufds } = useCufdsByCafc(
-    selectedCafc?.codigo || '',
-    !!selectedCafc
-  )
+  const { data: cufdsList, isLoading: isLoadingCufds } = useCufdsByCafc(selectedCafc?.codigo || '', !!selectedCafc)
 
   // Extraer los tipos de evento del catálogo SIAT (excluir eventos 1-4 que se manejan en otro flujo)
   const tiposEvento = useMemo(() => {
     if (!eventosParametricas?.parametrica?.[0]?.payload) return []
     const eventos = eventosParametricas.parametrica[0].payload as EventoSignificativoParametrica[]
+
     // Excluir eventos 1, 2, 3, 4 que se manejan en eventos significativos
     return eventos.filter(e => ![1, 2, 3, 4].includes(e.codigoClasificador))
   }, [eventosParametricas])
@@ -64,6 +68,7 @@ const PaqueteForm = ({ onSuccess, onCancel }: PaqueteFormProps) => {
   // CUFD seleccionado
   const cufdSeleccionado = useMemo(() => {
     if (!cufdsList || !selectedCufd) return null
+
     return cufdsList.find((c: CufdByCafc) => c.cufd === selectedCufd)
   }, [cufdsList, selectedCufd])
 
@@ -78,16 +83,19 @@ const PaqueteForm = ({ onSuccess, onCancel }: PaqueteFormProps) => {
 
     if (!selectedCafc) {
       setError('Debe seleccionar un CAFC')
+
       return
     }
 
     if (!selectedCufd) {
       setError('Debe seleccionar un CUFD')
+
       return
     }
 
     if (!codigoMotivoEvento) {
       setError('Debe seleccionar un motivo de evento')
+
       return
     }
 
@@ -118,11 +126,7 @@ const PaqueteForm = ({ onSuccess, onCancel }: PaqueteFormProps) => {
 
       <FormControl fullWidth>
         <InputLabel>CAFC *</InputLabel>
-        <Select
-          value={selectedCafcId}
-          label='CAFC *'
-          onChange={e => handleCafcChange(e.target.value as number)}
-        >
+        <Select value={selectedCafcId} label='CAFC *' onChange={e => handleCafcChange(e.target.value as number)}>
           {availableCafcs.length === 0 ? (
             <MenuItem value=''>No hay CAFCs disponibles</MenuItem>
           ) : (
@@ -137,11 +141,7 @@ const PaqueteForm = ({ onSuccess, onCancel }: PaqueteFormProps) => {
 
       <FormControl fullWidth disabled={!selectedCafc || isLoadingCufds}>
         <InputLabel>CUFD *</InputLabel>
-        <Select
-          value={selectedCufd}
-          label='CUFD *'
-          onChange={e => setSelectedCufd(e.target.value as string)}
-        >
+        <Select value={selectedCufd} label='CUFD *' onChange={e => setSelectedCufd(e.target.value as string)}>
           {isLoadingCufds ? (
             <MenuItem value=''>Cargando CUFDs...</MenuItem>
           ) : !cufdsList || cufdsList.length === 0 ? (
@@ -154,7 +154,8 @@ const PaqueteForm = ({ onSuccess, onCancel }: PaqueteFormProps) => {
                     {cufd.cantidadFacturas} factura{cufd.cantidadFacturas !== 1 ? 's' : ''}
                   </Typography>
                   <Typography variant='caption' color='text.secondary'>
-                    {dayjs(cufd.fechaDesde).format('DD/MM/YYYY HH:mm')} - {dayjs(cufd.fechaHasta).format('DD/MM/YYYY HH:mm')}
+                    {dayjs(cufd.fechaDesde).format('DD/MM/YYYY HH:mm')} -{' '}
+                    {dayjs(cufd.fechaHasta).format('DD/MM/YYYY HH:mm')}
                   </Typography>
                 </Box>
               </MenuItem>
@@ -174,7 +175,8 @@ const PaqueteForm = ({ onSuccess, onCancel }: PaqueteFormProps) => {
           </Typography>
           <br />
           <Typography variant='caption'>
-            <strong>Rango:</strong> {dayjs(cufdSeleccionado.fechaDesde).format('DD/MM/YYYY HH:mm')} - {dayjs(cufdSeleccionado.fechaHasta).format('DD/MM/YYYY HH:mm')}
+            <strong>Rango:</strong> {dayjs(cufdSeleccionado.fechaDesde).format('DD/MM/YYYY HH:mm')} -{' '}
+            {dayjs(cufdSeleccionado.fechaHasta).format('DD/MM/YYYY HH:mm')}
           </Typography>
         </Alert>
       )}
@@ -186,8 +188,10 @@ const PaqueteForm = ({ onSuccess, onCancel }: PaqueteFormProps) => {
           label='Motivo del Evento *'
           onChange={e => {
             const codigo = e.target.value as number
+
             setCodigoMotivoEvento(codigo)
             const motivo = tiposEvento.find(ev => ev.codigoClasificador === codigo)
+
             setDescripcionEvento(motivo?.descripcion || '')
           }}
         >

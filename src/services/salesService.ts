@@ -15,9 +15,11 @@ import type {
   GenerateQRRequest,
   GenerateQRResponse,
   VerifyPaymentResponse,
+  BillingInfo,
   BillingSearchResponse,
   ParametricasResponse,
   ParametricasRequest,
+  ActividadesResponse,
   VerificarNitResponse,
   VerificarNitRequest,
   Branch,
@@ -34,7 +36,10 @@ import type {
   PaqueteContingenciaRequest,
   PaquetesListResponse,
   PaquetesListParams,
-  CufdByCafc
+  CufdByCafc,
+  FacturacionOnlineRequest,
+  FacturacionListParams,
+  FacturacionListResponse
 } from '@/types/api/sales'
 
 class CartServiceClass {
@@ -140,6 +145,13 @@ class CartServiceClass {
     return response.data
   }
 
+  // Crear o actualizar datos de facturación (upsert)
+  async createOrUpdateBilling(data: BillingInfo): Promise<BillingSearchResponse> {
+    const response = await apiClient.post<BillingSearchResponse>('/api/billing', data)
+
+    return response.data
+  }
+
   // Obtener tipos de documento de identidad del SIAT
   async getTiposDocumentoIdentidad(): Promise<ParametricasResponse> {
     const response = await apiClient.post<ParametricasResponse>(
@@ -156,6 +168,17 @@ class CartServiceClass {
     const response = await apiClient.post<ParametricasResponse>(
       '/api/catalogos/parametricas',
       { metodo: 'sincronizarParametricaEventosSignificativos' } as ParametricasRequest,
+      { params: { codigoSucursal: 0, codigoPuntoVenta: 0 } }
+    )
+
+    return response.data
+  }
+
+  // Obtener actividades económicas del SIAT
+  async getActividades(): Promise<ActividadesResponse> {
+    const response = await apiClient.post<ActividadesResponse>(
+      '/api/catalogos/parametricas',
+      { metodo: 'sincronizarActividades' } as ParametricasRequest,
       { params: { codigoSucursal: 0, codigoPuntoVenta: 0 } }
     )
 
@@ -297,6 +320,36 @@ class CartServiceClass {
   async revertirAnulacion(facturaId: number): Promise<Factura> {
     const response = await apiClient.post<Factura>('/api/facturacion/facturacion/reversion', {
       facturaId
+    })
+
+    return response.data
+  }
+
+  // ============ Facturación Online (otras sucursales) ============
+
+  // Emitir factura online para otras sucursales
+  async facturarOnline(
+    data: FacturacionOnlineRequest,
+    codigoSucursal: number,
+    codigoPuntoVenta: number
+  ): Promise<FacturarResponse> {
+    const response = await apiClient.post<FacturarResponse>('/api/facturacion/facturacion/online', data, {
+      params: { codigoSucursal, codigoPuntoVenta }
+    })
+
+    return response.data
+  }
+
+  // Listar facturas de una sucursal
+  async getFacturas(params: FacturacionListParams): Promise<FacturacionListResponse> {
+    const response = await apiClient.get<FacturacionListResponse>('/api/facturacion/facturacion', {
+      params: {
+        codigoSucursal: params.codigoSucursal,
+        codigoPuntoVenta: params.codigoPuntoVenta,
+        search: params.search,
+        page: params.page ?? 1,
+        limit: params.limit ?? 10
+      }
     })
 
     return response.data

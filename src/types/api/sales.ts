@@ -137,6 +137,22 @@ export interface OrderFactura {
   mensajesList: any[] | null
   transaccion: boolean | null
   fechaRespuesta: string | null
+  detalles: OrderFacturaDetalle[]
+}
+
+export interface OrderFacturaDetalle {
+  id: number
+  actividadEconomica: string
+  codigoProductoSin: number
+  codigoProducto: string
+  descripcion: string
+  cantidad: string
+  unidadMedida: number
+  precioUnitario: string
+  montoDescuento: string | null
+  numeroSerie: string | null
+  numeroImei: string | null
+  subTotal: string
 }
 
 export interface Order {
@@ -196,6 +212,30 @@ export interface EventoSignificativoParametrica {
   codigoClasificador: number
 }
 
+// Tipo para actividades económicas SIAT
+export interface ActividadEconomica {
+  codigoCaeb: string
+  descripcion: string
+  tipoActividad: string
+}
+
+// Métodos de pago SIAT
+export const METODOS_PAGO_SIAT = [
+  { codigo: 1, descripcion: 'Efectivo' },
+  { codigo: 7, descripcion: 'Pago QR' }
+] as const
+
+// Actividades económicas SIAT (hardcoded)
+export const ACTIVIDADES_ECONOMICAS_SIAT = [
+  { codigoCaeb: '477110', descripcion: 'VENTA POR MENOR DE PRENDAS DE VESTIR' }
+] as const
+
+// Tipos de producto SIAT
+export const TIPOS_PRODUCTO_SIAT = [
+  { codigo: 'P1', codigoProductoSin: 99100, descripcion: 'PRENDAS DE VESTIR MUJER' },
+  { codigo: 'P2', codigoProductoSin: 99100, descripcion: 'PRENDAS DE VESTIR VARON' }
+] as const
+
 export interface ParametricaItem {
   id: number
   methodName: string
@@ -213,6 +253,31 @@ export interface ParametricasResponse {
   nit: string
   createdAt: string
   parametrica: ParametricaItem[]
+}
+
+// Respuesta para actividades económicas (estructura diferente)
+export interface ActividadesListaItem {
+  id: number
+  methodName: string
+  payload: {
+    RespuestaListaActividades?: {
+      transaccion: boolean
+      listaActividades: ActividadEconomica[]
+    }
+  }
+  createdAt: string
+}
+
+export interface ActividadesResponse {
+  id: number
+  codigoAmbiente: number
+  codigoPuntoVenta: number
+  codigoSistema: string
+  codigoSucursal: number
+  codigoCuis: string
+  nit: string
+  createdAt: string
+  listas: ActividadesListaItem[]
 }
 
 export interface ParametricasRequest {
@@ -580,4 +645,52 @@ export const MotivoEventoDescripcion: Record<number, string> = {
   3: 'VIRUS INFORMÁTICO O FALLA DE SOFTWARE',
   4: 'CORTE DE ENERGÍA ELÉCTRICA',
   5: 'OTRO'
+}
+
+// Tipos para Facturación Online (otras sucursales)
+export interface FacturacionOnlineDetalle {
+  actividadEconomica: string
+  codigoProductoSin: number
+  codigoProducto: string
+  descripcion: string
+  cantidad: number
+  unidadMedida: number
+  precioUnitario: number
+  montoDescuento: number
+}
+
+export interface FacturacionOnlineRequest {
+  razonSocialEmisor: string
+  municipio: string
+  telefono: string
+  nombreSucursal: string
+  tipoFacturaDocumento: number
+  nombreRazonSocial: string
+  codigoTipoDocumentoIdentidad: number
+  numeroDocumento: string
+  complemento?: string
+  codigoCliente: string
+  codigoMetodoPago: number
+  numeroTarjeta?: string | null
+  codigoMoneda: number
+  tipoCambio: number
+  montoGiftCard?: number
+  descuentoAdicional: number
+  usuario: string
+  emails?: string[]
+  codigoDocumentoSector: number
+  detalles: FacturacionOnlineDetalle[]
+}
+
+export interface FacturacionListParams {
+  codigoSucursal: number
+  codigoPuntoVenta: number
+  search?: string
+  page?: number
+  limit?: number
+}
+
+export interface FacturacionListResponse {
+  data: Factura[]
+  meta: OrdersListMeta
 }

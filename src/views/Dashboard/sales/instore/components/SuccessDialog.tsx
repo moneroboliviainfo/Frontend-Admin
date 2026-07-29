@@ -256,12 +256,8 @@ const SuccessDialog: React.FC<SuccessDialogProps> = ({
         </Box>
 
         {facturaSuccess && facturaData ? (
-          // Vista de factura emitida
           <Box>
-            <Alert
-              severity={facturaData.codigoEmision === 2 ? 'warning' : 'success'}
-              sx={{ mb: 2 }}
-            >
+            <Alert severity={facturaData.codigoEmision === 2 ? 'warning' : 'success'} sx={{ mb: 2 }}>
               {facturaData.codigoEmision === 2 ? (
                 <>
                   Factura por contingencia generada
@@ -277,11 +273,17 @@ const SuccessDialog: React.FC<SuccessDialogProps> = ({
               sx={{ p: 2, bgcolor: facturaData.codigoEmision === 2 ? 'warning.lighter' : 'success.lighter' }}
             >
               <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 1 }}>
-                <Typography variant='caption' color='text.secondary'>Nro. Factura</Typography>
-                <Typography variant='body2' fontWeight='bold'>{facturaData.numeroFactura}</Typography>
+                <Typography variant='caption' color='text.secondary'>
+                  Nro. Factura
+                </Typography>
+                <Typography variant='body2' fontWeight='bold'>
+                  {facturaData.numeroFactura}
+                </Typography>
               </Box>
               <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 1 }}>
-                <Typography variant='caption' color='text.secondary'>Estado</Typography>
+                <Typography variant='caption' color='text.secondary'>
+                  Estado
+                </Typography>
                 <Typography
                   variant='body2'
                   fontWeight='bold'
@@ -291,13 +293,21 @@ const SuccessDialog: React.FC<SuccessDialogProps> = ({
                 </Typography>
               </Box>
               <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 1 }}>
-                <Typography variant='caption' color='text.secondary'>Monto Total</Typography>
-                <Typography variant='body2' fontWeight='bold'>Bs {facturaData.montoTotal.toFixed(2)}</Typography>
+                <Typography variant='caption' color='text.secondary'>
+                  Monto Total
+                </Typography>
+                <Typography variant='body2' fontWeight='bold'>
+                  Bs {facturaData.montoTotal.toFixed(2)}
+                </Typography>
               </Box>
               {facturaData.codigoEmision === 2 && (
                 <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 1 }}>
-                  <Typography variant='caption' color='text.secondary'>Tipo</Typography>
-                  <Typography variant='body2' fontWeight='bold' color='warning.main'>CONTINGENCIA</Typography>
+                  <Typography variant='caption' color='text.secondary'>
+                    Tipo
+                  </Typography>
+                  <Typography variant='body2' fontWeight='bold' color='warning.main'>
+                    CONTINGENCIA
+                  </Typography>
                 </Box>
               )}
               <Divider sx={{ my: 1 }} />
@@ -314,7 +324,9 @@ const SuccessDialog: React.FC<SuccessDialogProps> = ({
             </Typography>
 
             {facturaError && (
-              <Alert severity='error' sx={{ mb: 2 }}>{facturaError}</Alert>
+              <Alert severity='error' sx={{ mb: 2 }}>
+                {facturaError}
+              </Alert>
             )}
 
             {/* Selector de sucursal */}
@@ -332,9 +344,13 @@ const SuccessDialog: React.FC<SuccessDialogProps> = ({
                 {isLoadingBranches ? (
                   <MenuItem value=''>Cargando...</MenuItem>
                 ) : (
-                  branchesData?.filter((b: Branch) => b.active).map((branch: Branch) => (
-                    <MenuItem key={branch.id} value={branch.id}>{branch.alias}</MenuItem>
-                  ))
+                  branchesData
+                    ?.filter((b: Branch) => b.active)
+                    .map((branch: Branch) => (
+                      <MenuItem key={branch.id} value={branch.id}>
+                        {branch.alias}
+                      </MenuItem>
+                    ))
                 )}
               </Select>
             </FormControl>
@@ -382,7 +398,8 @@ const SuccessDialog: React.FC<SuccessDialogProps> = ({
                               {cufd.codigo.substring(0, 20)}...
                             </Typography>
                             <Typography variant='caption' color='text.secondary'>
-                              Desde: {dayjs(cufd.createdAt).format('DD/MM/YYYY HH:mm')} - Hasta: {dayjs(cufd.fechaVigencia).format('DD/MM/YYYY HH:mm')}
+                              Desde: {dayjs(cufd.createdAt).format('DD/MM/YYYY HH:mm')} - Hasta:{' '}
+                              {dayjs(cufd.fechaVigencia).format('DD/MM/YYYY HH:mm')}
                             </Typography>
                           </Box>
                         </MenuItem>
@@ -400,43 +417,71 @@ const SuccessDialog: React.FC<SuccessDialogProps> = ({
               </Typography>
 
               <Box sx={{ mb: 1.5 }}>
-                <Typography variant='caption' color='text.secondary'>Tipo de Factura</Typography>
-                <Typography variant='body2' fontWeight='medium'>FACTURA CON DERECHO A CRÉDITO FISCAL</Typography>
+                <Typography variant='caption' color='text.secondary'>
+                  Tipo de Factura
+                </Typography>
+                <Typography variant='body2' fontWeight='medium'>
+                  FACTURA CON DERECHO A CRÉDITO FISCAL
+                </Typography>
               </Box>
 
               <Box sx={{ mb: 1.5 }}>
-                <Typography variant='caption' color='text.secondary'>Documento Sector</Typography>
-                <Typography variant='body2' fontWeight='medium'>FACTURA COMPRA-VENTA</Typography>
+                <Typography variant='caption' color='text.secondary'>
+                  Documento Sector
+                </Typography>
+                <Typography variant='body2' fontWeight='medium'>
+                  FACTURA COMPRA-VENTA
+                </Typography>
               </Box>
 
               <Box sx={{ mb: 1.5 }}>
-                <Typography variant='caption' color='text.secondary'>Moneda</Typography>
-                <Typography variant='body2' fontWeight='medium'>BOLIVIANOS (BOB)</Typography>
+                <Typography variant='caption' color='text.secondary'>
+                  Moneda
+                </Typography>
+                <Typography variant='body2' fontWeight='medium'>
+                  BOLIVIANOS (BOB)
+                </Typography>
               </Box>
 
               <Divider sx={{ my: 1.5 }} />
 
               <Box sx={{ mb: 1.5 }}>
-                <Typography variant='caption' color='text.secondary'>Razón Social</Typography>
-                <Typography variant='body2' fontWeight='medium'>{billingInfo?.name || '-'}</Typography>
+                <Typography variant='caption' color='text.secondary'>
+                  Razón Social
+                </Typography>
+                <Typography variant='body2' fontWeight='medium'>
+                  {billingInfo?.name || '-'}
+                </Typography>
               </Box>
 
               <Box sx={{ display: 'flex', gap: 3, mb: 1.5 }}>
                 <Box sx={{ flex: 1 }}>
-                  <Typography variant='caption' color='text.secondary'>Nro. Documento</Typography>
-                  <Typography variant='body2' fontWeight='medium'>{billingInfo?.ci || '-'}</Typography>
+                  <Typography variant='caption' color='text.secondary'>
+                    Nro. Documento
+                  </Typography>
+                  <Typography variant='body2' fontWeight='medium'>
+                    {billingInfo?.ci || '-'}
+                  </Typography>
                 </Box>
                 {billingInfo?.complemento && (
                   <Box>
-                    <Typography variant='caption' color='text.secondary'>Complemento</Typography>
-                    <Typography variant='body2' fontWeight='medium'>{billingInfo.complemento}</Typography>
+                    <Typography variant='caption' color='text.secondary'>
+                      Complemento
+                    </Typography>
+                    <Typography variant='body2' fontWeight='medium'>
+                      {billingInfo.complemento}
+                    </Typography>
                   </Box>
                 )}
               </Box>
 
               <Box>
-                <Typography variant='caption' color='text.secondary'>Email</Typography>
-                <Typography variant='body2' fontWeight='medium'>{billingInfo?.email || 'Sin email registrado'}</Typography>
+                <Typography variant='caption' color='text.secondary'>
+                  Email
+                </Typography>
+                <Typography variant='body2' fontWeight='medium'>
+                  {billingInfo?.email || 'Sin email registrado'}
+                </Typography>
               </Box>
             </Paper>
           </>

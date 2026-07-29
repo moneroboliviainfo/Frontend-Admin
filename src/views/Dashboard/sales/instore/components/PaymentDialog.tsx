@@ -128,6 +128,7 @@ const PaymentDialog: React.FC<PaymentDialogProps> = ({
   // Validar formato del CI/NIT
   const isCiFormatValid = useMemo(() => {
     if (!billing.ci.trim()) return true // Vacío es válido (se valida por separado)
+
     if (requiresOnlyNumbers) {
       return /^\d+$/.test(billing.ci)
     }
@@ -173,6 +174,7 @@ const PaymentDialog: React.FC<PaymentDialogProps> = ({
   useEffect(() => {
     if (isNitSelected && billing.ci.length >= 5 && /^\d+$/.test(billing.ci)) {
       setNitValidationStatus('idle')
+
       const timer = setTimeout(() => {
         verificarNitMutation.mutate(parseInt(billing.ci), {
           onSuccess: data => {
@@ -181,9 +183,7 @@ const PaymentDialog: React.FC<PaymentDialogProps> = ({
               setNitValidationMessage(data.data.RespuestaVerificarNit.mensajesList[0]?.descripcion || 'NIT válido')
             } else {
               setNitValidationStatus('invalid')
-              setNitValidationMessage(
-                data.data.RespuestaVerificarNit.mensajesList[0]?.descripcion || 'NIT no válido'
-              )
+              setNitValidationMessage(data.data.RespuestaVerificarNit.mensajesList[0]?.descripcion || 'NIT no válido')
             }
           },
           onError: () => {
@@ -248,9 +248,7 @@ const PaymentDialog: React.FC<PaymentDialogProps> = ({
 
   const totalToPay = useMemo(() => {
     if (orderData) {
-      return typeof orderData.totalPrice === 'string'
-        ? parseFloat(orderData.totalPrice)
-        : orderData.totalPrice
+      return typeof orderData.totalPrice === 'string' ? parseFloat(orderData.totalPrice) : orderData.totalPrice
     }
 
     if (repriceData) {

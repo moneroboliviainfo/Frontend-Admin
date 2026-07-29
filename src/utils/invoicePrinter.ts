@@ -429,12 +429,26 @@ export const generateInvoiceHTML = (factura: Factura): string => {
 
         .qr-container {
           text-align: center;
-          margin: 12px 0 8px;
+          margin: 12px 0 5px;
         }
 
         .qr-container img {
           width: 90px;
           height: 90px;
+        }
+
+        .print-footer {
+          margin-top: 25mm;
+          text-align: center;
+          font-size: 6px;
+          color: #ccc;
+          padding-bottom: 5mm;
+        }
+
+        .print-footer-line {
+          border-top: 1px dashed #ccc;
+          width: 50%;
+          margin: 0 auto 3mm;
         }
       </style>
     </head>
@@ -520,6 +534,11 @@ export const generateInvoiceHTML = (factura: Factura): string => {
 
       <div class="qr-container">
         <img src="${qrUrl}" alt="QR Code" />
+      </div>
+
+      <div class="print-footer">
+        <div class="print-footer-line"></div>
+        .
       </div>
 
     </body>

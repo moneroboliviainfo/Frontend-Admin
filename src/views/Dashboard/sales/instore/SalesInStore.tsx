@@ -91,6 +91,7 @@ const PointOfSale: React.FC = () => {
 
   const [isEditingOrder, setIsEditingOrder] = useState(false)
   const [editingOrderId, setEditingOrderId] = useState<number | null>(null)
+  const [newOrderId, setNewOrderId] = useState<number | null>(null)
 
   const [billing, setBilling] = useState<BillingInfo>({
     ci: '',
@@ -559,11 +560,12 @@ const PointOfSale: React.FC = () => {
       setCurrentStep('PAYMENT')
       setActiveStepIndex(3)
 
-      await updateOrderMutation.mutateAsync({
+      const updatedOrder = await updateOrderMutation.mutateAsync({
         orderId: editingOrderId,
         items: cartToken
       })
 
+      setNewOrderId(updatedOrder.id)
       setCurrentStep('COMPLETED')
       setShowPaymentDialog(false)
       setShowSuccessDialog(true)
@@ -874,8 +876,8 @@ const PointOfSale: React.FC = () => {
         onAccept={() => {
           setShowSuccessDialog(false)
 
-          if (isEditingOrder && editingOrderId) {
-            router.push(`/sales/list?showOrderId=${editingOrderId}`)
+          if (isEditingOrder && newOrderId) {
+            router.push(`/sales/list?showOrderId=${newOrderId}`)
           } else {
             clearCart()
           }

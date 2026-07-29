@@ -25,8 +25,26 @@ import {
   useReactTable,
   getSortedRowModel
 } from '@tanstack/react-table'
-import type { ColumnDef } from '@tanstack/react-table'
+import type { ColumnDef, FilterFn } from '@tanstack/react-table'
+import { rankItem, type RankingInfo } from '@tanstack/match-sorter-utils'
 import classnames from 'classnames'
+
+declare module '@tanstack/table-core' {
+  interface FilterFns {
+    fuzzy: FilterFn<unknown>
+  }
+  interface FilterMeta {
+    itemRank: RankingInfo
+  }
+}
+
+const fuzzyFilter: FilterFn<any> = (row, columnId, value, addMeta) => {
+  const itemRank = rankItem(row.getValue(columnId), value)
+
+  addMeta({ itemRank })
+
+  return itemRank.passed
+}
 
 import { useEventosSignificativos } from '@/hooks/useSales'
 import type { EventoSignificativo } from '@/types/api/sales'
@@ -133,6 +151,7 @@ const EventosList = () => {
   const table = useReactTable({
     data: paginatedData,
     columns,
+    filterFns: { fuzzy: fuzzyFilter },
     getCoreRowModel: getCoreRowModel(),
     getSortedRowModel: getSortedRowModel()
   })

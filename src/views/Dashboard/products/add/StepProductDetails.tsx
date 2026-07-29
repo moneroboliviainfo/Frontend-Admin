@@ -206,7 +206,7 @@ const StepProductDetails = ({ activeStep, handleNext, handlePrev, mode, productI
         enabled: true,
         subcategory: parseInt(data.subcategoria),
         codigoProductoSin: data.codigoProductoSin?.codigoProducto,
-        unidadMedida: 57
+        unidadMedida: 47
       }
 
       if (data.brand) {

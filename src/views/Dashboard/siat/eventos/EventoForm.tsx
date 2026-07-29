@@ -19,7 +19,8 @@ import { LocalizationProvider } from '@mui/x-date-pickers/LocalizationProvider'
 import { AdapterDayjs } from '@mui/x-date-pickers/AdapterDayjs'
 import { PickersDay } from '@mui/x-date-pickers/PickersDay'
 import type { PickersDayProps } from '@mui/x-date-pickers/PickersDay'
-import dayjs, { Dayjs } from 'dayjs'
+import type { Dayjs } from 'dayjs'
+import dayjs from 'dayjs'
 import minMax from 'dayjs/plugin/minMax'
 import 'dayjs/locale/es'
 
@@ -111,7 +112,9 @@ const EventoForm = ({ onSuccess, onCancel }: EventoFormProps) => {
   const cufdForSelectedDate = useMemo(() => {
     if (!cufds || !selectedCufdDate) return null
 
-    return cufds.find((cufd: Cufd) => dayjs(cufd.createdAt).format('YYYY-MM-DD') === selectedCufdDate.format('YYYY-MM-DD'))
+    return cufds.find(
+      (cufd: Cufd) => dayjs(cufd.createdAt).format('YYYY-MM-DD') === selectedCufdDate.format('YYYY-MM-DD')
+    )
   }, [cufds, selectedCufdDate])
 
   // Fecha seleccionada como string para el calendario
@@ -192,8 +195,10 @@ const EventoForm = ({ onSuccess, onCancel }: EventoFormProps) => {
             label='Motivo del Evento *'
             onChange={e => {
               const codigo = e.target.value as number
+
               setCodigoMotivoEvento(codigo)
               const motivo = tiposEvento.find(ev => ev.codigoClasificador === codigo)
+
               setDescripcion(motivo?.descripcion || '')
             }}
           >
@@ -242,7 +247,7 @@ const EventoForm = ({ onSuccess, onCancel }: EventoFormProps) => {
           </Typography>
           <DateCalendar
             value={selectedCufdDate}
-            onChange={(newDate) => setSelectedCufdDate(newDate)}
+            onChange={newDate => setSelectedCufdDate(newDate)}
             minDate={minDate}
             maxDate={maxDate}
             slots={{ day: CufdDay }}

@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useMemo } from 'react'
+import { useState, useMemo, useEffect } from 'react'
 
 import { useRouter } from 'next/navigation'
 
@@ -48,10 +48,14 @@ import {
   useCufds,
   useFacturarContingencia,
   useAnularFactura,
-  useRevertirAnulacion
+  useRevertirAnulacion,
+  useTiposDocumentoIdentidad,
+  useSearchBilling,
+  useVerificarNit,
+  useGetOrder
 } from '@/hooks/useSales'
 import { printInvoice } from '@/utils/invoicePrinter'
-import type { Order, Branch, Cafc, Cufd, Factura } from '@/types/api/sales'
+import type { Order, Branch, Cafc, Cufd, Factura, BillingInfo, TipoDocumentoIdentidad, OrderFacturaDetalle } from '@/types/api/sales'
 
 interface SnackbarMessage {
   message: string
@@ -128,9 +132,16 @@ const formatDate = (dateString: string): string => {
   })
 }
 
-const OrderDetailsModal = ({ open, onClose, order }: OrderDetailsModalProps) => {
+const OrderDetailsModal = ({ open, onClose, order: orderProp }: OrderDetailsModalProps) => {
   const router = useRouter()
   const queryClient = useQueryClient()
+
+  // Usar useGetOrder para poder refrescar los datos después de anular/revertir/facturar
+  const { data: orderData, refetch: refetchOrder } = useGetOrder(orderProp?.id ?? null, open && !!orderProp?.id)
+
+  // Usar los datos refrescados si existen, sino usar el prop original
+  const order = orderData ?? orderProp
+
   const [dhlCode, setDhlCode] = useState('')
   const [showDhlInput, setShowDhlInput] = useState(false)
   const [showCancelConfirm, setShowCancelConfirm] = useState(false)
@@ -159,6 +170,21 @@ const OrderDetailsModal = ({ open, onClose, order }: OrderDetailsModalProps) => 
   // Estado para confirmar emisión de factura
   const [showEmitirConfirm, setShowEmitirConfirm] = useState(false)
 
+  // Estados para edición de datos de facturación
+  const [editableBilling, setEditableBilling] = useState<BillingInfo>({
+    ci: '',
+    name: '',
+    phone: '',
+    email: '',
+    complemento: '',
+    codigoTipoDocumentoIdentidad: 1
+  })
+
+  const [nitValidationStatus, setNitValidationStatus] = useState<'idle' | 'valid' | 'invalid'>('idle')
+  const [nitValidationMessage, setNitValidationMessage] = useState('')
+  const [searchCi, setSearchCi] = useState('')
+  const [showBillingResults, setShowBillingResults] = useState(false)
+
   const cancelOrderMutation = useCancelOrder()
   const sendOrderMutation = useSendOrder()
   const cancelForEditMutation = useCancelOrderForEdit()
@@ -172,6 +198,26 @@ const OrderDetailsModal = ({ open, onClose, order }: OrderDetailsModalProps) => 
 
   // Hooks para contingencia
   const { data: cafcsData } = useCafcs()
+
+  // Hooks para edición de datos de facturación
+  const { data: tiposDocumentoData } = useTiposDocumentoIdentidad()
+  const { data: billingSearchData, isFetching: isSearchingBilling } = useSearchBilling(searchCi)
+  const verificarNitMutation = useVerificarNit()
+
+  // Extraer tipos de documento
+  const tiposDocumento: TipoDocumentoIdentidad[] = useMemo(() => {
+    if (tiposDocumentoData?.parametrica?.[0]?.payload) {
+      return tiposDocumentoData.parametrica[0].payload
+    }
+
+    return []
+  }, [tiposDocumentoData])
+
+  // Verificar si el tipo de documento requiere solo números
+  const requiresOnlyNumbers =
+    editableBilling.codigoTipoDocumentoIdentidad === 1 || editableBilling.codigoTipoDocumentoIdentidad === 5
+
+  const isNitSelected = editableBilling.codigoTipoDocumentoIdentidad === 5
 
   // Obtener sucursal seleccionada
   const selectedBranch = useMemo(() => {
@@ -194,8 +240,113 @@ const OrderDetailsModal = ({ open, onClose, order }: OrderDetailsModalProps) => 
     return cafcsData.filter((cafc: Cafc) => parseInt(cafc.ultimoNumero) < parseInt(cafc.numeroFinal))
   }, [cafcsData])
 
+  // Inicializar datos de facturación editables cuando se abre el modal
+  useEffect(() => {
+    if (open && order?.billing) {
+      setEditableBilling({
+        ci: order.billing.ci || '',
+        name: order.billing.name || '',
+        phone: order.billing.phone || '',
+        email: order.billing.email || '',
+        complemento: order.billing.complemento || '',
+        codigoTipoDocumentoIdentidad: order.billing.codigoTipoDocumentoIdentidad || 1
+      })
+      setNitValidationStatus('idle')
+      setNitValidationMessage('')
+    }
+  }, [open, order?.billing])
+
+  // Verificar NIT automáticamente cuando se ingresa
+  useEffect(() => {
+    if (isNitSelected && editableBilling.ci.length >= 5 && /^\d+$/.test(editableBilling.ci)) {
+      setNitValidationStatus('idle')
+
+      const timer = setTimeout(() => {
+        verificarNitMutation.mutate(parseInt(editableBilling.ci), {
+          onSuccess: data => {
+            if (data.success && data.data.RespuestaVerificarNit.transaccion) {
+              setNitValidationStatus('valid')
+              setNitValidationMessage(data.data.RespuestaVerificarNit.mensajesList[0]?.descripcion || 'NIT válido')
+            } else {
+              setNitValidationStatus('invalid')
+              setNitValidationMessage(data.data.RespuestaVerificarNit.mensajesList[0]?.descripcion || 'NIT no válido')
+            }
+          },
+          onError: () => {
+            setNitValidationStatus('invalid')
+            setNitValidationMessage('Error al verificar NIT')
+          }
+        })
+      }, 500)
+
+      return () => clearTimeout(timer)
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [editableBilling.ci, isNitSelected])
+
   if (!open || !order) {
     return null
+  }
+
+  // Handlers para edición de datos de facturación
+  const handleTipoDocumentoChange = (codigo: number) => {
+    setEditableBilling({
+      ci: '',
+      name: '',
+      phone: '',
+      email: '',
+      complemento: '',
+      codigoTipoDocumentoIdentidad: codigo
+    })
+    setNitValidationStatus('idle')
+    setNitValidationMessage('')
+    setShowBillingResults(false)
+    setSearchCi('')
+  }
+
+  const handleCiChange = (value: string) => {
+    const newValue = requiresOnlyNumbers ? value.replace(/\D/g, '') : value
+
+    if (newValue.length < editableBilling.ci.length || newValue === '') {
+      setEditableBilling({
+        ci: newValue,
+        name: '',
+        phone: '',
+        email: '',
+        complemento: '',
+        codigoTipoDocumentoIdentidad: editableBilling.codigoTipoDocumentoIdentidad
+      })
+      setShowBillingResults(false)
+      setSearchCi('')
+    } else {
+      setEditableBilling(prev => ({ ...prev, ci: newValue }))
+    }
+
+    setNitValidationStatus('idle')
+    setNitValidationMessage('')
+  }
+
+  const handleSearchBilling = () => {
+    if (editableBilling.ci.length >= 5) {
+      setSearchCi(editableBilling.ci)
+      setShowBillingResults(true)
+    }
+  }
+
+  const handleSelectBilling = () => {
+    if (billingSearchData) {
+      setEditableBilling({
+        ci: billingSearchData.ci,
+        name: billingSearchData.name || '',
+        phone: billingSearchData.phone || '',
+        email: billingSearchData.email || '',
+        complemento: billingSearchData.complemento || '',
+        codigoTipoDocumentoIdentidad:
+          billingSearchData.codigoTipoDocumentoIdentidad || editableBilling.codigoTipoDocumentoIdentidad
+      })
+      setShowBillingResults(false)
+      setSearchCi('')
+    }
   }
 
   const billingInfo = order.billing
@@ -283,11 +434,7 @@ const OrderDetailsModal = ({ open, onClose, order }: OrderDetailsModalProps) => 
     if (order.status === 'cancelled_for_edit') return true
     if (!['paid', 'sent'].includes(order.status)) return false
 
-    // No permitir editar si tiene factura activa (VALIDADA, PENDIENTE o REVERTIDA)
-    if (order.factura && ['VALIDADA', 'PENDIENTE', 'REVERTIDA'].includes(order.factura.estado)) {
-      return false
-    }
-
+    // Se puede editar aunque tenga factura activa
     return true
   }
 
@@ -310,12 +457,12 @@ const OrderDetailsModal = ({ open, onClose, order }: OrderDetailsModalProps) => 
     codigoDocumentoSector: 1,
     codigoMoneda: 1,
     tipoCambio: 1,
-    nombreRazonSocial: billingInfo?.name || '',
-    numeroDocumento: billingInfo?.ci || '',
-    complemento: billingInfo?.complemento || '',
-    codigoTipoDocumentoIdentidad: billingInfo?.codigoTipoDocumentoIdentidad || 1,
+    nombreRazonSocial: editableBilling.name || '',
+    numeroDocumento: editableBilling.ci || '',
+    complemento: editableBilling.complemento || '',
+    codigoTipoDocumentoIdentidad: editableBilling.codigoTipoDocumentoIdentidad || 1,
     usuario: 'MoneroAdmin',
-    ...(billingInfo?.email ? { emails: [billingInfo.email] } : {}),
+    ...(editableBilling.email ? { emails: [editableBilling.email] } : {}),
     descuentoAdicional: 0
   })
 
@@ -335,6 +482,7 @@ const OrderDetailsModal = ({ open, onClose, order }: OrderDetailsModalProps) => 
           setFacturaSuccess(true)
           setFacturaData(response.factura)
           queryClient.invalidateQueries({ queryKey: ['orders'] })
+          refetchOrder()
           showMessage('¡Factura emitida exitosamente!', 'success')
         },
         onError: (error: any) => {
@@ -376,6 +524,7 @@ const OrderDetailsModal = ({ open, onClose, order }: OrderDetailsModalProps) => 
           setFacturaSuccess(true)
           setFacturaData(factura)
           queryClient.invalidateQueries({ queryKey: ['orders'] })
+          refetchOrder()
           showMessage('¡Factura por contingencia emitida!', 'success')
         },
         onError: (error: any) => {
@@ -405,7 +554,13 @@ const OrderDetailsModal = ({ open, onClose, order }: OrderDetailsModalProps) => 
         codigoRecepcion: order.factura.codigoRecepcion || '',
         transaccion: order.factura.transaccion || false,
         fechaRespuesta: order.factura.fechaRespuesta || '',
-        detalles: []
+        detalles: (order.factura.detalles || []).map((d: OrderFacturaDetalle) => ({
+          ...d,
+          cantidad: parseFloat(d.cantidad),
+          precioUnitario: parseFloat(d.precioUnitario),
+          subTotal: parseFloat(d.subTotal),
+          montoDescuento: d.montoDescuento ? parseFloat(d.montoDescuento) : null
+        }))
       }
 
       printInvoice(facturaForPrint)
@@ -421,6 +576,7 @@ const OrderDetailsModal = ({ open, onClose, order }: OrderDetailsModalProps) => 
     setShowContingencia(false)
     setSelectedCafcId('')
     setSelectedCufdId('')
+    refetchOrder()
   }
 
   const handleAnularFactura = async () => {
@@ -432,8 +588,8 @@ const OrderDetailsModal = ({ open, onClose, order }: OrderDetailsModalProps) => 
         onSuccess: () => {
           setShowAnularConfirm(false)
           queryClient.invalidateQueries({ queryKey: ['orders'] })
+          refetchOrder()
           showMessage('Factura anulada exitosamente', 'success')
-          setTimeout(() => onClose(), 1500)
         },
         onError: (error: any) => {
           showMessage(error?.response?.data?.message || 'Error al anular la factura', 'error')
@@ -449,8 +605,8 @@ const OrderDetailsModal = ({ open, onClose, order }: OrderDetailsModalProps) => 
       onSuccess: () => {
         setShowRevertirConfirm(false)
         queryClient.invalidateQueries({ queryKey: ['orders'] })
+        refetchOrder()
         showMessage('Anulación revertida exitosamente. La factura ahora está REVERTIDA.', 'success')
-        setTimeout(() => onClose(), 1500)
       },
       onError: (error: any) => {
         showMessage(
@@ -627,7 +783,7 @@ const OrderDetailsModal = ({ open, onClose, order }: OrderDetailsModalProps) => 
             <Card variant='outlined'>
               <CardContent>
                 <Typography variant='h6' className='mb-4 text-textPrimary'>
-                  Datos de Facturación
+                  Datos del Cliente
                 </Typography>
                 <Grid container spacing={3}>
                   <Grid size={{ xs: 12, sm: 6 }}>
@@ -773,6 +929,35 @@ const OrderDetailsModal = ({ open, onClose, order }: OrderDetailsModalProps) => 
                       </Typography>
                     </Grid>
                   )}
+                  {order.factura.detalles && order.factura.detalles.length > 0 && (
+                    <Grid size={{ xs: 12 }}>
+                      <Typography variant='overline' className='text-textSecondary text-xs font-medium block mb-2'>
+                        Detalle de Factura
+                      </Typography>
+                      <Box sx={{ border: '1px solid', borderColor: 'divider', borderRadius: 1, overflow: 'hidden' }}>
+                        <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+                          <thead>
+                            <tr style={{ backgroundColor: 'rgba(0,0,0,0.04)' }}>
+                              <th style={{ padding: '8px 12px', textAlign: 'left', fontSize: '12px', fontWeight: 600 }}>Producto</th>
+                              <th style={{ padding: '8px 12px', textAlign: 'center', fontSize: '12px', fontWeight: 600 }}>Cant.</th>
+                              <th style={{ padding: '8px 12px', textAlign: 'right', fontSize: '12px', fontWeight: 600 }}>P. Unit.</th>
+                              <th style={{ padding: '8px 12px', textAlign: 'right', fontSize: '12px', fontWeight: 600 }}>Subtotal</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {order.factura.detalles.map((detalle: OrderFacturaDetalle, index: number) => (
+                              <tr key={detalle.id || index} style={{ borderTop: '1px solid rgba(0,0,0,0.08)' }}>
+                                <td style={{ padding: '8px 12px', fontSize: '13px' }}>{detalle.descripcion}</td>
+                                <td style={{ padding: '8px 12px', textAlign: 'center', fontSize: '13px' }}>{parseFloat(detalle.cantidad).toFixed(0)}</td>
+                                <td style={{ padding: '8px 12px', textAlign: 'right', fontSize: '13px' }}>Bs. {parseFloat(detalle.precioUnitario).toFixed(2)}</td>
+                                <td style={{ padding: '8px 12px', textAlign: 'right', fontSize: '13px', fontWeight: 600 }}>Bs. {parseFloat(detalle.subTotal).toFixed(2)}</td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </Box>
+                    </Grid>
+                  )}
                   <Grid size={{ xs: 12 }}>
                     <Box sx={{ display: 'flex', gap: 2, flexDirection: 'column' }}>
                       <Box sx={{ display: 'flex', gap: 2 }}>
@@ -838,7 +1023,7 @@ const OrderDetailsModal = ({ open, onClose, order }: OrderDetailsModalProps) => 
                     : 'pendiente'}
                 .
               </Typography>
-              <Typography variant='body2'>Para editar o cancelar la orden, primero debe anular la factura.</Typography>
+              <Typography variant='body2'>Para cancelar la orden, primero debe anular la factura.</Typography>
             </Alert>
           )}
 
@@ -1012,7 +1197,8 @@ const OrderDetailsModal = ({ open, onClose, order }: OrderDetailsModalProps) => 
                                         {cufd.codigo.substring(0, 20)}...
                                       </Typography>
                                       <Typography variant='caption' color='text.secondary'>
-                                        Desde: {dayjs(cufd.createdAt).format('DD/MM/YYYY HH:mm')} - Hasta: {dayjs(cufd.fechaVigencia).format('DD/MM/YYYY HH:mm')}
+                                        Desde: {dayjs(cufd.createdAt).format('DD/MM/YYYY HH:mm')} - Hasta:{' '}
+                                        {dayjs(cufd.fechaVigencia).format('DD/MM/YYYY HH:mm')}
                                       </Typography>
                                     </Box>
                                   </MenuItem>
@@ -1023,50 +1209,143 @@ const OrderDetailsModal = ({ open, onClose, order }: OrderDetailsModalProps) => 
                         </Paper>
                       </Collapse>
 
-                      {/* Preview datos factura */}
+                      {/* Datos de facturación editables */}
                       <Paper variant='outlined' sx={{ p: 2, bgcolor: 'action.hover', mb: 2 }}>
-                        <Typography variant='caption' color='text.secondary' sx={{ mb: 1, display: 'block' }}>
+                        <Typography variant='subtitle2' fontWeight='bold' sx={{ mb: 2 }}>
                           Datos de la Factura
                         </Typography>
 
-                        <Box sx={{ mb: 1 }}>
-                          <Typography variant='caption' color='text.secondary'>
-                            Razón Social
-                          </Typography>
-                          <Typography variant='body2' fontWeight='medium'>
-                            {billingInfo?.name || '-'}
-                          </Typography>
-                        </Box>
+                        <Grid container spacing={2}>
+                          {/* Tipo de Documento */}
+                          <Grid size={{ xs: 12, sm: 6 }}>
+                            <FormControl fullWidth size='small'>
+                              <InputLabel>Tipo Documento *</InputLabel>
+                              <Select
+                                value={editableBilling.codigoTipoDocumentoIdentidad}
+                                label='Tipo Documento *'
+                                onChange={e => handleTipoDocumentoChange(e.target.value as number)}
+                              >
+                                {tiposDocumento.map(tipo => (
+                                  <MenuItem key={tipo.codigoClasificador} value={tipo.codigoClasificador}>
+                                    {tipo.descripcion}
+                                  </MenuItem>
+                                ))}
+                              </Select>
+                            </FormControl>
+                          </Grid>
 
-                        <Box sx={{ display: 'flex', gap: 3, mb: 1 }}>
-                          <Box sx={{ flex: 1 }}>
-                            <Typography variant='caption' color='text.secondary'>
-                              Nro. Documento
-                            </Typography>
-                            <Typography variant='body2' fontWeight='medium'>
-                              {billingInfo?.ci || '-'}
-                            </Typography>
-                          </Box>
-                          {billingInfo?.complemento && (
-                            <Box>
-                              <Typography variant='caption' color='text.secondary'>
-                                Complemento
-                              </Typography>
-                              <Typography variant='body2' fontWeight='medium'>
-                                {billingInfo.complemento}
-                              </Typography>
+                          {/* CI/NIT con búsqueda */}
+                          <Grid size={{ xs: 12, sm: 6 }}>
+                            <Box sx={{ display: 'flex', gap: 1 }}>
+                              <TextField
+                                fullWidth
+                                size='small'
+                                label={isNitSelected ? 'NIT *' : 'CI *'}
+                                value={editableBilling.ci}
+                                onChange={e => handleCiChange(e.target.value)}
+                                placeholder={isNitSelected ? 'Ej: 12345678' : 'Ej: 1234567'}
+                                inputProps={{ maxLength: 15 }}
+                                error={isNitSelected && nitValidationStatus === 'invalid'}
+                                helperText={isNitSelected && nitValidationStatus !== 'idle' ? nitValidationMessage : ''}
+                                InputProps={{
+                                  endAdornment:
+                                    isNitSelected && verificarNitMutation.isPending ? (
+                                      <CircularProgress size={16} />
+                                    ) : isNitSelected && nitValidationStatus === 'valid' ? (
+                                      <i className='tabler-check text-success' />
+                                    ) : null
+                                }}
+                              />
+                              <Button
+                                variant='outlined'
+                                size='small'
+                                onClick={handleSearchBilling}
+                                disabled={editableBilling.ci.length < 5 || isSearchingBilling}
+                                sx={{ minWidth: 40, px: 1 }}
+                              >
+                                {isSearchingBilling ? <CircularProgress size={16} /> : <i className='tabler-search' />}
+                              </Button>
                             </Box>
-                          )}
-                        </Box>
+                          </Grid>
 
-                        <Box>
-                          <Typography variant='caption' color='text.secondary'>
-                            Email
-                          </Typography>
-                          <Typography variant='body2' fontWeight='medium'>
-                            {billingInfo?.email || 'Sin email'}
-                          </Typography>
-                        </Box>
+                          {/* Resultado de búsqueda */}
+                          {showBillingResults && billingSearchData && (
+                            <Grid size={{ xs: 12 }}>
+                              <Alert
+                                severity='info'
+                                action={
+                                  <Button color='inherit' size='small' onClick={handleSelectBilling}>
+                                    Usar estos datos
+                                  </Button>
+                                }
+                              >
+                                <Typography variant='caption'>
+                                  <strong>Encontrado:</strong> {billingSearchData.name || 'Sin nombre'} -{' '}
+                                  {billingSearchData.ci}
+                                </Typography>
+                              </Alert>
+                            </Grid>
+                          )}
+
+                          {showBillingResults && !billingSearchData && !isSearchingBilling && (
+                            <Grid size={{ xs: 12 }}>
+                              <Alert severity='warning'>No se encontraron datos para este CI/NIT</Alert>
+                            </Grid>
+                          )}
+
+                          {/* Nombre/Razón Social */}
+                          <Grid size={{ xs: 12 }}>
+                            <TextField
+                              fullWidth
+                              size='small'
+                              label='Nombre / Razón Social *'
+                              value={editableBilling.name}
+                              onChange={e => setEditableBilling(prev => ({ ...prev, name: e.target.value }))}
+                              placeholder='Nombre o razón social'
+                            />
+                          </Grid>
+
+                          {/* Complemento */}
+                          <Grid size={{ xs: 12, sm: 4 }}>
+                            <TextField
+                              fullWidth
+                              size='small'
+                              label='Complemento'
+                              value={editableBilling.complemento}
+                              onChange={e => setEditableBilling(prev => ({ ...prev, complemento: e.target.value }))}
+                              placeholder='1E, 1J, etc.'
+                              inputProps={{ maxLength: 5 }}
+                            />
+                          </Grid>
+
+                          {/* Teléfono */}
+                          <Grid size={{ xs: 12, sm: 4 }}>
+                            <TextField
+                              fullWidth
+                              size='small'
+                              label='Teléfono'
+                              value={editableBilling.phone}
+                              onChange={e =>
+                                setEditableBilling(prev => ({ ...prev, phone: e.target.value.replace(/\D/g, '') }))
+                              }
+                              placeholder='Ej: 70000000'
+                              inputProps={{ maxLength: 15 }}
+                            />
+                          </Grid>
+
+                          {/* Email */}
+                          <Grid size={{ xs: 12, sm: 4 }}>
+                            <TextField
+                              fullWidth
+                              size='small'
+                              label='Email'
+                              type='email'
+                              value={editableBilling.email}
+                              onChange={e => setEditableBilling(prev => ({ ...prev, email: e.target.value }))}
+                              placeholder='correo@ejemplo.com'
+                            />
+                          </Grid>
+                        </Grid>
                       </Paper>
 
                       {/* Botones de facturación */}
@@ -1078,7 +1357,9 @@ const OrderDetailsModal = ({ open, onClose, order }: OrderDetailsModalProps) => 
                           disabled={
                             !selectedBranchId ||
                             isPendingFactura ||
-                            !billingInfo?.ci ||
+                            !editableBilling.ci ||
+                            !editableBilling.name ||
+                            (isNitSelected && nitValidationStatus !== 'valid') ||
                             (showContingencia && (!selectedCufdId || !selectedCafcId))
                           }
                           startIcon={
@@ -1346,7 +1627,7 @@ const OrderDetailsModal = ({ open, onClose, order }: OrderDetailsModalProps) => 
                             {item.variant?.productColor?.multimedia?.[0] ? (
                               <img
                                 src={item.variant.productColor.multimedia[0]}
-                                alt={item.variant.productColor.product.name}
+                                alt={item.variant.productColor.product?.name || 'Producto'}
                                 className='w-full h-full object-cover'
                               />
                             ) : (
@@ -1789,7 +2070,7 @@ const OrderDetailsModal = ({ open, onClose, order }: OrderDetailsModalProps) => 
                 Razón Social
               </Typography>
               <Typography variant='body2' fontWeight='medium'>
-                {billingInfo?.name || '-'}
+                {editableBilling.name || '-'}
               </Typography>
             </Box>
             <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 1 }}>
@@ -1797,8 +2078,8 @@ const OrderDetailsModal = ({ open, onClose, order }: OrderDetailsModalProps) => 
                 Documento
               </Typography>
               <Typography variant='body2' fontWeight='medium'>
-                {billingInfo?.ci}
-                {billingInfo?.complemento ? `-${billingInfo.complemento}` : ''}
+                {editableBilling.ci}
+                {editableBilling.complemento ? `-${editableBilling.complemento}` : ''}
               </Typography>
             </Box>
             <Box sx={{ display: 'flex', justifyContent: 'space-between' }}>

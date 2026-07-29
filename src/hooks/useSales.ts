@@ -12,7 +12,10 @@ import type {
   EventoSignificativoRequest,
   PaqueteContingenciaRequest,
   PaquetesListParams,
-  CafcCreateRequest
+  CafcCreateRequest,
+  FacturacionOnlineRequest,
+  FacturacionListParams,
+  BillingInfo
 } from '@/types/api/sales'
 
 export const useAddToCart = () => {
@@ -151,6 +154,17 @@ export const useSearchBilling = (ci: string) => {
   })
 }
 
+// Hook para crear o actualizar datos de facturación (upsert)
+export const useCreateOrUpdateBilling = () => {
+  return useMutation({
+    mutationFn: (data: BillingInfo) => cartService.createOrUpdateBilling(data),
+    onError: (error: any) => {
+      console.error('Error creating/updating billing:', error)
+      throw error
+    }
+  })
+}
+
 // Hook para obtener tipos de documento de identidad del SIAT
 export const useTiposDocumentoIdentidad = () => {
   return useQuery({
@@ -166,6 +180,16 @@ export const useEventosSignificativosParametricas = () => {
   return useQuery({
     queryKey: ['eventos-significativos-parametricas'],
     queryFn: () => cartService.getEventosSignificativosParametricas(),
+    staleTime: 1000 * 60 * 60, // Cache 1 hora
+    retry: 2
+  })
+}
+
+// Hook para obtener actividades económicas del SIAT
+export const useActividades = () => {
+  return useQuery({
+    queryKey: ['actividades-economicas'],
+    queryFn: () => cartService.getActividades(),
     staleTime: 1000 * 60 * 60, // Cache 1 hora
     retry: 2
   })
@@ -340,5 +364,35 @@ export const useRevertirAnulacion = () => {
     onError: (error: any) => {
       console.error('Error revirtiendo anulación:', error)
     }
+  })
+}
+
+// ============ Facturación Online (otras sucursales) ============
+
+// Hook para emitir factura online
+export const useFacturarOnline = () => {
+  return useMutation({
+    mutationFn: ({
+      data,
+      codigoSucursal,
+      codigoPuntoVenta
+    }: {
+      data: FacturacionOnlineRequest
+      codigoSucursal: number
+      codigoPuntoVenta: number
+    }) => cartService.facturarOnline(data, codigoSucursal, codigoPuntoVenta),
+    onError: (error: any) => {
+      console.error('Error emitiendo factura online:', error)
+    }
+  })
+}
+
+// Hook para listar facturas
+export const useFacturas = (params: FacturacionListParams, enabled: boolean = true) => {
+  return useQuery({
+    queryKey: ['facturas', params],
+    queryFn: () => cartService.getFacturas(params),
+    enabled: enabled && params.codigoSucursal !== undefined,
+    staleTime: 1000 * 60 * 2
   })
 }

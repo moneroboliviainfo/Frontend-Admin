@@ -170,6 +170,11 @@ const getFullMenuData = (): VerticalMenuDataType[] => [
     icon: 'tabler-file-invoice',
     children: [
       {
+        label: 'Facturación Online',
+        icon: 'tabler-receipt',
+        href: '/siat/facturacion/'
+      },
+      {
         label: 'Paquetes Contingencia',
         icon: 'tabler-package',
         href: '/siat/paquetes/'
