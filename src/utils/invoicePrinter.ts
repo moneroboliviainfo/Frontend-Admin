@@ -3,8 +3,32 @@ import type { Factura } from '@/types/api/sales'
 // Convertir número a palabras en español boliviano
 const unidades = ['', 'UN', 'DOS', 'TRES', 'CUATRO', 'CINCO', 'SEIS', 'SIETE', 'OCHO', 'NUEVE']
 const decenas = ['', 'DIEZ', 'VEINTE', 'TREINTA', 'CUARENTA', 'CINCUENTA', 'SESENTA', 'SETENTA', 'OCHENTA', 'NOVENTA']
-const especiales = ['DIEZ', 'ONCE', 'DOCE', 'TRECE', 'CATORCE', 'QUINCE', 'DIECISEIS', 'DIECISIETE', 'DIECIOCHO', 'DIECINUEVE']
-const centenas = ['', 'CIENTO', 'DOSCIENTOS', 'TRESCIENTOS', 'CUATROCIENTOS', 'QUINIENTOS', 'SEISCIENTOS', 'SETECIENTOS', 'OCHOCIENTOS', 'NOVECIENTOS']
+
+const especiales = [
+  'DIEZ',
+  'ONCE',
+  'DOCE',
+  'TRECE',
+  'CATORCE',
+  'QUINCE',
+  'DIECISEIS',
+  'DIECISIETE',
+  'DIECIOCHO',
+  'DIECINUEVE'
+]
+
+const centenas = [
+  '',
+  'CIENTO',
+  'DOSCIENTOS',
+  'TRESCIENTOS',
+  'CUATROCIENTOS',
+  'QUINIENTOS',
+  'SEISCIENTOS',
+  'SETECIENTOS',
+  'OCHOCIENTOS',
+  'NOVECIENTOS'
+]
 
 const convertirMenorMil = (n: number): string => {
   if (n === 0) return ''
@@ -535,8 +559,8 @@ export const generateInvoiceHTML = (factura: Factura): string => {
         <div class="title">CON DERECHO A CRÉDITO FISCAL</div>
         <div class="company-name">${factura.razonSocialEmisor}</div>
         <div class="branch-info">
-          Casa Matriz<br>
-          ${factura.nombreSucursal}<br>
+          
+          ${factura.nombreSucursal} ${factura.codigoSucursal}<br>
           No. Punto de Venta ${factura.codigoPuntoVenta}<br>
           ${factura.direccion}<br>
           Tel. ${factura.telefono}<br>
