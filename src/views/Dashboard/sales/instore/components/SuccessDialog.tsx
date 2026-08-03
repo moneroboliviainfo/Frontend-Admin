@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react'
+import React, { useState, useMemo, useEffect } from 'react'
 
 import {
   Dialog,
@@ -73,6 +73,20 @@ const SuccessDialog: React.FC<SuccessDialogProps> = ({
 
   const orderId = isEditingOrder ? editingOrderId : orderData?.id
   const billingInfo = billing || orderData?.billing
+
+  // Filtrar solo sucursal con código 3 para ventas en tienda
+  const instoreBranch = useMemo(() => {
+    if (!branchesData) return null
+
+    return branchesData.find((b: Branch) => b.codigoSucursal === 3 && b.active)
+  }, [branchesData])
+
+  // Auto-seleccionar sucursal código 3 cuando cargue
+  useEffect(() => {
+    if (instoreBranch && !selectedBranchId) {
+      setSelectedBranchId(instoreBranch.id)
+    }
+  }, [instoreBranch, selectedBranchId])
 
   // Obtener sucursal seleccionada
   const selectedBranch = useMemo(() => {
@@ -385,14 +399,10 @@ const SuccessDialog: React.FC<SuccessDialogProps> = ({
               >
                 {isLoadingBranches ? (
                   <MenuItem value=''>Cargando...</MenuItem>
+                ) : instoreBranch ? (
+                  <MenuItem value={instoreBranch.id}>{instoreBranch.alias}</MenuItem>
                 ) : (
-                  branchesData
-                    ?.filter((b: Branch) => b.active)
-                    .map((branch: Branch) => (
-                      <MenuItem key={branch.id} value={branch.id}>
-                        {branch.alias}
-                      </MenuItem>
-                    ))
+                  <MenuItem value=''>No hay sucursal disponible</MenuItem>
                 )}
               </Select>
             </FormControl>
