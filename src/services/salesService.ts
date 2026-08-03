@@ -37,6 +37,7 @@ import type {
   PaquetesListResponse,
   PaquetesListParams,
   CufdByCafc,
+  EventoByCafc,
   FacturacionOnlineRequest,
   FacturacionListParams,
   FacturacionListResponse
@@ -211,9 +212,9 @@ class CartServiceClass {
   }
 
   // Obtener lista de CUFDs
-  async getCufds(codigoSucursal: number, codigoPuntoVenta: number, soloVigentes?: boolean): Promise<Cufd[]> {
+  async getCufds(codigoSucursal: number, codigoPuntoVenta: number): Promise<Cufd[]> {
     const response = await apiClient.get<Cufd[]>('/api/codigos/cufd/all', {
-      params: { codigoSucursal, codigoPuntoVenta, soloVigentes }
+      params: { codigoSucursal, codigoPuntoVenta }
     })
 
     return response.data
@@ -245,6 +246,18 @@ class CartServiceClass {
   // Obtener lista de eventos significativos
   async getEventosSignificativos(): Promise<EventoSignificativo[]> {
     const response = await apiClient.get<EventoSignificativo[]>('/api/operaciones/evento-significativo')
+
+    return response.data
+  }
+
+  // Obtener eventos significativos por sucursal y punto de venta
+  async getEventosSignificativosBySucursal(
+    codigoSucursal: number,
+    codigoPuntoVenta: number
+  ): Promise<EventoSignificativo[]> {
+    const response = await apiClient.get<EventoSignificativo[]>('/api/operaciones/evento-significativo', {
+      params: { codigoSucursal, codigoPuntoVenta }
+    })
 
     return response.data
   }
@@ -299,6 +312,19 @@ class CartServiceClass {
     return response.data
   }
 
+  // Obtener eventos significativos disponibles por CAFC para paquetes de contingencia
+  async getEventosByCafc(
+    cafc: string,
+    codigoSucursal: number,
+    codigoPuntoVenta: number
+  ): Promise<EventoByCafc[]> {
+    const response = await apiClient.get<EventoByCafc[]>(`/api/paquetes/contingencia/${cafc}/eventos`, {
+      params: { codigoSucursal, codigoPuntoVenta }
+    })
+
+    return response.data
+  }
+
   // Enviar paquete a SIAT para validación
   async validarPaquete(paqueteId: number): Promise<Paquete> {
     const response = await apiClient.post<Paquete>(`/api/paquetes/validacion/${paqueteId}`)
@@ -348,7 +374,9 @@ class CartServiceClass {
         codigoPuntoVenta: params.codigoPuntoVenta,
         search: params.search,
         page: params.page ?? 1,
-        limit: params.limit ?? 10
+        limit: params.limit ?? 10,
+        fechaInicio: params.fechaInicio,
+        fechaFin: params.fechaFin
       }
     })
 

@@ -26,6 +26,7 @@ import dayjs from 'dayjs'
 import 'dayjs/locale/es'
 
 import { useFacturas, useBranches, useAnularFactura, useRevertirAnulacion } from '@/hooks/useSales'
+import { useUserRole } from '@/hooks/useUserRole'
 import type { Factura, Branch } from '@/types/api/sales'
 import FacturacionForm from './FacturacionForm'
 import { printInvoice } from '@/utils/invoicePrinter'
@@ -56,10 +57,22 @@ const FacturacionList = () => {
   const [showAnularConfirm, setShowAnularConfirm] = useState(false)
   const [showRevertirConfirm, setShowRevertirConfirm] = useState(false)
   const [motivoAnulacion, setMotivoAnulacion] = useState<number>(1)
+  const [fechaInicio, setFechaInicio] = useState<string>(dayjs().format('YYYY-MM-DD'))
+  const [fechaFin, setFechaFin] = useState<string>('')
 
   const { data: branchesData, isLoading: isLoadingBranches } = useBranches()
+  const { excludedBranchCodes } = useUserRole()
   const anularFacturaMutation = useAnularFactura()
   const revertirAnulacionMutation = useRevertirAnulacion()
+
+  // Filtrar sucursales según el rol del usuario
+  const filteredBranches = useMemo(() => {
+    if (!branchesData) return []
+
+    return branchesData.filter(
+      (b: Branch) => b.active && !excludedBranchCodes.includes(b.codigoSucursal)
+    )
+  }, [branchesData, excludedBranchCodes])
 
   // Obtener sucursal seleccionada
   const selectedBranch = useMemo(() => {
@@ -79,7 +92,9 @@ const FacturacionList = () => {
       codigoPuntoVenta: 0,
       search: search || undefined,
       page: page + 1,
-      limit: rowsPerPage
+      limit: rowsPerPage,
+      fechaInicio: fechaInicio || undefined,
+      fechaFin: fechaFin || undefined
     },
     !!selectedBranch
   )
@@ -219,13 +234,11 @@ const FacturacionList = () => {
                   setPage(0)
                 }}
               >
-                {branchesData
-                  ?.filter((b: Branch) => b.active)
-                  .map((branch: Branch) => (
-                    <MenuItem key={branch.id} value={branch.id}>
-                      {branch.alias} (Sucursal {branch.codigoSucursal})
-                    </MenuItem>
-                  ))}
+                {filteredBranches.map((branch: Branch) => (
+                <MenuItem key={branch.id} value={branch.id}>
+                  {branch.alias} (Sucursal {branch.codigoSucursal})
+                </MenuItem>
+              ))}
               </Select>
             </FormControl>
 
@@ -247,6 +260,34 @@ const FacturacionList = () => {
               }}
               sx={{ minWidth: 250 }}
             />
+
+            <TextField
+              size='small'
+              type='date'
+              label='Fecha Inicio'
+              value={fechaInicio}
+              onChange={e => {
+                setFechaInicio(e.target.value)
+                setPage(0)
+              }}
+              disabled={!selectedBranch}
+              InputLabelProps={{ shrink: true }}
+              sx={{ minWidth: 150 }}
+            />
+
+            <TextField
+              size='small'
+              type='date'
+              label='Fecha Fin'
+              value={fechaFin}
+              onChange={e => {
+                setFechaFin(e.target.value)
+                setPage(0)
+              }}
+              disabled={!selectedBranch}
+              InputLabelProps={{ shrink: true }}
+              sx={{ minWidth: 150 }}
+            />
           </Box>
 
           {!selectedBranch ? (
@@ -259,6 +300,11 @@ const FacturacionList = () => {
             <Alert severity='info'>No hay facturas para mostrar</Alert>
           ) : (
             <>
+              <Box sx={{ mb: 2, p: 2, bgcolor: 'primary.main', borderRadius: 1 }}>
+                <Typography variant='h6' color='white'>
+                  Total Facturado: Bs. {facturasData?.totalFacturado?.toFixed(2) ?? '0.00'}
+                </Typography>
+              </Box>
               <div className='overflow-x-auto'>
                 <table className='w-full'>
                   <thead>

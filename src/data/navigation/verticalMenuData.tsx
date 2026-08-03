@@ -175,6 +175,11 @@ const getFullMenuData = (): VerticalMenuDataType[] => [
         href: '/siat/facturacion/'
       },
       {
+        label: 'Eventos Significativos',
+        icon: 'tabler-alert-triangle',
+        href: '/siat/eventos/'
+      },
+      {
         label: 'Paquetes Contingencia',
         icon: 'tabler-package',
         href: '/siat/paquetes/'

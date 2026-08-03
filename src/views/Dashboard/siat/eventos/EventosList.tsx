@@ -46,7 +46,7 @@ const fuzzyFilter: FilterFn<any> = (row, columnId, value, addMeta) => {
   return itemRank.passed
 }
 
-import { useEventosSignificativos } from '@/hooks/useSales'
+import { useEventosSignificativosBySucursal } from '@/hooks/useSales'
 import type { EventoSignificativo } from '@/types/api/sales'
 import EventoForm from './EventoForm'
 
@@ -55,7 +55,7 @@ import tableStyles from '@core/styles/table.module.css'
 const columnHelper = createColumnHelper<EventoSignificativo>()
 
 const EventosList = () => {
-  const { data: eventos, isLoading, error, refetch } = useEventosSignificativos()
+  const { data: eventos, isLoading, error, refetch } = useEventosSignificativosBySucursal(0, 0)
   const [showForm, setShowForm] = useState(false)
   const [page, setPage] = useState(0)
   const [rowsPerPage, setRowsPerPage] = useState(10)

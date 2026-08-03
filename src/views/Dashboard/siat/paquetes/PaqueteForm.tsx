@@ -8,20 +8,14 @@ import FormControl from '@mui/material/FormControl'
 import InputLabel from '@mui/material/InputLabel'
 import Select from '@mui/material/Select'
 import MenuItem from '@mui/material/MenuItem'
-import TextField from '@mui/material/TextField'
 import Alert from '@mui/material/Alert'
 import CircularProgress from '@mui/material/CircularProgress'
 import Typography from '@mui/material/Typography'
 import dayjs from 'dayjs'
 import 'dayjs/locale/es'
 
-import {
-  useCrearPaqueteContingencia,
-  useCafcs,
-  useCufdsByCafc,
-  useEventosSignificativosParametricas
-} from '@/hooks/useSales'
-import type { Cafc, CufdByCafc, EventoSignificativoParametrica } from '@/types/api/sales'
+import { useCrearPaqueteContingencia, useCafcs, useEventosByCafc } from '@/hooks/useSales'
+import type { Cafc, EventoByCafc } from '@/types/api/sales'
 
 interface PaqueteFormProps {
   onSuccess: () => void
@@ -30,14 +24,11 @@ interface PaqueteFormProps {
 
 const PaqueteForm = ({ onSuccess, onCancel }: PaqueteFormProps) => {
   const [selectedCafcId, setSelectedCafcId] = useState<number | ''>('')
-  const [selectedCufd, setSelectedCufd] = useState<string>('')
-  const [codigoMotivoEvento, setCodigoMotivoEvento] = useState<number | ''>('')
-  const [descripcionEvento, setDescripcionEvento] = useState<string>('')
+  const [selectedEventoId, setSelectedEventoId] = useState<number | ''>('')
   const [error, setError] = useState<string>('')
 
   const crearPaqueteMutation = useCrearPaqueteContingencia()
   const { data: cafcs } = useCafcs()
-  const { data: eventosParametricas } = useEventosSignificativosParametricas()
 
   // CAFCs disponibles (con números restantes)
   const availableCafcs = useMemo(() => {
@@ -48,33 +39,24 @@ const PaqueteForm = ({ onSuccess, onCancel }: PaqueteFormProps) => {
 
   const selectedCafc = cafcs?.find((c: Cafc) => c.id === selectedCafcId)
 
-  // Obtener CUFDs disponibles para el CAFC seleccionado
-  const { data: cufdsList, isLoading: isLoadingCufds } = useCufdsByCafc(selectedCafc?.codigo || '', !!selectedCafc)
+  // Obtener Eventos Significativos disponibles para el CAFC seleccionado
+  const { data: eventosList, isLoading: isLoadingEventos } = useEventosByCafc(
+    selectedCafc?.codigo || '',
+    0,
+    0,
+    !!selectedCafc
+  )
 
-  // Extraer los tipos de evento del catálogo SIAT (excluir eventos 1-4 que se manejan en otro flujo)
-  const tiposEvento = useMemo(() => {
-    if (!eventosParametricas?.parametrica?.[0]?.payload) return []
-    const eventos = eventosParametricas.parametrica[0].payload as EventoSignificativoParametrica[]
+  // Evento seleccionado
+  const eventoSeleccionado = useMemo(() => {
+    if (!eventosList || !selectedEventoId) return null
 
-    // Excluir eventos 1, 2, 3, 4 que se manejan en eventos significativos
-    return eventos.filter(e => ![1, 2, 3, 4].includes(e.codigoClasificador))
-  }, [eventosParametricas])
-
-  // Obtener descripción del motivo seleccionado
-  const motivoSeleccionado = useMemo(() => {
-    return tiposEvento.find(e => e.codigoClasificador === codigoMotivoEvento)
-  }, [tiposEvento, codigoMotivoEvento])
-
-  // CUFD seleccionado
-  const cufdSeleccionado = useMemo(() => {
-    if (!cufdsList || !selectedCufd) return null
-
-    return cufdsList.find((c: CufdByCafc) => c.cufd === selectedCufd)
-  }, [cufdsList, selectedCufd])
+    return eventosList.find((e: EventoByCafc) => e.eventoSignificativoId === selectedEventoId)
+  }, [eventosList, selectedEventoId])
 
   const handleCafcChange = (cafcId: number) => {
     setSelectedCafcId(cafcId)
-    setSelectedCufd('') // Reset CUFD selection when CAFC changes
+    setSelectedEventoId('')
   }
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -87,23 +69,15 @@ const PaqueteForm = ({ onSuccess, onCancel }: PaqueteFormProps) => {
       return
     }
 
-    if (!selectedCufd) {
-      setError('Debe seleccionar un CUFD')
-
-      return
-    }
-
-    if (!codigoMotivoEvento) {
-      setError('Debe seleccionar un motivo de evento')
+    if (!selectedEventoId) {
+      setError('Debe seleccionar un Evento Significativo')
 
       return
     }
 
     const data = {
-      descripcionEvento: descripcionEvento || motivoSeleccionado?.descripcion || '',
-      codigoEvento: codigoMotivoEvento as number,
-      cafc: selectedCafc.codigo,
-      cufd: selectedCufd
+      eventoSignificativoId: selectedEventoId as number,
+      cafc: selectedCafc.codigo
     }
 
     crearPaqueteMutation.mutate(data, {
@@ -121,7 +95,7 @@ const PaqueteForm = ({ onSuccess, onCancel }: PaqueteFormProps) => {
       {error && <Alert severity='error'>{error}</Alert>}
 
       <Alert severity='info' sx={{ fontSize: '0.875rem' }}>
-        El sistema agrupará automáticamente todas las facturas PENDIENTES con el CAFC y CUFD seleccionados.
+        El sistema agrupará automáticamente todas las facturas PENDIENTES del evento significativo seleccionado.
       </Alert>
 
       <FormControl fullWidth>
@@ -139,23 +113,28 @@ const PaqueteForm = ({ onSuccess, onCancel }: PaqueteFormProps) => {
         </Select>
       </FormControl>
 
-      <FormControl fullWidth disabled={!selectedCafc || isLoadingCufds}>
-        <InputLabel>CUFD *</InputLabel>
-        <Select value={selectedCufd} label='CUFD *' onChange={e => setSelectedCufd(e.target.value as string)}>
-          {isLoadingCufds ? (
-            <MenuItem value=''>Cargando CUFDs...</MenuItem>
-          ) : !cufdsList || cufdsList.length === 0 ? (
-            <MenuItem value=''>No hay CUFDs disponibles para este CAFC</MenuItem>
+      <FormControl fullWidth disabled={!selectedCafc || isLoadingEventos}>
+        <InputLabel>Evento Significativo *</InputLabel>
+        <Select
+          value={selectedEventoId}
+          label='Evento Significativo *'
+          onChange={e => setSelectedEventoId(e.target.value as number)}
+        >
+          {isLoadingEventos ? (
+            <MenuItem value=''>Cargando Eventos...</MenuItem>
+          ) : !eventosList || eventosList.length === 0 ? (
+            <MenuItem value=''>No hay eventos disponibles para este CAFC</MenuItem>
           ) : (
-            cufdsList.map((cufd: CufdByCafc) => (
-              <MenuItem key={cufd.cufd} value={cufd.cufd}>
+            eventosList.map((evento: EventoByCafc) => (
+              <MenuItem key={evento.eventoSignificativoId} value={evento.eventoSignificativoId}>
                 <Box sx={{ display: 'flex', flexDirection: 'column' }}>
                   <Typography variant='body2' fontWeight='medium'>
-                    {cufd.cantidadFacturas} factura{cufd.cantidadFacturas !== 1 ? 's' : ''}
+                    Evento #{evento.eventoSignificativoId} - {evento.cantidadFacturas} factura
+                    {evento.cantidadFacturas !== 1 ? 's' : ''}
                   </Typography>
                   <Typography variant='caption' color='text.secondary'>
-                    {dayjs(cufd.fechaDesde).format('DD/MM/YYYY HH:mm')} -{' '}
-                    {dayjs(cufd.fechaHasta).format('DD/MM/YYYY HH:mm')}
+                    {dayjs(evento.fechaDesde).format('DD/MM/YYYY HH:mm')} -{' '}
+                    {dayjs(evento.fechaHasta).format('DD/MM/YYYY HH:mm')}
                   </Typography>
                 </Box>
               </MenuItem>
@@ -164,65 +143,29 @@ const PaqueteForm = ({ onSuccess, onCancel }: PaqueteFormProps) => {
         </Select>
       </FormControl>
 
-      {cufdSeleccionado && (
+      {eventoSeleccionado && (
         <Alert severity='info' sx={{ py: 1 }}>
           <Typography variant='caption'>
-            <strong>CUFD:</strong> {cufdSeleccionado.cufd.substring(0, 30)}...
+            <strong>Evento:</strong> #{eventoSeleccionado.eventoSignificativoId}
           </Typography>
           <br />
           <Typography variant='caption'>
-            <strong>Facturas:</strong> {cufdSeleccionado.cantidadFacturas}
+            <strong>Facturas:</strong> {eventoSeleccionado.cantidadFacturas}
           </Typography>
           <br />
           <Typography variant='caption'>
-            <strong>Rango:</strong> {dayjs(cufdSeleccionado.fechaDesde).format('DD/MM/YYYY HH:mm')} -{' '}
-            {dayjs(cufdSeleccionado.fechaHasta).format('DD/MM/YYYY HH:mm')}
+            <strong>Rango:</strong> {dayjs(eventoSeleccionado.fechaDesde).format('DD/MM/YYYY HH:mm')} -{' '}
+            {dayjs(eventoSeleccionado.fechaHasta).format('DD/MM/YYYY HH:mm')}
           </Typography>
         </Alert>
       )}
 
-      <FormControl fullWidth>
-        <InputLabel>Motivo del Evento *</InputLabel>
-        <Select
-          value={codigoMotivoEvento}
-          label='Motivo del Evento *'
-          onChange={e => {
-            const codigo = e.target.value as number
-
-            setCodigoMotivoEvento(codigo)
-            const motivo = tiposEvento.find(ev => ev.codigoClasificador === codigo)
-
-            setDescripcionEvento(motivo?.descripcion || '')
-          }}
-        >
-          {tiposEvento.length === 0 ? (
-            <MenuItem value=''>Cargando catálogo...</MenuItem>
-          ) : (
-            tiposEvento.map((evento: EventoSignificativoParametrica) => (
-              <MenuItem key={evento.codigoClasificador} value={evento.codigoClasificador}>
-                {evento.descripcion}
-              </MenuItem>
-            ))
-          )}
-        </Select>
-      </FormControl>
-
-      <TextField
-        label='Descripción (opcional)'
-        value={descripcionEvento}
-        onChange={e => setDescripcionEvento(e.target.value)}
-        multiline
-        rows={2}
-        fullWidth
-      />
-
-      {selectedCafc && selectedCufd && motivoSeleccionado && (
+      {selectedCafc && eventoSeleccionado && (
         <Alert severity='success'>
           <Typography variant='caption'>
-            Se creará un paquete con todas las facturas pendientes que usen:
+            Se creará un paquete con las {eventoSeleccionado.cantidadFacturas} facturas pendientes del evento #
+            {eventoSeleccionado.eventoSignificativoId}
             <br />- CAFC: {selectedCafc.codigo}
-            <br />- CUFD: {selectedCufd.substring(0, 25)}...
-            <br />- Evento: {motivoSeleccionado.descripcion}
           </Typography>
         </Alert>
       )}
@@ -234,7 +177,7 @@ const PaqueteForm = ({ onSuccess, onCancel }: PaqueteFormProps) => {
         <Button
           type='submit'
           variant='contained'
-          disabled={crearPaqueteMutation.isPending || !selectedCafc || !selectedCufd || !codigoMotivoEvento}
+          disabled={crearPaqueteMutation.isPending || !selectedCafc || !selectedEventoId}
           startIcon={crearPaqueteMutation.isPending ? <CircularProgress size={20} /> : null}
         >
           {crearPaqueteMutation.isPending ? 'Creando...' : 'Crear Paquete'}

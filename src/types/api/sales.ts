@@ -538,7 +538,8 @@ export interface CafcCreateRequest {
 // Request para facturación por contingencia (extiende facturación normal)
 export interface FacturarContingenciaRequest extends FacturarRequest {
   cafc: string
-  cufdId: number
+  eventoSignificativoId: number
+  fechaEmision: string
   numeroTarjeta?: string | null
   montoGiftCard?: number
 }
@@ -565,7 +566,7 @@ export interface EventoSignificativo {
 
 export interface EventoSignificativoRequest {
   codigoMotivoEvento: number
-  cufdEvento: string
+  cufdId: number
   descripcion: string
   fechaHoraInicioEvento: string
   fechaHoraFinEvento: string
@@ -600,10 +601,15 @@ export interface Paquete {
 }
 
 export interface PaqueteContingenciaRequest {
-  descripcionEvento: string
-  codigoEvento: number
+  eventoSignificativoId: number
   cafc: string
-  cufd: string
+}
+
+export interface EventoByCafc {
+  eventoSignificativoId: number
+  cantidadFacturas: number
+  fechaDesde: string
+  fechaHasta: string
 }
 
 export interface PaqueteValidacionRequest {
@@ -640,11 +646,9 @@ export const MotivoEventoSignificativo = {
 } as const
 
 export const MotivoEventoDescripcion: Record<number, string> = {
-  1: 'CORTE DEL SERVICIO DE INTERNET',
-  2: 'INACCESIBILIDAD AL SERVICIO WEB DE LA ADMINISTRACIÓN TRIBUTARIA',
-  3: 'VIRUS INFORMÁTICO O FALLA DE SOFTWARE',
-  4: 'CORTE DE ENERGÍA ELÉCTRICA',
-  5: 'OTRO'
+  5: 'VIRUS INFORMÁTICO O FALLA DE SOFTWARE',
+  6: 'CAMBIO DE INFRAESTRUCTURA DE SISTEMA O FALLA DE HARDWARE',
+  7: 'CORTE DE SUMINISTRO DE ENERGIA ELÉCTRICA'
 }
 
 // Tipos para Facturación Online (otras sucursales)
@@ -688,9 +692,12 @@ export interface FacturacionListParams {
   search?: string
   page?: number
   limit?: number
+  fechaInicio?: string
+  fechaFin?: string
 }
 
 export interface FacturacionListResponse {
   data: Factura[]
   meta: OrdersListMeta
+  totalFacturado: number
 }

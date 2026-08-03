@@ -9,7 +9,7 @@ export interface UserRole {
   permissions?: Permission[]
 }
 
-export type StaticRole = 'ADMIN' | 'CASHIER'
+export type StaticRole = 'ADMIN' | 'CASHIER' | 'FACTURACION_JUNIN'
 
 export interface UserSession {
   email: string

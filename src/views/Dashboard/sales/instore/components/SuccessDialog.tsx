@@ -18,13 +18,20 @@ import {
   Paper,
   Divider,
   Collapse,
-  Chip
+  Chip,
+  TextField
 } from '@mui/material'
 import dayjs from 'dayjs'
 import 'dayjs/locale/es'
 
-import type { Order, BillingInfo, Branch, Factura, Cafc, Cufd } from '@/types/api/sales'
-import { useBranches, useFacturar, useCafcs, useCufds, useFacturarContingencia } from '@/hooks/useSales'
+import type { Order, BillingInfo, Branch, Factura, Cafc, EventoSignificativo } from '@/types/api/sales'
+import {
+  useBranches,
+  useFacturar,
+  useCafcs,
+  useFacturarContingencia,
+  useEventosSignificativosBySucursal
+} from '@/hooks/useSales'
 import { printInvoice } from '@/utils/invoicePrinter'
 
 interface SuccessDialogProps {
@@ -55,7 +62,8 @@ const SuccessDialog: React.FC<SuccessDialogProps> = ({
   // Estados para contingencia
   const [showContingencia, setShowContingencia] = useState(false)
   const [selectedCafcId, setSelectedCafcId] = useState<number | ''>('')
-  const [selectedCufdId, setSelectedCufdId] = useState<number | ''>('')
+  const [selectedEventoId, setSelectedEventoId] = useState<number | ''>('')
+  const [fechaEmisionContingencia, setFechaEmisionContingencia] = useState<string>('')
 
   // Hooks
   const { data: branchesData, isLoading: isLoadingBranches } = useBranches()
@@ -73,12 +81,19 @@ const SuccessDialog: React.FC<SuccessDialogProps> = ({
     return branchesData.find((b: Branch) => b.id === selectedBranchId)
   }, [branchesData, selectedBranchId])
 
-  // CUFDs disponibles para la sucursal seleccionada
-  const { data: cufdsData, isLoading: isLoadingCufds } = useCufds(
-    selectedBranch?.codigoSucursal ?? 0,
+  // Eventos significativos disponibles para la sucursal seleccionada
+  const { data: eventosData, isLoading: isLoadingEventos } = useEventosSignificativosBySucursal(
+    selectedBranch?.codigoSucursal ?? null,
     0, // codigoPuntoVenta
     showContingencia && !!selectedBranch
   )
+
+  // Evento seleccionado
+  const selectedEvento = useMemo(() => {
+    if (!eventosData || !selectedEventoId) return null
+
+    return eventosData.find((e: EventoSignificativo) => e.id === selectedEventoId)
+  }, [eventosData, selectedEventoId])
 
   // CAFCs disponibles (con números restantes)
   const availableCafcs = useMemo(() => {
@@ -100,7 +115,8 @@ const SuccessDialog: React.FC<SuccessDialogProps> = ({
     setFacturaData(null)
     setShowContingencia(false)
     setSelectedCafcId('')
-    setSelectedCufdId('')
+    setSelectedEventoId('')
+    setFechaEmisionContingencia('')
   }
 
   // Datos base para facturación (usados en normal y contingencia)
@@ -145,7 +161,14 @@ const SuccessDialog: React.FC<SuccessDialogProps> = ({
 
   // Handler factura contingencia
   const handleEmitirContingencia = async () => {
-    if (!orderId || !selectedBranchId || !billingInfo || !selectedCufdId || !selectedCafcId) {
+    if (
+      !orderId ||
+      !selectedBranchId ||
+      !billingInfo ||
+      !selectedEventoId ||
+      !selectedCafcId ||
+      !fechaEmisionContingencia
+    ) {
       setFacturaError('Faltan datos para emitir la factura por contingencia')
 
       return
@@ -159,12 +182,30 @@ const SuccessDialog: React.FC<SuccessDialogProps> = ({
       return
     }
 
+    if (!selectedEvento) {
+      setFacturaError('Evento significativo no encontrado')
+
+      return
+    }
+
+    // Validar que la fecha de emisión esté dentro del rango del evento
+    const fechaEmision = dayjs(fechaEmisionContingencia)
+    const fechaInicio = dayjs(selectedEvento.fechaHoraInicioEvento)
+    const fechaFin = dayjs(selectedEvento.fechaHoraFinEvento)
+
+    if (fechaEmision.isBefore(fechaInicio) || fechaEmision.isAfter(fechaFin)) {
+      setFacturaError('La fecha de emisión debe estar dentro del rango del evento significativo')
+
+      return
+    }
+
     setFacturaError('')
 
     const contingenciaData = {
       ...getFacturaBaseData(),
       cafc: selectedCafc.codigo,
-      cufdId: selectedCufdId as number,
+      eventoSignificativoId: selectedEventoId as number,
+      fechaEmision: dayjs(fechaEmisionContingencia).format('YYYY-MM-DDTHH:mm:ss'),
       numeroTarjeta: null,
       montoGiftCard: 0
     }
@@ -337,7 +378,8 @@ const SuccessDialog: React.FC<SuccessDialogProps> = ({
                 label='Sucursal *'
                 onChange={e => {
                   setSelectedBranchId(e.target.value as number)
-                  setSelectedCufdId('')
+                  setSelectedEventoId('')
+                  setFechaEmisionContingencia('')
                 }}
                 disabled={isLoadingBranches}
               >
@@ -378,28 +420,31 @@ const SuccessDialog: React.FC<SuccessDialogProps> = ({
                   </Select>
                 </FormControl>
 
-                {/* Selector de CUFD */}
-                <FormControl fullWidth size='small' disabled={isLoadingCufds || !selectedBranchId}>
-                  <InputLabel>CUFD *</InputLabel>
+                {/* Selector de Evento Significativo */}
+                <FormControl fullWidth size='small' sx={{ mb: 2 }} disabled={isLoadingEventos || !selectedBranchId}>
+                  <InputLabel>Evento Significativo *</InputLabel>
                   <Select
-                    value={selectedCufdId}
-                    label='CUFD *'
-                    onChange={e => setSelectedCufdId(e.target.value as number)}
+                    value={selectedEventoId}
+                    label='Evento Significativo *'
+                    onChange={e => {
+                      setSelectedEventoId(e.target.value as number)
+                      setFechaEmisionContingencia('')
+                    }}
                   >
-                    {isLoadingCufds ? (
-                      <MenuItem value=''>Cargando CUFDs...</MenuItem>
-                    ) : !cufdsData || cufdsData.length === 0 ? (
-                      <MenuItem value=''>No hay CUFDs disponibles</MenuItem>
+                    {isLoadingEventos ? (
+                      <MenuItem value=''>Cargando eventos...</MenuItem>
+                    ) : !eventosData || eventosData.length === 0 ? (
+                      <MenuItem value=''>No hay eventos significativos disponibles</MenuItem>
                     ) : (
-                      cufdsData.map((cufd: Cufd) => (
-                        <MenuItem key={cufd.id} value={cufd.id}>
+                      eventosData.map((evento: EventoSignificativo) => (
+                        <MenuItem key={evento.id} value={evento.id}>
                           <Box sx={{ display: 'flex', flexDirection: 'column' }}>
                             <Typography variant='body2' fontWeight='medium'>
-                              {cufd.codigo.substring(0, 20)}...
+                              {evento.descripcion}
                             </Typography>
                             <Typography variant='caption' color='text.secondary'>
-                              Desde: {dayjs(cufd.createdAt).format('DD/MM/YYYY HH:mm')} - Hasta:{' '}
-                              {dayjs(cufd.fechaVigencia).format('DD/MM/YYYY HH:mm')}
+                              Desde: {dayjs(evento.fechaHoraInicioEvento).format('DD/MM/YYYY HH:mm')} - Hasta:{' '}
+                              {dayjs(evento.fechaHoraFinEvento).format('DD/MM/YYYY HH:mm')}
                             </Typography>
                           </Box>
                         </MenuItem>
@@ -407,6 +452,39 @@ const SuccessDialog: React.FC<SuccessDialogProps> = ({
                     )}
                   </Select>
                 </FormControl>
+
+                {/* Fecha de Emisión */}
+                {selectedEvento && (
+                  <Box sx={{ mb: 1 }}>
+                    <TextField
+                      fullWidth
+                      size='small'
+                      type='datetime-local'
+                      label='Fecha de Emisión *'
+                      value={fechaEmisionContingencia}
+                      onChange={e => {
+                        const value = e.target.value
+                        const fecha = dayjs(value)
+                        const inicio = dayjs(selectedEvento.fechaHoraInicioEvento)
+                        const fin = dayjs(selectedEvento.fechaHoraFinEvento)
+
+                        // Solo permitir si está dentro del rango
+                        if (fecha.isAfter(inicio) || fecha.isSame(inicio)) {
+                          if (fecha.isBefore(fin) || fecha.isSame(fin)) {
+                            setFechaEmisionContingencia(value)
+                          }
+                        }
+                      }}
+                      InputLabelProps={{ shrink: true }}
+                      inputProps={{
+                        min: dayjs(selectedEvento.fechaHoraInicioEvento).format('YYYY-MM-DDTHH:mm'),
+                        max: dayjs(selectedEvento.fechaHoraFinEvento).format('YYYY-MM-DDTHH:mm'),
+                        step: 60
+                      }}
+                      helperText={`Rango válido: ${dayjs(selectedEvento.fechaHoraInicioEvento).format('DD/MM/YYYY HH:mm')} - ${dayjs(selectedEvento.fechaHoraFinEvento).format('DD/MM/YYYY HH:mm')}`}
+                    />
+                  </Box>
+                )}
               </Paper>
             </Collapse>
 
@@ -517,7 +595,7 @@ const SuccessDialog: React.FC<SuccessDialogProps> = ({
                   !selectedBranchId ||
                   isPending ||
                   !billingInfo?.ci ||
-                  (showContingencia && (!selectedCufdId || !selectedCafcId))
+                  (showContingencia && (!selectedEventoId || !selectedCafcId || !fechaEmisionContingencia))
                 }
                 startIcon={isPending ? <CircularProgress size={20} color='inherit' /> : <span>📄</span>}
                 fullWidth

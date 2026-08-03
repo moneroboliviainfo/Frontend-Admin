@@ -227,7 +227,11 @@ export const useFacturar = () => {
 }
 
 // Hook para obtener CUFDs
-export const useCufds = (codigoSucursal: number, codigoPuntoVenta: number, enabled: boolean = true) => {
+export const useCufds = (
+  codigoSucursal: number,
+  codigoPuntoVenta: number,
+  enabled: boolean = true
+) => {
   return useQuery({
     queryKey: ['cufds', codigoSucursal, codigoPuntoVenta],
     queryFn: () => cartService.getCufds(codigoSucursal, codigoPuntoVenta),
@@ -274,6 +278,20 @@ export const useEventosSignificativos = () => {
     queryKey: ['eventos-significativos'],
     queryFn: () => cartService.getEventosSignificativos(),
     staleTime: 1000 * 60 * 5
+  })
+}
+
+// Hook para obtener eventos significativos por sucursal (para contingencia)
+export const useEventosSignificativosBySucursal = (
+  codigoSucursal: number | null,
+  codigoPuntoVenta: number | null,
+  enabled: boolean = true
+) => {
+  return useQuery({
+    queryKey: ['eventos-significativos-sucursal', codigoSucursal, codigoPuntoVenta],
+    queryFn: () => cartService.getEventosSignificativosBySucursal(codigoSucursal!, codigoPuntoVenta!),
+    enabled: enabled && codigoSucursal !== null && codigoPuntoVenta !== null,
+    staleTime: 1000 * 60 * 2
   })
 }
 
@@ -331,6 +349,21 @@ export const useCufdsByCafc = (cafc: string, enabled: boolean = true) => {
   return useQuery({
     queryKey: ['cufds-by-cafc', cafc],
     queryFn: () => cartService.getCufdsByCafc(cafc),
+    enabled: enabled && !!cafc,
+    staleTime: 1000 * 60 * 2
+  })
+}
+
+// Hook para obtener Eventos Significativos disponibles por CAFC
+export const useEventosByCafc = (
+  cafc: string,
+  codigoSucursal: number,
+  codigoPuntoVenta: number,
+  enabled: boolean = true
+) => {
+  return useQuery({
+    queryKey: ['eventos-by-cafc', cafc, codigoSucursal, codigoPuntoVenta],
+    queryFn: () => cartService.getEventosByCafc(cafc, codigoSucursal, codigoPuntoVenta),
     enabled: enabled && !!cafc,
     staleTime: 1000 * 60 * 2
   })
