@@ -22,6 +22,9 @@ import InputLabel from '@mui/material/InputLabel'
 import Select from '@mui/material/Select'
 import MenuItem from '@mui/material/MenuItem'
 import InputAdornment from '@mui/material/InputAdornment'
+import Snackbar from '@mui/material/Snackbar'
+import CircularProgress from '@mui/material/CircularProgress'
+import Tooltip from '@mui/material/Tooltip'
 import dayjs from 'dayjs'
 import 'dayjs/locale/es'
 
@@ -30,6 +33,7 @@ import { useUserRole } from '@/hooks/useUserRole'
 import type { Factura, Branch } from '@/types/api/sales'
 import FacturacionForm from './FacturacionForm'
 import { printInvoice } from '@/utils/invoicePrinter'
+import { printInvoiceBluetooth, isBluetoothAvailable, isBluetoothConnected, getConnectedDeviceName } from '@/utils/bluetoothPrinter'
 
 const getEstadoColor = (estado: string): 'success' | 'warning' | 'error' | 'info' | 'default' => {
   switch (estado) {
@@ -59,6 +63,10 @@ const FacturacionList = () => {
   const [motivoAnulacion, setMotivoAnulacion] = useState<number>(1)
   const [fechaInicio, setFechaInicio] = useState<string>(dayjs().format('YYYY-MM-DD'))
   const [fechaFin, setFechaFin] = useState<string>('')
+
+  // Estados para impresión Bluetooth
+  const [btPrinting, setBtPrinting] = useState<number | null>(null)
+  const [btMessage, setBtMessage] = useState<{ text: string; type: 'success' | 'error' } | null>(null)
 
   const { data: branchesData, isLoading: isLoadingBranches } = useBranches()
   const { excludedBranchCodes } = useUserRole()
@@ -163,6 +171,72 @@ const FacturacionList = () => {
     }
 
     printInvoice(facturaParaImprimir)
+  }
+
+  const handlePrintBluetoothInvoice = async (factura: Factura) => {
+    if (!isBluetoothAvailable()) {
+      const isSecure = window.location.protocol === 'https:' || window.location.hostname === 'localhost'
+
+      if (!isSecure) {
+        setBtMessage({ text: 'Requiere HTTPS. Sube a producción o usa localhost.', type: 'error' })
+      } else {
+        setBtMessage({ text: 'Bluetooth no disponible en este navegador.', type: 'error' })
+      }
+
+      return
+    }
+
+    setBtPrinting(factura.id)
+    setBtMessage(null)
+
+    try {
+      let detalles = factura.detalles
+
+      if (!detalles || detalles.length === 0) {
+        const parser = new DOMParser()
+        const xmlDoc = parser.parseFromString(factura.xml || '', 'text/xml')
+        const detalleNodes = xmlDoc.querySelectorAll('detalle')
+
+        detalles = Array.from(detalleNodes).map((node, index) => ({
+          id: index + 1,
+          actividadEconomica: node.querySelector('actividadEconomica')?.textContent || '',
+          codigoProductoSin: parseInt(node.querySelector('codigoProductoSin')?.textContent || '0'),
+          codigoProducto: node.querySelector('codigoProducto')?.textContent || '',
+          descripcion: node.querySelector('descripcion')?.textContent || '',
+          cantidad: parseFloat(node.querySelector('cantidad')?.textContent || '0'),
+          unidadMedida: parseInt(node.querySelector('unidadMedida')?.textContent || '57'),
+          precioUnitario: parseFloat(node.querySelector('precioUnitario')?.textContent || '0'),
+          montoDescuento: parseFloat(node.querySelector('montoDescuento')?.textContent || '0'),
+          subTotal: parseFloat(node.querySelector('subTotal')?.textContent || '0'),
+          numeroSerie: node.querySelector('numeroSerie')?.textContent || null,
+          numeroImei: node.querySelector('numeroImei')?.textContent || null
+        }))
+      }
+
+      const facturaParaImprimir: Factura = {
+        ...factura,
+        montoTotal: parseFloat(String(factura.montoTotal)) || 0,
+        montoTotalSujetoIva: parseFloat(String(factura.montoTotalSujetoIva)) || 0,
+        descuentoAdicional: parseFloat(String(factura.descuentoAdicional)) || 0,
+        montoGiftCard: parseFloat(String(factura.montoGiftCard)) || 0,
+        codigoEmision: parseInt(String(factura.codigoEmision)) || 1,
+        detalles
+      }
+
+      await printInvoiceBluetooth(facturaParaImprimir)
+
+      const deviceName = getConnectedDeviceName()
+
+      setBtMessage({ text: `Impreso en ${deviceName || 'impresora BT'}`, type: 'success' })
+    } catch (error) {
+      console.error('Error imprimiendo via Bluetooth:', error)
+      setBtMessage({
+        text: error instanceof Error ? error.message : 'Error al imprimir',
+        type: 'error'
+      })
+    } finally {
+      setBtPrinting(null)
+    }
   }
 
   const handleAnularFactura = () => {
@@ -379,14 +453,31 @@ const FacturacionList = () => {
                         </td>
                         <td className='p-4'>
                           <Box sx={{ display: 'flex', gap: 1 }}>
-                            <IconButton
-                              size='small'
-                              color='primary'
-                              onClick={() => handlePrintInvoice(factura)}
-                              title='Imprimir'
-                            >
-                              <i className='tabler-printer' />
-                            </IconButton>
+                            <Tooltip title='Imprimir (navegador)'>
+                              <IconButton
+                                size='small'
+                                color='primary'
+                                onClick={() => handlePrintInvoice(factura)}
+                              >
+                                <i className='tabler-printer' />
+                              </IconButton>
+                            </Tooltip>
+                            <Tooltip title={isBluetoothConnected() ? `Imprimir BT (${getConnectedDeviceName()})` : 'Imprimir Bluetooth'}>
+                              <span>
+                                <IconButton
+                                  size='small'
+                                  color='secondary'
+                                  onClick={() => handlePrintBluetoothInvoice(factura)}
+                                  disabled={btPrinting === factura.id}
+                                >
+                                  {btPrinting === factura.id ? (
+                                    <CircularProgress size={18} />
+                                  ) : (
+                                    <i className='tabler-bluetooth' />
+                                  )}
+                                </IconButton>
+                              </span>
+                            </Tooltip>
                             {factura.estado === 'VALIDADA' && (
                               <IconButton
                                 size='small'
@@ -528,6 +619,22 @@ const FacturacionList = () => {
           </Box>
         </DialogContent>
       </Dialog>
+
+      {/* Snackbar para mensajes de impresión Bluetooth */}
+      <Snackbar
+        open={!!btMessage}
+        autoHideDuration={4000}
+        onClose={() => setBtMessage(null)}
+        anchorOrigin={{ vertical: 'bottom', horizontal: 'center' }}
+      >
+        <Alert
+          onClose={() => setBtMessage(null)}
+          severity={btMessage?.type === 'success' ? 'success' : 'error'}
+          sx={{ width: '100%' }}
+        >
+          {btMessage?.text}
+        </Alert>
+      </Snackbar>
     </>
   )
 }
