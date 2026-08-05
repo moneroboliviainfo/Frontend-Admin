@@ -370,33 +370,33 @@ export const generateInvoiceHTML = (factura: Factura): string => {
 
         .header {
           text-align: center;
-          margin-bottom: 6px;
+          margin-bottom: 3px;
         }
 
         .title {
           font-size: 16px;
           font-weight: bold;
-          line-height: 1.2;
+          line-height: 1.1;
         }
 
         .company-name {
           font-size: 13px;
-          margin: 4px 0 2px;
+          margin: 2px 0 1px;
         }
 
         .branch-info {
           font-size: 11px;
-          line-height: 1.3;
+          line-height: 1.2;
         }
 
         .separator {
           border-top: 1px dashed #000;
-          margin: 6px 0;
+          margin: 4px 0;
         }
 
         .section-center {
           text-align: center;
-          margin: 4px 0;
+          margin: 2px 0;
         }
 
         .section-center .label {
@@ -413,7 +413,7 @@ export const generateInvoiceHTML = (factura: Factura): string => {
 
         .cuf-section {
           text-align: center;
-          margin: 4px 0;
+          margin: 2px 0;
         }
 
         .cuf-label {
@@ -423,35 +423,35 @@ export const generateInvoiceHTML = (factura: Factura): string => {
         .cuf-value {
           font-size: 10px;
           word-break: break-all;
-          line-height: 1.3;
-          margin-top: 2px;
+          line-height: 1.2;
+          margin-top: 1px;
         }
 
         .cliente-section {
-          margin: 6px 0;
+          margin: 3px 0;
           text-align: left;
         }
 
         .info-row {
           font-size: 11px;
-          margin: 2px 0;
-          line-height: 1.2;
+          margin: 1px 0;
+          line-height: 1.1;
         }
 
         .detalle-section {
-          margin: 6px 0;
+          margin: 3px 0;
         }
 
         .detalle-title {
           text-align: center;
           font-size: 12px;
-          padding: 3px 0;
+          padding: 2px 0;
           border-top: 1px dashed #000;
           border-bottom: 1px dashed #000;
         }
 
         .detalle-item {
-          margin: 4px 0;
+          margin: 2px 0;
         }
 
         .detalle-producto {
@@ -460,7 +460,7 @@ export const generateInvoiceHTML = (factura: Factura): string => {
 
         .detalle-unidad {
           font-size: 10px;
-          margin: 1px 0;
+          margin: 0;
         }
 
         .detalle-calculo {
@@ -471,15 +471,15 @@ export const generateInvoiceHTML = (factura: Factura): string => {
 
         .totales {
           border-top: 1px dashed #000;
-          margin-top: 6px;
-          padding-top: 4px;
+          margin-top: 3px;
+          padding-top: 2px;
         }
 
         .total-row {
           display: flex;
           justify-content: flex-end;
           font-size: 11px;
-          margin: 2px 0;
+          margin: 1px 0;
         }
 
         .total-row .total-label {
@@ -497,33 +497,33 @@ export const generateInvoiceHTML = (factura: Factura): string => {
 
         .monto-letras {
           font-size: 11px;
-          margin: 6px 0;
+          margin: 3px 0;
           text-align: left;
         }
 
         .leyenda-section {
           border-top: 1px dashed #000;
-          margin-top: 6px;
-          padding-top: 6px;
+          margin-top: 3px;
+          padding-top: 3px;
           text-align: center;
         }
 
         .leyenda-title {
           font-size: 10px;
-          line-height: 1.3;
-          margin-bottom: 6px;
+          line-height: 1.2;
+          margin-bottom: 3px;
         }
 
         .leyenda-text {
           font-size: 10px;
-          line-height: 1.3;
-          margin-bottom: 6px;
+          line-height: 1.2;
+          margin-bottom: 3px;
         }
 
         .leyenda-documento {
           font-size: 9px;
-          line-height: 1.3;
-          margin-top: 4px;
+          line-height: 1.2;
+          margin-top: 2px;
         }
 
         .qr-container {
