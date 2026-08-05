@@ -330,20 +330,31 @@ export const generateInvoiceHTML = (factura: Factura): string => {
 
         body {
           font-family: Arial, Helvetica, sans-serif;
-          font-size: 9px;
-          width: 72mm;
-          padding: 3mm;
+          font-size: 11px;
+          font-weight: bold;
+          width: 70mm;
+          padding: 2mm 3mm 2mm 4mm;
           color: #000;
           background: #fff;
-          margin: 0 auto;
-          line-height: 1.4;
+          margin: 0;
+          line-height: 1.3;
+          -webkit-print-color-adjust: exact;
+          print-color-adjust: exact;
         }
 
         @media screen {
+          html {
+            background: #f5f5f5;
+            min-height: 100vh;
+            padding: 20px;
+          }
           body {
-            transform: scale(2.5);
+            transform: scale(2);
             transform-origin: top center;
-            margin-top: 20px;
+            margin: 30px auto;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.2);
+            border-radius: 4px;
+            background: #fff;
           }
         }
 
@@ -351,135 +362,124 @@ export const generateInvoiceHTML = (factura: Factura): string => {
           body {
             transform: none;
             margin: 0;
+            margin-left: -0.2mm;
+            padding-left: 0;
+            font-weight: bold;
           }
         }
 
         .header {
           text-align: center;
-          margin-bottom: 8px;
+          margin-bottom: 6px;
         }
 
         .title {
-          font-size: 11px;
+          font-size: 14px;
           font-weight: bold;
           line-height: 1.2;
         }
 
         .company-name {
-          font-size: 9px;
-          margin: 6px 0 2px;
+          font-size: 11px;
+          margin: 4px 0 2px;
         }
 
         .branch-info {
-          font-size: 8px;
+          font-size: 10px;
           line-height: 1.3;
         }
 
         .separator {
           border-top: 1px dashed #000;
-          margin: 8px 0;
+          margin: 6px 0;
         }
 
         .section-center {
           text-align: center;
-          margin: 6px 0;
+          margin: 4px 0;
         }
 
         .section-center .label {
-          font-size: 9px;
-          font-weight: bold;
+          font-size: 11px;
         }
 
         .section-center .value {
-          font-size: 10px;
-          font-weight: bold;
+          font-size: 12px;
         }
 
         .section-center .value-large {
-          font-size: 12px;
-          font-weight: bold;
+          font-size: 16px;
         }
 
         .cuf-section {
           text-align: center;
-          margin: 6px 0;
+          margin: 4px 0;
         }
 
         .cuf-label {
-          font-size: 9px;
-          font-weight: bold;
+          font-size: 10px;
         }
 
         .cuf-value {
-          font-size: 6px;
+          font-size: 8px;
           word-break: break-all;
-          line-height: 1.3;
+          line-height: 1.2;
           margin-top: 2px;
         }
 
         .cliente-section {
-          margin: 8px 0;
-          text-align: center;
+          margin: 6px 0;
+          text-align: left;
         }
 
         .info-row {
-          font-size: 8px;
-          margin: 3px 0;
+          font-size: 10px;
+          margin: 2px 0;
           line-height: 1.2;
         }
 
-        .info-row .label {
-          font-weight: bold;
-        }
-
-        .info-row .value {
-          margin-left: 4px;
-        }
-
         .detalle-section {
-          margin: 8px 0;
+          margin: 6px 0;
         }
 
         .detalle-title {
           text-align: center;
-          font-weight: bold;
-          font-size: 9px;
-          padding: 4px 0;
+          font-size: 11px;
+          padding: 3px 0;
           border-top: 1px dashed #000;
           border-bottom: 1px dashed #000;
         }
 
         .detalle-item {
-          margin: 6px 0;
+          margin: 4px 0;
         }
 
         .detalle-producto {
-          font-size: 8px;
-          font-weight: bold;
+          font-size: 10px;
         }
 
         .detalle-unidad {
-          font-size: 7px;
-          margin: 2px 0;
+          font-size: 9px;
+          margin: 1px 0;
         }
 
         .detalle-calculo {
           display: flex;
           justify-content: space-between;
-          font-size: 8px;
+          font-size: 10px;
         }
 
         .totales {
           border-top: 1px dashed #000;
-          margin-top: 8px;
-          padding-top: 6px;
+          margin-top: 6px;
+          padding-top: 4px;
         }
 
         .total-row {
           display: flex;
           justify-content: flex-end;
-          font-size: 8px;
-          margin: 3px 0;
+          font-size: 10px;
+          margin: 2px 0;
         }
 
         .total-row .total-label {
@@ -487,69 +487,67 @@ export const generateInvoiceHTML = (factura: Factura): string => {
         }
 
         .total-row .total-value {
-          width: 50px;
+          width: 55px;
           text-align: right;
         }
 
         .total-row.bold {
-          font-weight: bold;
-          font-size: 9px;
+          font-size: 11px;
         }
 
         .monto-letras {
-          font-size: 8px;
-          margin: 10px 0;
+          font-size: 10px;
+          margin: 6px 0;
           text-align: left;
         }
 
         .leyenda-section {
           border-top: 1px dashed #000;
-          margin-top: 8px;
-          padding-top: 8px;
+          margin-top: 6px;
+          padding-top: 6px;
           text-align: center;
         }
 
         .leyenda-title {
-          font-size: 8px;
-          font-weight: bold;
-          line-height: 1.4;
-          margin-bottom: 10px;
+          font-size: 9px;
+          line-height: 1.3;
+          margin-bottom: 6px;
         }
 
         .leyenda-text {
-          font-size: 7px;
-          line-height: 1.4;
-          margin-bottom: 8px;
+          font-size: 9px;
+          line-height: 1.3;
+          margin-bottom: 6px;
         }
 
         .leyenda-documento {
-          font-size: 7px;
-          line-height: 1.4;
-          margin-top: 8px;
+          font-size: 8px;
+          line-height: 1.3;
+          margin-top: 4px;
         }
 
         .qr-container {
           text-align: center;
-          margin: 12px 0 5px;
+          margin: 8px 0 4px;
         }
 
         .qr-container img {
-          width: 90px;
-          height: 90px;
+          width: 100px;
+          height: 100px;
         }
 
         .print-footer {
-          margin-top: 25mm;
+          margin-top: 15mm;
           text-align: center;
           font-size: 6px;
           color: #ccc;
-          padding-bottom: 5mm;
+          padding-bottom: 3mm;
         }
 
         .print-footer-line {
           border-top: 1px dashed #ccc;
           width: 50%;
-          margin: 0 auto 3mm;
+          margin: 0 auto 2mm;
         }
       </style>
     </head>
