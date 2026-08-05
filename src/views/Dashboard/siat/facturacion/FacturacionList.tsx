@@ -67,6 +67,8 @@ const FacturacionList = () => {
   // Estados para impresión Bluetooth
   const [btPrinting, setBtPrinting] = useState<number | null>(null)
   const [btMessage, setBtMessage] = useState<{ text: string; type: 'success' | 'error' } | null>(null)
+  const [showBtConfirm, setShowBtConfirm] = useState(false)
+  const [facturaParaBt, setFacturaParaBt] = useState<Factura | null>(null)
 
   const { data: branchesData, isLoading: isLoadingBranches } = useBranches()
   const { excludedBranchCodes } = useUserRole()
@@ -173,7 +175,18 @@ const FacturacionList = () => {
     printInvoice(facturaParaImprimir)
   }
 
-  const handlePrintBluetoothInvoice = async (factura: Factura) => {
+  const handleOpenBtConfirm = (factura: Factura) => {
+    setFacturaParaBt(factura)
+    setShowBtConfirm(true)
+  }
+
+  const handlePrintBluetoothInvoice = async () => {
+    const factura = facturaParaBt
+
+    if (!factura) return
+
+    setShowBtConfirm(false)
+
     if (!isBluetoothAvailable()) {
       const isSecure = window.location.protocol === 'https:' || window.location.hostname === 'localhost'
 
@@ -467,7 +480,7 @@ const FacturacionList = () => {
                                 <IconButton
                                   size='small'
                                   color='secondary'
-                                  onClick={() => handlePrintBluetoothInvoice(factura)}
+                                  onClick={() => handleOpenBtConfirm(factura)}
                                   disabled={btPrinting === factura.id}
                                 >
                                   {btPrinting === factura.id ? (
@@ -615,6 +628,37 @@ const FacturacionList = () => {
               disabled={revertirAnulacionMutation.isPending}
             >
               {revertirAnulacionMutation.isPending ? 'Revirtiendo...' : 'Revertir'}
+            </Button>
+          </Box>
+        </DialogContent>
+      </Dialog>
+
+      {/* Modal de confirmación de impresión Bluetooth */}
+      <Dialog open={showBtConfirm} onClose={() => setShowBtConfirm(false)} maxWidth='xs' fullWidth>
+        <DialogTitle sx={{ fontWeight: 'bold' }}>Imprimir via Bluetooth</DialogTitle>
+        <DialogContent>
+          <Typography>
+            ¿Desea imprimir la factura #{facturaParaBt?.numeroFactura} via Bluetooth?
+          </Typography>
+
+          <Box sx={{ display: 'flex', gap: 2, mt: 3 }}>
+            <Button
+              variant='outlined'
+              fullWidth
+              onClick={() => setShowBtConfirm(false)}
+              disabled={btPrinting !== null}
+            >
+              Cancelar
+            </Button>
+            <Button
+              variant='contained'
+              color='secondary'
+              fullWidth
+              onClick={handlePrintBluetoothInvoice}
+              disabled={btPrinting !== null}
+              startIcon={btPrinting !== null ? <CircularProgress size={16} color='inherit' /> : <i className='tabler-bluetooth' />}
+            >
+              {btPrinting !== null ? 'Imprimiendo...' : 'Imprimir'}
             </Button>
           </Box>
         </DialogContent>

@@ -560,8 +560,8 @@ export const generateInvoiceHTML = (factura: Factura): string => {
         <div class="company-name">${factura.razonSocialEmisor}</div>
         <div class="branch-info">
           
-          ${factura.nombreSucursal} ${factura.codigoSucursal}<br>
-          No. Punto de Venta ${factura.codigoPuntoVenta}<br>
+          ${factura.nombreSucursal}<br>
+          No. Punto de Venta ${factura.codigoSucursal}<br>
           ${factura.direccion}<br>
           Tel. ${factura.telefono}<br>
           ${factura.municipio}
