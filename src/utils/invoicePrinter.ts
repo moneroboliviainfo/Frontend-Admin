@@ -330,7 +330,7 @@ export const generateInvoiceHTML = (factura: Factura): string => {
 
         body {
           font-family: Arial, Helvetica, sans-serif;
-          font-size: 11px;
+          font-size: 12px;
           font-weight: bold;
           width: 70mm;
           padding: 2mm 3mm 2mm 4mm;
@@ -374,18 +374,18 @@ export const generateInvoiceHTML = (factura: Factura): string => {
         }
 
         .title {
-          font-size: 14px;
+          font-size: 16px;
           font-weight: bold;
           line-height: 1.2;
         }
 
         .company-name {
-          font-size: 11px;
+          font-size: 13px;
           margin: 4px 0 2px;
         }
 
         .branch-info {
-          font-size: 10px;
+          font-size: 11px;
           line-height: 1.3;
         }
 
@@ -400,15 +400,15 @@ export const generateInvoiceHTML = (factura: Factura): string => {
         }
 
         .section-center .label {
-          font-size: 11px;
-        }
-
-        .section-center .value {
           font-size: 12px;
         }
 
+        .section-center .value {
+          font-size: 14px;
+        }
+
         .section-center .value-large {
-          font-size: 16px;
+          font-size: 18px;
         }
 
         .cuf-section {
@@ -417,13 +417,13 @@ export const generateInvoiceHTML = (factura: Factura): string => {
         }
 
         .cuf-label {
-          font-size: 10px;
+          font-size: 12px;
         }
 
         .cuf-value {
-          font-size: 8px;
+          font-size: 10px;
           word-break: break-all;
-          line-height: 1.2;
+          line-height: 1.3;
           margin-top: 2px;
         }
 
@@ -433,7 +433,7 @@ export const generateInvoiceHTML = (factura: Factura): string => {
         }
 
         .info-row {
-          font-size: 10px;
+          font-size: 11px;
           margin: 2px 0;
           line-height: 1.2;
         }
@@ -444,7 +444,7 @@ export const generateInvoiceHTML = (factura: Factura): string => {
 
         .detalle-title {
           text-align: center;
-          font-size: 11px;
+          font-size: 12px;
           padding: 3px 0;
           border-top: 1px dashed #000;
           border-bottom: 1px dashed #000;
@@ -455,18 +455,18 @@ export const generateInvoiceHTML = (factura: Factura): string => {
         }
 
         .detalle-producto {
-          font-size: 10px;
+          font-size: 11px;
         }
 
         .detalle-unidad {
-          font-size: 9px;
+          font-size: 10px;
           margin: 1px 0;
         }
 
         .detalle-calculo {
           display: flex;
           justify-content: space-between;
-          font-size: 10px;
+          font-size: 11px;
         }
 
         .totales {
@@ -478,7 +478,7 @@ export const generateInvoiceHTML = (factura: Factura): string => {
         .total-row {
           display: flex;
           justify-content: flex-end;
-          font-size: 10px;
+          font-size: 11px;
           margin: 2px 0;
         }
 
@@ -487,16 +487,16 @@ export const generateInvoiceHTML = (factura: Factura): string => {
         }
 
         .total-row .total-value {
-          width: 55px;
+          width: 60px;
           text-align: right;
         }
 
         .total-row.bold {
-          font-size: 11px;
+          font-size: 12px;
         }
 
         .monto-letras {
-          font-size: 10px;
+          font-size: 11px;
           margin: 6px 0;
           text-align: left;
         }
@@ -509,19 +509,19 @@ export const generateInvoiceHTML = (factura: Factura): string => {
         }
 
         .leyenda-title {
-          font-size: 9px;
+          font-size: 10px;
           line-height: 1.3;
           margin-bottom: 6px;
         }
 
         .leyenda-text {
-          font-size: 9px;
+          font-size: 10px;
           line-height: 1.3;
           margin-bottom: 6px;
         }
 
         .leyenda-documento {
-          font-size: 8px;
+          font-size: 9px;
           line-height: 1.3;
           margin-top: 4px;
         }
