@@ -71,7 +71,7 @@ const FacturacionList = () => {
   const [facturaParaBt, setFacturaParaBt] = useState<Factura | null>(null)
 
   const { data: branchesData, isLoading: isLoadingBranches } = useBranches()
-  const { excludedBranchCodes } = useUserRole()
+  const { excludedBranchCodes, allowedBranchCodes } = useUserRole()
   const anularFacturaMutation = useAnularFactura()
   const revertirAnulacionMutation = useRevertirAnulacion()
 
@@ -79,10 +79,18 @@ const FacturacionList = () => {
   const filteredBranches = useMemo(() => {
     if (!branchesData) return []
 
-    return branchesData.filter(
-      (b: Branch) => b.active && !excludedBranchCodes.includes(b.codigoSucursal)
-    )
-  }, [branchesData, excludedBranchCodes])
+    return branchesData.filter((b: Branch) => {
+      if (!b.active) return false
+
+      // Si hay códigos permitidos específicos, solo mostrar esos
+      if (allowedBranchCodes !== null) {
+        return allowedBranchCodes.includes(b.codigoSucursal)
+      }
+
+      // Si no, excluir los códigos en la lista de excluidos
+      return !excludedBranchCodes.includes(b.codigoSucursal)
+    })
+  }, [branchesData, excludedBranchCodes, allowedBranchCodes])
 
   // Obtener sucursal seleccionada
   const selectedBranch = useMemo(() => {

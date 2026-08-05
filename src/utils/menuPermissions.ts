@@ -11,7 +11,19 @@ export const filterMenuByRole = (
   if (role === 'CASHIER') {
     const excludedMenus = ['PRINCIPAL', 'Inicio']
 
-    return menuItems.filter((item: any) => !excludedMenus.includes(item.label))
+    return menuItems
+      .filter((item: any) => !excludedMenus.includes(item.label))
+      .map((item: any) => {
+        // Filtrar submenús de SIAT para CASHIER
+        if (item.label === 'SIAT' && item.children) {
+          return {
+            ...item,
+            children: item.children.filter((child: any) => child.label === 'Facturación Online')
+          }
+        }
+
+        return item
+      })
   }
 
   if (role === 'FACTURACION_JUNIN') {
@@ -52,6 +64,17 @@ export const getExcludedBranchCodes = (email: string | null, userRole?: StaticRo
   }
 
   return []
+}
+
+// Códigos de sucursal permitidos por rol (null = todos permitidos)
+export const getAllowedBranchCodes = (email: string | null, userRole?: StaticRole): number[] | null => {
+  const role = userRole || getRoleFromEmail(email)
+
+  if (role === 'CASHIER') {
+    return [3] // Solo sucursal 3
+  }
+
+  return null // Todos permitidos (excepto los excluidos)
 }
 
 export const getHomeRouteByRole = (userEmail: string | null, userRole?: StaticRole): string => {
