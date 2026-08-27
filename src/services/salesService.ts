@@ -54,7 +54,7 @@ class CartServiceClass {
   //  Verificar disponibilidad y obtener precios actualizados
 
   async repriceCart(token: string): Promise<RepriceResponse> {
-    const response = await apiClient.post<RepriceResponse>(`/api/orders/reprice/${token}`)
+    const response = await apiClient.post<RepriceResponse>(`/api/orders/reprice/${token}?type=in_store`)
 
     return response.data
   }

@@ -1,6 +1,8 @@
 export interface BaseDiscount {
   description: string
   isActive: boolean
+  appliesOnline: boolean
+  appliesInStore: boolean
   value: number
 }
 
@@ -15,6 +17,8 @@ export interface DiscountResponse {
   id: number
   description: string
   isActive: boolean
+  appliesOnline: boolean
+  appliesInStore: boolean
   value: number
   startDate?: string
   endDate?: string

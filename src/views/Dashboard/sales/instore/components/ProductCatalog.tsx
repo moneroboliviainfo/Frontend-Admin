@@ -165,9 +165,32 @@ const ProductCatalog: React.FC<ProductCatalogProps> = ({
                     <Typography variant='caption' color='text.secondary' display='block' sx={{ mb: 1 }}>
                       Talla: {item.size}
                     </Typography>
-                    <Typography variant='h6' color='primary' fontWeight='bold' sx={{ mb: 1 }}>
-                      {item.price ? formatCurrency(item.price) : '-'}
-                    </Typography>
+                    {item.product?.discount && item.product.discount.appliesInStore ? (
+                      <Box sx={{ mb: 1 }}>
+                        <Typography
+                          variant='caption'
+                          color='text.secondary'
+                          sx={{ textDecoration: 'line-through', display: 'block' }}
+                        >
+                          {item.price ? formatCurrency(item.price) : '-'}
+                        </Typography>
+                        <Chip
+                          label={`-${item.product.discount.value}%`}
+                          size='small'
+                          color='error'
+                          sx={{ mb: 0.5 }}
+                        />
+                        <Typography variant='h6' color='success.main' fontWeight='bold'>
+                          {item.price
+                            ? formatCurrency(parseFloat(item.price) * (1 - item.product.discount.value / 100))
+                            : '-'}
+                        </Typography>
+                      </Box>
+                    ) : (
+                      <Typography variant='h6' color='primary' fontWeight='bold' sx={{ mb: 1 }}>
+                        {item.price ? formatCurrency(item.price) : '-'}
+                      </Typography>
+                    )}
                     <Chip
                       label={`Stock: ${item.stock}`}
                       size='small'

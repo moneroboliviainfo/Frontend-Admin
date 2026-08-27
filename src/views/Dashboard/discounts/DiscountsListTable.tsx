@@ -128,7 +128,9 @@ const DiscountsListTable = () => {
     description: '',
     value: 0,
     startDate: null as Dayjs | null,
-    endDate: null as Dayjs | null
+    endDate: null as Dayjs | null,
+    appliesOnline: true,
+    appliesInStore: true
   })
 
   const [selectedProducts, setSelectedProducts] = useState<number[]>([])
@@ -237,7 +239,9 @@ const DiscountsListTable = () => {
       description: '',
       value: 0,
       startDate: null,
-      endDate: null
+      endDate: null,
+      appliesOnline: true,
+      appliesInStore: true
     })
     setDiscountType('permanent')
     setApplyToAll(false)
@@ -276,12 +280,16 @@ const DiscountsListTable = () => {
         discountResponse = await createPermanentDiscount.mutateAsync({
           description: formData.description,
           isActive: true,
+          appliesOnline: formData.appliesOnline,
+          appliesInStore: formData.appliesInStore,
           value: formData.value
         })
       } else {
         discountResponse = await createSeasonalDiscount.mutateAsync({
           description: formData.description,
           isActive: true,
+          appliesOnline: formData.appliesOnline,
+          appliesInStore: formData.appliesInStore,
           value: formData.value,
           startDate: formData.startDate!.toISOString(),
           endDate: formData.endDate!.toISOString()
@@ -491,7 +499,7 @@ const DiscountsListTable = () => {
           return (
             <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
               <Box sx={{ display: 'flex', flexDirection: 'column', gap: 0.5 }}>
-                <Box sx={{ display: 'flex', gap: 0.5, alignItems: 'center' }}>
+                <Box sx={{ display: 'flex', gap: 0.5, alignItems: 'center', flexWrap: 'wrap' }}>
                   <Chip label={`${discount.value}% OFF`} size='small' color='success' variant='tonal' />
                   <Chip label={discountTypeLabel} size='small' color='info' variant='outlined' />
                 </Box>
@@ -516,6 +524,35 @@ const DiscountsListTable = () => {
               >
                 <i className='tabler-x' />
               </IconButton>
+            </Box>
+          )
+        }
+      },
+      {
+        accessorKey: 'applicability',
+        header: 'Aplicable en',
+        cell: ({ row }: any) => {
+          const discount = row.original.discount
+
+          if (!discount) {
+            return (
+              <Typography variant='body2' color='text.secondary'>
+                -
+              </Typography>
+            )
+          }
+
+          const appliesOnline = discount.appliesOnline ?? true
+          const appliesInStore = discount.appliesInStore ?? true
+
+          return (
+            <Box sx={{ display: 'flex', gap: 0.5, alignItems: 'center', flexWrap: 'wrap' }}>
+              {appliesOnline && (
+                <Chip label='Online' size='small' color='primary' variant='outlined' />
+              )}
+              {appliesInStore && (
+                <Chip label='Tienda' size='small' color='secondary' variant='outlined' />
+              )}
             </Box>
           )
         }
@@ -807,6 +844,24 @@ const DiscountsListTable = () => {
                 }}
                 fullWidth
               />
+
+              {/* Checkboxes para aplicar descuento en tienda y online */}
+              <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
+                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                  <Checkbox
+                    checked={formData.appliesOnline}
+                    onChange={e => setFormData({ ...formData, appliesOnline: e.target.checked })}
+                  />
+                  <Typography>Aplicar descuento en tienda online</Typography>
+                </Box>
+                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                  <Checkbox
+                    checked={formData.appliesInStore}
+                    onChange={e => setFormData({ ...formData, appliesInStore: e.target.checked })}
+                  />
+                  <Typography>Aplicar descuento en tienda física</Typography>
+                </Box>
+              </Box>
 
               {discountType === 'temporary' && (
                 <>
