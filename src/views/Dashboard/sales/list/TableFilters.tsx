@@ -1,10 +1,11 @@
+'use client'
+
 import { useEffect } from 'react'
 
 import { MenuItem } from '@mui/material'
 
 import CustomTextField from '@core/components/mui/TextField'
-import { authService } from '@/services/authService'
-import { getRoleFromEmail } from '@/utils/menuPermissions'
+import { useUserRole } from '@/hooks/useUserRole'
 
 interface TableFiltersProps {
   typeFilter: string
@@ -28,9 +29,7 @@ const TableFilters = ({
   setPaymentTypeFilter
 }: TableFiltersProps) => {
   const today = new Date().toISOString().split('T')[0]
-  const userEmail = authService.getUserEmail()
-  const userRole = getRoleFromEmail(userEmail)
-  const isCashier = userRole === 'CASHIER'
+  const { isCashier } = useUserRole()
 
   useEffect(() => {
     if (isCashier && typeFilter === 'all') {

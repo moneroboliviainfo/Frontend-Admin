@@ -4,6 +4,8 @@ import type { ChildrenType, Direction } from '@core/types'
 // Context Imports
 import { VerticalNavProvider } from '@menu/contexts/verticalNavContext'
 import { SettingsProvider } from '@core/contexts/settingsContext'
+import { AuthProvider } from '@/contexts/AuthContext'
+import { BranchProvider } from '@/contexts/BranchContext'
 import ThemeProvider from '@components/theme'
 
 // Util Imports
@@ -25,13 +27,17 @@ const Providers = async (props: Props) => {
 
   return (
     <ReactQueryProvider>
-      <VerticalNavProvider>
-        <SettingsProvider settingsCookie={settingsCookie} mode={mode}>
-          <ThemeProvider direction={direction} systemMode={systemMode}>
-            {children}
-          </ThemeProvider>
-        </SettingsProvider>
-      </VerticalNavProvider>
+      <AuthProvider>
+        <BranchProvider>
+          <VerticalNavProvider>
+            <SettingsProvider settingsCookie={settingsCookie} mode={mode}>
+              <ThemeProvider direction={direction} systemMode={systemMode}>
+                {children}
+              </ThemeProvider>
+            </SettingsProvider>
+          </VerticalNavProvider>
+        </BranchProvider>
+      </AuthProvider>
     </ReactQueryProvider>
   )
 }

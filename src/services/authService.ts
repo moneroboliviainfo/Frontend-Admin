@@ -1,31 +1,38 @@
 import axios from 'axios'
 import Cookies from 'js-cookie'
 
+import type { LoginResponse as BackendLoginResponse, AuthUser } from '@/types/api/auth'
+import { normalizeRole } from '@/types/api/auth'
+
 export interface LoginCredentials {
   email: string
   password: string
 }
 
-export interface LoginResponse {
-  token: string
-  email?: string
-}
+// Re-exportar para compatibilidad
+export type LoginResponse = BackendLoginResponse
 
 class AuthService {
   private baseURL = process.env.NEXT_PUBLIC_API_URL
 
-  async login(credentials: LoginCredentials): Promise<LoginResponse> {
+  async login(credentials: LoginCredentials): Promise<AuthUser> {
     try {
-      const response = await axios.post(`${this.baseURL}/api/auth/login`, credentials, {
+      const response = await axios.post<BackendLoginResponse>(`${this.baseURL}/api/auth/login`, credentials, {
         headers: { 'Content-Type': 'application/json' }
       })
 
-      // Guardar email si viene en la respuesta
-      if (response.data.email) {
-        this.setUserEmail(response.data.email)
+      const { email, name, rol, token, branch } = response.data
+
+      // Transformar respuesta del backend a AuthUser
+      const user: AuthUser = {
+        email,
+        name,
+        role: normalizeRole(rol),
+        token,
+        branch: branch || null
       }
 
-      return response.data
+      return user
     } catch (error: any) {
       if (error.response?.data?.message) {
         throw new Error(error.response.data.message)
@@ -37,9 +44,10 @@ class AuthService {
 
   async logout(): Promise<void> {
     this.removeToken()
-    this.removeUserEmail()
+    this.removeUserData()
   }
 
+  // Token methods
   setToken(token: string) {
     Cookies.set('auth-token', token, {
       expires: 7,
@@ -56,6 +64,7 @@ class AuthService {
     Cookies.remove('auth-token')
   }
 
+  // User data methods (legacy - mantener por compatibilidad)
   setUserEmail(email: string) {
     Cookies.set('user-email', email, {
       expires: 7,
@@ -70,6 +79,11 @@ class AuthService {
 
   removeUserEmail() {
     Cookies.remove('user-email')
+  }
+
+  removeUserData() {
+    Cookies.remove('user-email')
+    Cookies.remove('auth-user')
   }
 
   isAuthenticated(): boolean {

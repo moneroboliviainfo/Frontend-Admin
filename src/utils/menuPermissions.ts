@@ -1,20 +1,36 @@
 import type { VerticalMenuDataType } from '@/types/menuTypes'
-import type { StaticRole } from '@/types/api/auth'
+import type { Role } from '@/types/api/auth'
 
 export const filterMenuByRole = (
   menuItems: VerticalMenuDataType[],
-  userEmail: string | null,
-  userRole?: StaticRole
+  _userEmail: string | null,
+  userRole?: Role | null
 ): VerticalMenuDataType[] => {
-  const role = userRole || getRoleFromEmail(userEmail)
+  const role = userRole || 'ADMIN'
+
+  if (role === 'ADMIN') {
+    return menuItems
+  }
+
+  if (role === 'MANAGER') {
+    return menuItems.map((item: any) => {
+      if (item.label === 'SIAT' && item.children) {
+        return {
+          ...item,
+          children: item.children.filter((child: any) => ['Facturación Online'].includes(child.label))
+        }
+      }
+
+      return item
+    })
+  }
 
   if (role === 'CASHIER') {
-    const excludedMenus = ['PRINCIPAL', 'Inicio']
+    const allowedMenus = ['MÓDULO VENTAS', 'Ventas', 'FACTURACIÓN SIAT', 'SIAT']
 
     return menuItems
-      .filter((item: any) => !excludedMenus.includes(item.label))
+      .filter((item: any) => allowedMenus.includes(item.label))
       .map((item: any) => {
-        // Filtrar submenús de SIAT para CASHIER
         if (item.label === 'SIAT' && item.children) {
           return {
             ...item,
@@ -26,67 +42,23 @@ export const filterMenuByRole = (
       })
   }
 
-  if (role === 'FACTURACION_JUNIN') {
-    // Solo mostrar el menú de Facturación Online
-    return menuItems
-      .filter((item: any) => item.label === 'FACTURACIÓN SIAT')
-      .map((item: any) => ({
-        ...item,
-        children: item.children?.filter((child: any) => child.label === 'Facturación Online')
-      }))
-  }
-
-  if (role === 'ADMIN') {
-    return menuItems
-  }
-
   return []
 }
 
-export const getRoleFromEmail = (email: string | null): StaticRole => {
-  if (email === 'rilberadmin@moneroget.com') {
-    return 'CASHIER'
-  }
+export const getHomeRouteByRole = (_userEmail: string | null, userRole?: Role | null): string => {
+  const role = userRole || 'ADMIN'
 
-  if (email === 'facturacionjunin@gmail.com') {
-    return 'FACTURACION_JUNIN'
-  }
-
-  return 'ADMIN'
-}
-
-// Códigos de sucursal excluidos por rol
-export const getExcludedBranchCodes = (email: string | null, userRole?: StaticRole): number[] => {
-  const role = userRole || getRoleFromEmail(email)
-
-  if (role === 'FACTURACION_JUNIN') {
-    return [3] // Excluir sucursal con código 3
-  }
-
-  return []
-}
-
-// Códigos de sucursal permitidos por rol (null = todos permitidos)
-export const getAllowedBranchCodes = (email: string | null, userRole?: StaticRole): number[] | null => {
-  const role = userRole || getRoleFromEmail(email)
-
-  if (role === 'CASHIER') {
-    return [3] // Solo sucursal 3
-  }
-
-  return null // Todos permitidos (excepto los excluidos)
-}
-
-export const getHomeRouteByRole = (userEmail: string | null, userRole?: StaticRole): string => {
-  const role = userRole || getRoleFromEmail(userEmail)
-
-  if (role === 'CASHIER') {
-    return '/sales/instore'
-  }
-
-  if (role === 'FACTURACION_JUNIN') {
-    return '/siat/facturacion'
-  }
+  if (role === 'CASHIER') return '/sales/instore'
+  if (role === 'MANAGER') return '/sales/list'
 
   return '/home'
+}
+
+export const canAccessRoute = (role: Role | null, route: string): boolean => {
+  if (!role) return false
+  if (role === 'ADMIN') return true
+
+  const adminOnlyRoutes = ['/users', '/branches', '/siat/eventos', '/siat/paquetes', '/siat/cafc']
+
+  return !adminOnlyRoutes.some(r => route.startsWith(r))
 }

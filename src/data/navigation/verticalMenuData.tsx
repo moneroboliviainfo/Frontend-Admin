@@ -1,6 +1,6 @@
 // Type Imports
 import type { VerticalMenuDataType } from '@/types/menuTypes'
-import { authService } from '@/services/authService'
+import type { Role } from '@/types/api/auth'
 import { filterMenuByRole } from '@/utils/menuPermissions'
 
 const getFullMenuData = (): VerticalMenuDataType[] => [
@@ -193,12 +193,15 @@ const getFullMenuData = (): VerticalMenuDataType[] => [
   }
 ]
 
-const verticalMenuData = (): VerticalMenuDataType[] => {
-  const userEmail = authService.getUserEmail()
+// Función que recibe el rol como parámetro
+const verticalMenuData = (userRole?: Role | null): VerticalMenuDataType[] => {
   const fullMenu = getFullMenuData()
 
   // Filtrar el menú basado en el rol del usuario
-  return filterMenuByRole(fullMenu, userEmail)
+  return filterMenuByRole(fullMenu, null, userRole)
 }
 
 export default verticalMenuData
+
+// Exportar también el menú completo para casos especiales
+export { getFullMenuData }

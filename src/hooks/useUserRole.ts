@@ -1,23 +1,26 @@
 'use client'
 
-import { authService } from '@/services/authService'
-import { getRoleFromEmail, getHomeRouteByRole, getExcludedBranchCodes, getAllowedBranchCodes } from '@/utils/menuPermissions'
+import { useAuthContext } from '@/contexts/AuthContext'
+import { getHomeRouteByRole } from '@/utils/menuPermissions'
 
 export const useUserRole = () => {
-  const userEmail = authService.getUserEmail()
-  const role = getRoleFromEmail(userEmail)
-  const homeRoute = getHomeRouteByRole(userEmail)
-  const excludedBranchCodes = getExcludedBranchCodes(userEmail)
-  const allowedBranchCodes = getAllowedBranchCodes(userEmail)
+  const { user } = useAuthContext()
+
+  const role = user?.role ?? null
+  const userEmail = user?.email ?? null
+  const homeRoute = getHomeRouteByRole(userEmail, role)
+  const userBranch = user?.branch ?? null
 
   return {
+    user,
     userEmail,
     role,
     homeRoute,
-    excludedBranchCodes,
-    allowedBranchCodes,
+    userBranch,
     isCashier: role === 'CASHIER',
+    isManager: role === 'MANAGER',
     isAdmin: role === 'ADMIN',
-    isFacturacionJunin: role === 'FACTURACION_JUNIN'
+    needsBranchSelector: role === 'ADMIN',
+    hasFixedBranch: role === 'MANAGER' || role === 'CASHIER'
   }
 }

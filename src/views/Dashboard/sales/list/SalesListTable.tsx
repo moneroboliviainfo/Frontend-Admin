@@ -15,8 +15,7 @@ import TextField from '@mui/material/TextField'
 import Box from '@mui/material/Box'
 
 import { useOrders } from '@/hooks/useSales'
-import { authService } from '@/services/authService'
-import { getRoleFromEmail } from '@/utils/menuPermissions'
+import { useUserRole } from '@/hooks/useUserRole'
 import { cartService } from '@/services/salesService'
 import OrderDetailsModal from './SaleDetailsModal'
 import TableFilters from './TableFilters'
@@ -114,9 +113,7 @@ const formatDate = (dateString: string): string => {
 const OrdersListTable = () => {
   const router = useRouter()
   const searchParams = useSearchParams()
-  const userEmail = authService.getUserEmail()
-  const userRole = getRoleFromEmail(userEmail)
-  const isCashier = userRole === 'CASHIER'
+  const { isCashier } = useUserRole()
 
   const [page, setPage] = useState(0)
   const [limit, setLimit] = useState(10)

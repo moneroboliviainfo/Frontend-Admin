@@ -15,9 +15,11 @@ import type { ThemeColor } from '@core/types'
 import CustomAvatar from '@core/components/mui/Avatar'
 
 // Hooks
-import { useOrders } from '@/hooks/useSales'
-import { useCustomers } from '@/hooks/useCustomers'
-import { useProducts } from '@/hooks/useProducts'
+import {
+  useDashboardOrdersCount,
+  useDashboardCustomersCount,
+  useDashboardProductsCount
+} from '@/hooks/useDashboard'
 
 type DataType = {
   icon: string
@@ -28,21 +30,20 @@ type DataType = {
 }
 
 const TarjetaEstadisticas = () => {
-  // Obtener datos de las APIs
-  const { data: ordersData, isLoading: isLoadingOrders } = useOrders({ page: 1, limit: 1 })
-  const { data: customersData, isLoading: isLoadingCustomers } = useCustomers({ page: 1, limit: 1 })
-  const { data: productsData, isLoading: isLoadingProducts } = useProducts({ page: 1, limit: 1 })
+  const { data: ordersCount, isLoading: isLoadingOrders } = useDashboardOrdersCount()
+  const { data: customersCount, isLoading: isLoadingCustomers } = useDashboardCustomersCount()
+  const { data: productsCount, isLoading: isLoadingProducts } = useDashboardProductsCount()
 
   const formatNumber = (num: number) => {
     if (num >= 1000000) return `${(num / 1000000).toFixed(1)}M`
     if (num >= 1000) return `${(num / 1000).toFixed(1)}k`
-    
-return num.toString()
+
+    return num.toString()
   }
 
   const data: DataType[] = [
     {
-      stats: ordersData?.meta?.total ? formatNumber(ordersData.meta.total) : '0',
+      stats: ordersCount ? formatNumber(ordersCount) : '0',
       title: 'Órdenes',
       color: 'primary',
       icon: 'tabler-chart-pie-2',
@@ -50,20 +51,20 @@ return num.toString()
     },
     {
       color: 'info',
-      stats: customersData?.total ? formatNumber(customersData.total) : '0',
+      stats: customersCount ? formatNumber(customersCount) : '0',
       title: 'Clientes',
       icon: 'tabler-users',
       isLoading: isLoadingCustomers
     },
     {
       color: 'error',
-      stats: productsData?.total ? formatNumber(productsData.total) : '0',
+      stats: productsCount ? formatNumber(productsCount) : '0',
       title: 'Productos',
       icon: 'tabler-shopping-cart',
       isLoading: isLoadingProducts
     },
     {
-      stats: ordersData?.meta?.total ? formatNumber(ordersData.meta.total) : '0',
+      stats: ordersCount ? formatNumber(ordersCount) : '0',
       color: 'success',
       title: 'Ventas',
       icon: 'tabler-currency-dollar',

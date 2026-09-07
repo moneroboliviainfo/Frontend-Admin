@@ -15,13 +15,11 @@ import ClickAwayListener from '@mui/material/ClickAwayListener'
 import MenuList from '@mui/material/MenuList'
 import Typography from '@mui/material/Typography'
 import Divider from '@mui/material/Divider'
-import MenuItem from '@mui/material/MenuItem'
 import Button from '@mui/material/Button'
 import CircularProgress from '@mui/material/CircularProgress'
 
 import { useSettings } from '@core/hooks/useSettings'
 import { useAuth } from '@/hooks/useAuth'
-import { authService } from '@/services/authService'
 
 const BadgeContentSpan = styled('span')({
   width: 8,
@@ -37,8 +35,7 @@ const UserDropdown = () => {
   const anchorRef = useRef<HTMLDivElement>(null)
   const router = useRouter()
   const { settings } = useSettings()
-  const { logout, isLoggingOut } = useAuth()
-  const userEmail = authService.getUserEmail()
+  const { logout, isLoggingOut, user } = useAuth()
 
   const handleDropdownOpen = () => {
     setOpen(!open)
@@ -97,12 +94,12 @@ const UserDropdown = () => {
               <ClickAwayListener onClickAway={e => handleDropdownClose(e as MouseEvent | TouchEvent)}>
                 <MenuList>
                   <div className='flex items-center plb-2 pli-6 gap-2' tabIndex={-1}>
-                    <Avatar alt='Administrador' src='/images/avatars/1.png' />
+                    <Avatar alt={user?.name || 'Usuario'} src='/images/avatars/1.png' />
                     <div className='flex items-start flex-col'>
                       <Typography className='font-medium' color='text.primary'>
-                        Administrador
+                        {user?.name || 'Usuario'}
                       </Typography>
-                      <Typography variant='caption'>{userEmail || 'Monero Administrador'}</Typography>
+                      <Typography variant='caption'>{user?.email || ''}</Typography>
                     </div>
                   </div>
                   <Divider className='mlb-1' />
