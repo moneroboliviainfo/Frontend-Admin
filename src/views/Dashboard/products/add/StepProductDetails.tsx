@@ -42,6 +42,8 @@ type FormValues = {
   descripcion: string
   brand: string
   discount: string
+  weightGrams: string
+  unitsPerBox: string
 }
 
 type BrandFormValues = {
@@ -65,7 +67,9 @@ const StepProductDetails = ({ activeStep, handleNext, handlePrev, mode, productI
       precio: '',
       descripcion: '',
       brand: '',
-      discount: '1'
+      discount: '1',
+      weightGrams: '',
+      unitsPerBox: ''
     }
   })
 
@@ -124,6 +128,8 @@ const StepProductDetails = ({ activeStep, handleNext, handlePrev, mode, productI
       setValue('descripcion', productData.description)
       setValue('brand', productData.brand?.toString() || '')
       setValue('discount', productData.discount?.toString() || '1')
+      setValue('weightGrams', productData.weightGrams || '')
+      setValue('unitsPerBox', productData.unitsPerBox?.toString() || '')
     }
   }, [productData, mode, categoriesData, setValue])
 
@@ -183,6 +189,14 @@ const StepProductDetails = ({ activeStep, handleNext, handlePrev, mode, productI
 
       if (data.brand) {
         productData.brand = parseInt(data.brand)
+      }
+
+      if (data.weightGrams) {
+        productData.weightGrams = data.weightGrams
+      }
+
+      if (data.unitsPerBox) {
+        productData.unitsPerBox = parseInt(data.unitsPerBox)
       }
 
       if (mode === 'create') {
@@ -341,6 +355,44 @@ const StepProductDetails = ({ activeStep, handleNext, handlePrev, mode, productI
                   type='number'
                   inputProps={{ step: '0.01', min: '0' }}
                   {...(errors.precio && { error: true, helperText: 'Este campo es requerido.' })}
+                />
+              )}
+            />
+          </Grid>
+
+          <Grid size={{ xs: 12, sm: 4 }}>
+            <Controller
+              name='weightGrams'
+              control={control}
+              rules={{ required: true }}
+              render={({ field }) => (
+                <CustomTextField
+                  {...field}
+                  fullWidth
+                  label='Peso (gramos)'
+                  placeholder='250.50'
+                  type='number'
+                  inputProps={{ step: '0.01', min: '0' }}
+                  {...(errors.weightGrams && { error: true, helperText: 'Este campo es requerido.' })}
+                />
+              )}
+            />
+          </Grid>
+
+          <Grid size={{ xs: 12, sm: 4 }}>
+            <Controller
+              name='unitsPerBox'
+              control={control}
+              rules={{ required: true }}
+              render={({ field }) => (
+                <CustomTextField
+                  {...field}
+                  fullWidth
+                  label='Unidades por caja'
+                  placeholder='20'
+                  type='number'
+                  inputProps={{ step: '1', min: '1' }}
+                  {...(errors.unitsPerBox && { error: true, helperText: 'Este campo es requerido.' })}
                 />
               )}
             />

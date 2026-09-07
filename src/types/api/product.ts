@@ -19,6 +19,8 @@ export interface Product {
   subcategory: Subcategory
   brand?: Brand
   discount?: number
+  weightGrams?: string
+  unitsPerBox?: number
   createdAt?: string
   updatedAt?: string
 }
@@ -33,6 +35,8 @@ export interface CreateProductDto {
   discount?: number
   codigoProductoSin?: number
   unidadMedida?: number
+  weightGrams?: string
+  unitsPerBox?: number
 }
 
 export interface UpdateProductDto extends Partial<CreateProductDto> {}
