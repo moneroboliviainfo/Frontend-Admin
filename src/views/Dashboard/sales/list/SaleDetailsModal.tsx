@@ -110,7 +110,8 @@ const getPaymentLabel = (paymentType: string): string => {
   const labels: Record<string, string> = {
     cash: 'Efectivo',
     card: 'Tarjeta',
-    qr: 'QR'
+    qr: 'QR',
+    card_online: 'Tarjeta Online'
   }
 
   return labels[paymentType] || paymentType
@@ -248,6 +249,17 @@ const OrderDetailsModal = ({ open, onClose, order: orderProp }: OrderDetailsModa
     return cafcsData.filter((cafc: Cafc) => parseInt(cafc.ultimoNumero) < parseInt(cafc.numeroFinal))
   }, [cafcsData])
 
+  // Seleccionar automáticamente la sucursal si solo hay una disponible
+  useEffect(() => {
+    if (branchesData && !selectedBranchId) {
+      const availableBranches = branchesData.filter((b: Branch) => b.codigoSucursal === 3 && b.active)
+
+      if (availableBranches.length === 1) {
+        setSelectedBranchId(availableBranches[0].id)
+      }
+    }
+  }, [branchesData, selectedBranchId])
+
   // Inicializar datos de facturación editables cuando se abre el modal
   useEffect(() => {
     if (open && order?.billing) {
@@ -263,6 +275,18 @@ const OrderDetailsModal = ({ open, onClose, order: orderProp }: OrderDetailsModa
       setNitValidationMessage('')
     }
   }, [open, order?.billing])
+
+  // Resetear estados de facturación cuando cambia la orden o se cierra el modal
+  useEffect(() => {
+    setFacturaSuccess(false)
+    setFacturaData(null)
+    setFacturaError('')
+    setShowFacturacion(false)
+    setShowContingencia(false)
+    setShowEmitirConfirm(false)
+    setShowAnularConfirm(false)
+    setShowRevertirConfirm(false)
+  }, [orderProp?.id])
 
   // Verificar NIT automáticamente cuando se ingresa
   useEffect(() => {
@@ -663,7 +687,7 @@ const OrderDetailsModal = ({ open, onClose, order: orderProp }: OrderDetailsModa
   // - Tiene datos de facturación
   // NOTA: Cuando se edita una orden, se crea una NUEVA orden. La original queda cancelled_for_edit.
   // NOTA: Después de anular, solo se puede REVERTIR, no emitir nueva factura en la misma orden.
-  const canInvoice = order.status === 'sent' && !order.factura && billingInfo
+  const canInvoice = (order.status === 'sent' || (order.status === 'paid' && order.payment_type === 'card_online')) && !order.factura && billingInfo
 
   // Se puede anular solo si la factura está VALIDADA (no REVERTIDA, ya que la reversión es única)
   const canAnular = order.factura && order.factura.estado === 'VALIDADA'
@@ -1174,7 +1198,7 @@ const OrderDetailsModal = ({ open, onClose, order: orderProp }: OrderDetailsModa
                             <MenuItem value=''>Cargando...</MenuItem>
                           ) : (
                             branchesData
-                              ?.filter((b: Branch) => b.active)
+                              ?.filter((b: Branch) => b.codigoSucursal === 3 && b.active)
                               .map((branch: Branch) => (
                                 <MenuItem key={branch.id} value={branch.id}>
                                   {branch.alias}
@@ -1863,7 +1887,7 @@ const OrderDetailsModal = ({ open, onClose, order: orderProp }: OrderDetailsModa
                   </Button>
                 )}
 
-                {!showDhlInput && (
+                {!showDhlInput && order.payment_type !== 'card_online' && (
                   <Button
                     variant='contained'
                     color='primary'
