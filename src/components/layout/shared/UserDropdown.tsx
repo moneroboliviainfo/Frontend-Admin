@@ -13,13 +13,23 @@ import Fade from '@mui/material/Fade'
 import Paper from '@mui/material/Paper'
 import ClickAwayListener from '@mui/material/ClickAwayListener'
 import MenuList from '@mui/material/MenuList'
+import MenuItem from '@mui/material/MenuItem'
 import Typography from '@mui/material/Typography'
 import Divider from '@mui/material/Divider'
 import Button from '@mui/material/Button'
 import CircularProgress from '@mui/material/CircularProgress'
+import Chip from '@mui/material/Chip'
 
 import { useSettings } from '@core/hooks/useSettings'
 import { useAuth } from '@/hooks/useAuth'
+import type { Role } from '@/types/api/auth'
+import ChangePasswordDialog from './ChangePasswordDialog'
+
+const roleLabels: Record<Role, string> = {
+  ADMIN: 'Administrador',
+  MANAGER: 'Encargado',
+  CASHIER: 'Cajero'
+}
 
 const BadgeContentSpan = styled('span')({
   width: 8,
@@ -32,6 +42,7 @@ const BadgeContentSpan = styled('span')({
 
 const UserDropdown = () => {
   const [open, setOpen] = useState(false)
+  const [changePasswordOpen, setChangePasswordOpen] = useState(false)
   const anchorRef = useRef<HTMLDivElement>(null)
   const router = useRouter()
   const { settings } = useSettings()
@@ -100,13 +111,29 @@ const UserDropdown = () => {
                         {user?.name || 'Usuario'}
                       </Typography>
                       <Typography variant='caption'>{user?.email || ''}</Typography>
+                      {user?.role && (
+                        <Chip
+                          label={roleLabels[user.role]}
+                          size='small'
+                          color='primary'
+                          variant='tonal'
+                          className='mbs-1'
+                        />
+                      )}
                     </div>
                   </div>
                   <Divider className='mlb-1' />
-                  {/*   <MenuItem className='mli-2 gap-3' onClick={e => handleDropdownClose(e, '/profile')}>
-                    <i className='tabler-user' />
-                    <Typography color='text.primary'>Mi Perfil</Typography>
-                  </MenuItem> */}
+
+                  <MenuItem
+                    className='mli-2 gap-3'
+                    onClick={() => {
+                      setOpen(false)
+                      setChangePasswordOpen(true)
+                    }}
+                  >
+                    <i className='tabler-key' />
+                    <Typography color='text.primary'>Cambiar Contraseña</Typography>
+                  </MenuItem>
 
                   <div className='flex items-center plb-2 pli-3'>
                     <Button
@@ -130,6 +157,7 @@ const UserDropdown = () => {
           </Fade>
         )}
       </Popper>
+      <ChangePasswordDialog open={changePasswordOpen} onClose={() => setChangePasswordOpen(false)} />
     </>
   )
 }

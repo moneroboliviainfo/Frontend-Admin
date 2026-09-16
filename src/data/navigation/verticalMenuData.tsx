@@ -15,6 +15,22 @@ const getFullMenuData = (): VerticalMenuDataType[] => [
     href: '/home'
   },
 
+  // MÓDULO ADMINISTRACIÓN
+  {
+    isSection: true,
+    label: 'ADMINISTRACIÓN'
+  },
+  {
+    label: 'Usuarios',
+    icon: 'tabler-users-group',
+    href: '/users/list'
+  },
+  {
+    label: 'Sucursales',
+    icon: 'tabler-building-store',
+    href: '/branches/list'
+  },
+
   // MÓDULO CLIENTES
   {
     isSection: true,

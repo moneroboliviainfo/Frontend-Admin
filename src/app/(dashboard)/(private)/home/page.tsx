@@ -4,14 +4,12 @@ import Grid from '@mui/material/Grid2'
 // Components Imports
 import CongratulationsJohn from '@views/Dashboard/ecommerce/Congratulations'
 import StatisticsCard from '@views/Dashboard/ecommerce/StatisticsCard'
-import BranchTabs from '@/components/branch/BranchTabs'
 import LowStock from '@/views/Dashboard/ecommerce/LowStock'
 import BestSellers from '@/views/Dashboard/ecommerce/BestSellers'
 
 const EcommerceDashboard = () => {
   return (
     <>
-      <BranchTabs />
       <Grid container spacing={6}>
         <Grid size={{ xs: 12, md: 4 }}>
           <CongratulationsJohn />

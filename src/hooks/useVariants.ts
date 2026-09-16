@@ -5,7 +5,13 @@ import { useMemo } from 'react'
 import { useQuery, useMutation, useQueryClient, useInfiniteQuery } from '@tanstack/react-query'
 
 import { variantService } from '@/services/variantService'
-import type { CreateVariantDto, UpdateVariantDto, CreateBrandDto, AddStockRequest } from '@/types/api/variants'
+import type {
+  CreateVariantDto,
+  UpdateVariantDto,
+  CreateBrandDto,
+  AddStockRequest,
+  SubtractStockRequest
+} from '@/types/api/variants'
 
 export const useVariantsByProduct = (productId: string | number | undefined) => {
   const numericProductId = useMemo(() => {
@@ -24,10 +30,11 @@ export const useVariantsByProduct = (productId: string | number | undefined) => 
   })
 }
 
-export const useVariantById = (variantId: number | null) => {
+export const useVariantById = (variantId: number | null, branchId?: number) => {
   return useQuery({
-    queryKey: ['variant', variantId],
-    queryFn: () => variantService.getVariantById(variantId!),
+    // branchId en la queryKey: si el admin cambia de sucursal en la navbar, refetchea solo
+    queryKey: ['variant', variantId, branchId],
+    queryFn: () => variantService.getVariantById(variantId!, branchId),
     enabled: !!variantId && variantId > 0,
     staleTime: 0,
     gcTime: 0
@@ -95,8 +102,7 @@ export const useSubtractStock = () => {
   const queryClient = useQueryClient()
 
   return useMutation({
-    mutationFn: (data: { variantId: number; quantity: number; reason?: string }) =>
-      variantService.subtractStock(data),
+    mutationFn: (data: SubtractStockRequest) => variantService.subtractStock(data),
     onSuccess: () => {
       queryClient.invalidateQueries({
         queryKey: ['variants'],

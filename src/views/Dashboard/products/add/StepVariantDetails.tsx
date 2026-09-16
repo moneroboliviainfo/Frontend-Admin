@@ -30,6 +30,7 @@ import { z } from 'zod'
 
 import DirectionalIcon from '@components/DirectionalIcon'
 import CustomTextField from '@core/components/mui/TextField'
+import { useBranchContext } from '@/contexts/BranchContext'
 import {
   useColors,
   useUploadMultimedia,
@@ -102,10 +103,14 @@ const StepVariantDetails = ({ activeStep, handlePrev, steps, mode, productId, pr
 
   const [isSubmitting, setIsSubmitting] = useState(false)
 
+  // Sucursal activa: solo el ADMIN la manda (MANAGER/CASHIER se resuelven solos en el backend)
+  const { selectedBranchId, isAdmin } = useBranchContext()
+  const branchId = isAdmin ? (selectedBranchId ?? undefined) : undefined
+
   const { data: colors, isLoading: colorsLoading } = useColors()
   const { data: existingVariants, isLoading: variantsLoading } = useVariantsByProduct(productId)
   const uploadMultimedia = useUploadMultimedia()
-  const { data: variantToLoad, isLoading: variantLoading } = useVariantById(variantToLoadId)
+  const { data: variantToLoad, isLoading: variantLoading } = useVariantById(variantToLoadId, branchId)
   const { data: colorToLoad } = useColorById(colorToLoadId)
   const [originalColorId, setOriginalColorId] = useState<number | null>(null)
 
@@ -318,7 +323,8 @@ const StepVariantDetails = ({ activeStep, handlePrev, steps, mode, productId, pr
           pdfs: finalPdfUrls,
           variants: normalizedVariants,
           colorName: selectedColor.name,
-          colorCode: selectedColor.code
+          colorCode: selectedColor.code,
+          branchId
         }
 
         await updateVariant.mutateAsync({
@@ -339,7 +345,8 @@ const StepVariantDetails = ({ activeStep, handlePrev, steps, mode, productId, pr
           variants: normalizedVariants,
           colorName: selectedColor.name,
           colorCode: selectedColor.code,
-          productId: parseInt(productId!)
+          productId: parseInt(productId!),
+          branchId
         }
 
         await createVariant.mutateAsync(createData)

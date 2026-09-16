@@ -10,6 +10,7 @@ import type {
   VariantsResponse,
   BrandsResponse,
   AddStockRequest,
+  SubtractStockRequest,
   AddStockResponse
 } from '@/types/api/variants'
 
@@ -24,8 +25,10 @@ class VariantServiceClass {
       total: productColors.length
     }
   }
-  async getVariantById(variantId: number): Promise<Variant> {
-    const response = await apiClient.get(`/api/variants/${variantId}`)
+  async getVariantById(variantId: number, branchId?: number): Promise<Variant> {
+    const response = await apiClient.get(`/api/variants/${variantId}`, {
+      params: branchId ? { branchId } : undefined
+    })
 
     return response.data
   }
@@ -40,14 +43,18 @@ class VariantServiceClass {
 
     return response.data
   }
-  async addStock(data: AddStockRequest): Promise<AddStockResponse> {
-    const response = await apiClient.post<AddStockResponse>('/api/variants/addstock', data)
+  async addStock({ branchId, ...body }: AddStockRequest): Promise<AddStockResponse> {
+    const response = await apiClient.post<AddStockResponse>('/api/variants/addstock', body, {
+      params: branchId ? { branchId } : undefined
+    })
 
     return response.data
   }
 
-  async subtractStock(data: { variantId: number; quantity: number; reason?: string }): Promise<AddStockResponse> {
-    const response = await apiClient.post<AddStockResponse>('/api/variants/subtractstock', data)
+  async subtractStock({ branchId, ...body }: SubtractStockRequest): Promise<AddStockResponse> {
+    const response = await apiClient.post<AddStockResponse>('/api/variants/subtractstock', body, {
+      params: branchId ? { branchId } : undefined
+    })
 
     return response.data
   }
@@ -80,17 +87,23 @@ class VariantServiceClass {
   }
 
   async getColors(): Promise<Color[]> {
-    const response = await apiClient.get<Color[]>('/api/colors')
+    // GET /colors está paginado (doc backend); limit alto para traerlos todos en una página
+    const response = await apiClient.get<{ data: Color[] }>('/api/colors', {
+      params: { limit: 1000, page: 1 }
+    })
 
-    return response.data
+    return response.data.data
   }
 
   async getBrands(): Promise<BrandsResponse> {
-    const response = await apiClient.get<Brand[]>('/api/brands')
+    // GET /brands también está paginado (doc backend); mismo caso que getColors
+    const response = await apiClient.get<{ data: Brand[]; meta: { total: number } }>('/api/brands', {
+      params: { limit: 1000, page: 1 }
+    })
 
     return {
-      brands: response.data,
-      total: response.data.length
+      brands: response.data.data,
+      total: response.data.meta.total
     }
   }
 
@@ -108,7 +121,8 @@ class VariantServiceClass {
   async getAllVariants(
     page: number = 1,
     limit: number = 6,
-    search: string = ''
+    search: string = '',
+    branchId?: number
   ): Promise<{
     data: Variant[]
     meta: {
@@ -124,7 +138,8 @@ class VariantServiceClass {
     const params = new URLSearchParams({
       page: page.toString(),
       limit: limit.toString(),
-      ...(search && { search })
+      ...(search && { search }),
+      ...(branchId && { branchId: branchId.toString() })
     })
 
     const response = await apiClient.get(`/api/variants?${params}`)

@@ -7,6 +7,7 @@ export interface VariantSize {
       }
     | string
   availableStock?: number
+  warehouseStock?: number
   quantity?: number
 }
 
@@ -41,6 +42,9 @@ export interface CreateVariantDto {
   colorName: string
   colorCode: string
   productId: number
+
+  // Solo lo manda un ADMIN (sucursal de bodega para el stock inicial); MANAGER/CASHIER no lo mandan.
+  branchId?: number
 }
 
 export interface UpdateVariantDto extends Partial<CreateVariantDto> {}
@@ -75,6 +79,14 @@ export interface BrandsResponse {
 export type AddStockRequest = {
   quantity: number
   variantId: number
+  branchId?: number // va como query param, no en el body (lo separa variantService)
+}
+
+export type SubtractStockRequest = {
+  variantId: number
+  quantity: number
+  reason?: string
+  branchId?: number // idem AddStockRequest
 }
 
 export type AddStockResponse = {

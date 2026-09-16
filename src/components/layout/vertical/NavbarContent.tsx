@@ -7,6 +7,7 @@ import classnames from 'classnames'
 import NavToggle from './NavToggle'
 import ModeDropdown from '@components/layout/shared/ModeDropdown'
 import UserDropdown from '@components/layout/shared/UserDropdown'
+import BranchSwitcher from '@components/layout/shared/BranchSwitcher'
 
 // Util Imports
 import { verticalLayoutClasses } from '@layouts/utils/layoutClasses'
@@ -17,6 +18,9 @@ const NavbarContent = () => {
       <div className='flex items-center gap-4'>
         <NavToggle />
         <ModeDropdown />
+      </div>
+      <div className='flex items-center'>
+        <BranchSwitcher />
       </div>
       <div className='flex items-center'>
         <UserDropdown />

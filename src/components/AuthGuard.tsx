@@ -4,8 +4,6 @@ import { useEffect, useState } from 'react'
 
 import { useRouter, usePathname } from 'next/navigation'
 
-import { CircularProgress, Box } from '@mui/material'
-
 import { authService } from '@/services/authService'
 import { initLogRocket, identifyUser } from '@/libs/logrocket'
 
@@ -36,7 +34,19 @@ const AuthGuard = ({ children }: AuthGuardProps) => {
         }
       }
 
-      const protectedPaths = ['/home', '/customers', '/apps', '/pages', '/forms', '/tables', '/charts', '/products']
+      const protectedPaths = [
+        '/home',
+        '/customers',
+        '/apps',
+        '/pages',
+        '/forms',
+        '/tables',
+        '/charts',
+        '/products',
+        '/users',
+        '/branches'
+      ]
+
       const publicPaths = ['/login', '/register', '/forgot-password']
 
       const isProtectedPath = protectedPaths.some(path => pathname.startsWith(path))
@@ -68,9 +78,9 @@ const AuthGuard = ({ children }: AuthGuardProps) => {
 
   if (isChecking) {
     return (
-      <Box display='flex' justifyContent='center' alignItems='center' minHeight='100vh'>
-        <CircularProgress />
-      </Box>
+      <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', minHeight: '100vh' }}>
+        <div className='auth-guard-spinner' />
+      </div>
     )
   }
 

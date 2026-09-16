@@ -14,6 +14,7 @@ import { z } from 'zod'
 
 import CustomTextField from '@core/components/mui/TextField'
 import { useSubtractStock } from '@/hooks/useVariants'
+import { useBranchContext } from '@/contexts/BranchContext'
 
 const subtractStockSchema = z.object({
   quantity: z.number().positive('La cantidad debe ser mayor a 0'),
@@ -36,6 +37,8 @@ const SubtractStockModal = ({ open, onClose, variants }: Props) => {
   const [reasons, setReasons] = useState<Record<number, string>>({})
   const [errors, setErrors] = useState<Record<number, { quantity?: string; reason?: string }>>({})
   const subtractStock = useSubtractStock()
+  const { selectedBranchId, isAdmin } = useBranchContext()
+  const branchId = isAdmin ? (selectedBranchId ?? undefined) : undefined
 
   const handleQuantityChange = (variantId: number, value: string) => {
     const numValue = parseInt(value) || 0
@@ -144,7 +147,8 @@ const SubtractStockModal = ({ open, onClose, variants }: Props) => {
         const payload = {
           variantId: Number(variantId),
           quantity: -quantity,
-          reason: reason!
+          reason: reason!,
+          branchId
         }
 
         await subtractStock.mutateAsync(payload)

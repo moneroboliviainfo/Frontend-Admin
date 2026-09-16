@@ -21,7 +21,7 @@ import DirectionalIcon from '@components/DirectionalIcon'
 import CustomTextField from '@core/components/mui/TextField'
 import { useCategories } from '@/hooks/useCategory'
 import { useCreateProduct, useProduct, useUpdateProduct } from '@/hooks/useProducts'
-import { useBrands, useCreateBrand } from '@/hooks/useVariants'
+import { useCreateBrand } from '@/hooks/useVariants'
 
 type Props = {
   activeStep: number
@@ -42,6 +42,8 @@ type FormValues = {
   descripcion: string
   brand: string
   discount: string
+  pesoGramos: string
+  unidadesPorCaja: string
 }
 
 type BrandFormValues = {
@@ -65,7 +67,9 @@ const StepProductDetails = ({ activeStep, handleNext, handlePrev, mode, productI
       precio: '',
       descripcion: '',
       brand: '',
-      discount: '1'
+      discount: '1',
+      pesoGramos: '',
+      unidadesPorCaja: ''
     }
   })
 
@@ -87,8 +91,6 @@ const StepProductDetails = ({ activeStep, handleNext, handlePrev, mode, productI
   const selectedCategory = useWatch({ control, name: 'categoria' })
 
   const { data: categoriesData, isLoading: categoriesLoading } = useCategories()
-
-  const { data: brandsData, isLoading: brandsLoading } = useBrands()
 
   const { data: productData, isLoading: productLoading } = useProduct(
     mode === 'edit' && productId ? parseInt(productId) : 0
@@ -124,6 +126,8 @@ const StepProductDetails = ({ activeStep, handleNext, handlePrev, mode, productI
       setValue('descripcion', productData.description)
       setValue('brand', productData.brand?.toString() || '')
       setValue('discount', productData.discount?.toString() || '1')
+      setValue('pesoGramos', productData.weightGrams || '')
+      setValue('unidadesPorCaja', productData.unitsPerBox?.toString() || '')
     }
   }, [productData, mode, categoriesData, setValue])
 
@@ -178,7 +182,9 @@ const StepProductDetails = ({ activeStep, handleNext, handlePrev, mode, productI
         enabled: true,
         subcategory: parseInt(data.subcategoria),
         codigoProductoSin: 99100,
-        unidadMedida: 47
+        unidadMedida: 47,
+        weightGrams: Number(data.pesoGramos).toFixed(2),
+        unitsPerBox: parseInt(data.unidadesPorCaja)
       }
 
       if (data.brand) {
@@ -341,6 +347,44 @@ const StepProductDetails = ({ activeStep, handleNext, handlePrev, mode, productI
                   type='number'
                   inputProps={{ step: '0.01', min: '0' }}
                   {...(errors.precio && { error: true, helperText: 'Este campo es requerido.' })}
+                />
+              )}
+            />
+          </Grid>
+
+          <Grid size={{ xs: 12, sm: 6 }}>
+            <Controller
+              name='pesoGramos'
+              control={control}
+              rules={{ required: true }}
+              render={({ field }) => (
+                <CustomTextField
+                  {...field}
+                  fullWidth
+                  label='Peso (gramos)'
+                  placeholder='0.00'
+                  type='number'
+                  inputProps={{ step: '0.01', min: '0' }}
+                  {...(errors.pesoGramos && { error: true, helperText: 'Este campo es requerido.' })}
+                />
+              )}
+            />
+          </Grid>
+
+          <Grid size={{ xs: 12, sm: 6 }}>
+            <Controller
+              name='unidadesPorCaja'
+              control={control}
+              rules={{ required: true }}
+              render={({ field }) => (
+                <CustomTextField
+                  {...field}
+                  fullWidth
+                  label='Unidades por Caja'
+                  placeholder='0'
+                  type='number'
+                  inputProps={{ step: '1', min: '0' }}
+                  {...(errors.unidadesPorCaja && { error: true, helperText: 'Este campo es requerido.' })}
                 />
               )}
             />

@@ -13,16 +13,20 @@ export const filterMenuByRole = (
   }
 
   if (role === 'MANAGER') {
-    return menuItems.map((item: any) => {
-      if (item.label === 'SIAT' && item.children) {
-        return {
-          ...item,
-          children: item.children.filter((child: any) => ['Facturación Online'].includes(child.label))
-        }
-      }
+    const managerExcluded = ['ADMINISTRACIÓN', 'Usuarios', 'Sucursales']
 
-      return item
-    })
+    return menuItems
+      .filter((item: any) => !managerExcluded.includes(item.label))
+      .map((item: any) => {
+        if (item.label === 'SIAT' && item.children) {
+          return {
+            ...item,
+            children: item.children.filter((child: any) => ['Facturación Online'].includes(child.label))
+          }
+        }
+
+        return item
+      })
   }
 
   if (role === 'CASHIER') {

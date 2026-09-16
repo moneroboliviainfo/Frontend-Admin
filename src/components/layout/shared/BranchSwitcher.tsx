@@ -1,26 +1,20 @@
 'use client'
 
+import Box from '@mui/material/Box'
+import Typography from '@mui/material/Typography'
 import ToggleButton from '@mui/material/ToggleButton'
 import ToggleButtonGroup from '@mui/material/ToggleButtonGroup'
 import Skeleton from '@mui/material/Skeleton'
-import Box from '@mui/material/Box'
-import Typography from '@mui/material/Typography'
 
 import { useBranchContext } from '@/contexts/BranchContext'
 
-const BranchTabs = () => {
+const BranchSwitcher = () => {
   const { branches, selectedBranch, setSelectedBranch, isLoading, isAdmin } = useBranchContext()
 
   if (!isAdmin) return null
 
   if (isLoading) {
-    return (
-      <Box sx={{ mb: 4, display: 'flex', justifyContent: 'center', gap: 2 }}>
-        {[1, 2, 3].map(i => (
-          <Skeleton key={i} variant='rounded' width={120} height={42} />
-        ))}
-      </Box>
-    )
+    return <Skeleton variant='rounded' width={220} height={34} />
   }
 
   if (branches.length === 0) return null
@@ -30,35 +24,30 @@ const BranchTabs = () => {
 
     const branch = branches.find(b => b.id === newValue)
 
-    if (branch) {
-      setSelectedBranch(branch)
-    }
+    if (branch) setSelectedBranch(branch)
   }
 
   return (
-    <Box sx={{ mb: 4, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 1 }}>
-      <Typography variant='body2' color='text.secondary'>
-        Sucursal
+    <Box className='flex items-center gap-2'>
+      <Typography variant='body2' color='text.secondary' className='max-sm:hidden'>
+        Sucursal:
       </Typography>
       <ToggleButtonGroup
         value={selectedBranch?.id ?? branches[0]?.id}
         exclusive
+        size='small'
         onChange={handleChange}
         aria-label='Selector de sucursal'
         sx={{
           '& .MuiToggleButton-root': {
-            px: 3,
-            py: 1,
+            paddingBlock: '4px',
+            paddingInline: '10px',
             textTransform: 'none',
             fontWeight: 500,
-            borderRadius: '8px !important',
-            border: '1px solid',
-            borderColor: 'divider',
-            mx: 0.5,
+            lineHeight: 1.3,
             '&.Mui-selected': {
               bgcolor: 'primary.main',
               color: 'primary.contrastText',
-              borderColor: 'primary.main',
               '&:hover': {
                 bgcolor: 'primary.dark'
               }
@@ -76,4 +65,4 @@ const BranchTabs = () => {
   )
 }
 
-export default BranchTabs
+export default BranchSwitcher

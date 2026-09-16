@@ -7,6 +7,7 @@ import { SettingsProvider } from '@core/contexts/settingsContext'
 import { AuthProvider } from '@/contexts/AuthContext'
 import { BranchProvider } from '@/contexts/BranchContext'
 import ThemeProvider from '@components/theme'
+import BranchThemeSync from '@components/BranchThemeSync'
 
 // Util Imports
 import { getMode, getSettingsFromCookie, getSystemMode } from '@core/utils/serverHelpers'
@@ -32,6 +33,7 @@ const Providers = async (props: Props) => {
           <VerticalNavProvider>
             <SettingsProvider settingsCookie={settingsCookie} mode={mode}>
               <ThemeProvider direction={direction} systemMode={systemMode}>
+                <BranchThemeSync />
                 {children}
               </ThemeProvider>
             </SettingsProvider>

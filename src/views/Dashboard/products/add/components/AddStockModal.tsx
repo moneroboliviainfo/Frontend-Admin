@@ -13,6 +13,7 @@ import { toast } from 'react-toastify'
 
 import CustomTextField from '@core/components/mui/TextField'
 import { useAddStock } from '@/hooks/useVariants'
+import { useBranchContext } from '@/contexts/BranchContext'
 
 type Props = {
   open: boolean
@@ -28,6 +29,8 @@ type Props = {
 const AddStockModal = ({ open, onClose, variants }: Props) => {
   const [quantities, setQuantities] = useState<Record<number, number>>({})
   const addStock = useAddStock()
+  const { selectedBranchId, isAdmin } = useBranchContext()
+  const branchId = isAdmin ? (selectedBranchId ?? undefined) : undefined
 
   const handleQuantityChange = (variantId: number, value: string) => {
     const numValue = parseInt(value) || 0
@@ -51,7 +54,8 @@ const AddStockModal = ({ open, onClose, variants }: Props) => {
       for (const [variantId, quantity] of variantsToUpdate) {
         await addStock.mutateAsync({
           variantId: Number(variantId),
-          quantity
+          quantity,
+          branchId
         })
       }
 
