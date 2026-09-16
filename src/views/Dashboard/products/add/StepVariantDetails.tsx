@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation'
 
 import Grid from '@mui/material/Grid2'
 import Button from '@mui/material/Button'
-import MenuItem from '@mui/material/MenuItem'
+import Autocomplete from '@mui/material/Autocomplete'
 import Box from '@mui/material/Box'
 import IconButton from '@mui/material/IconButton'
 import Typography from '@mui/material/Typography'
@@ -65,6 +65,8 @@ type Props = {
   productName?: string
   productCreated?: boolean
 }
+
+type ColorOption = { id: number | 'custom'; name: string; code?: string }
 
 const StepVariantDetails = ({ activeStep, handlePrev, steps, mode, productId, productName, productCreated }: Props) => {
   const router = useRouter()
@@ -223,6 +225,16 @@ const StepVariantDetails = ({ activeStep, handlePrev, steps, mode, productId, pr
 
     return colors?.find(c => c.id.toString() === variantForm.colorId) || null
   }
+
+  // "custom" no es una opción listable — solo existe si se creó desde el botón "Crear Color"
+  const colorOptions: ColorOption[] = colors || []
+
+  const selectedColorOption: ColorOption | null =
+    variantForm.colorId === ''
+      ? null
+      : variantForm.colorId === 'custom'
+        ? { id: 'custom', name: variantForm.customColorName || 'Color personalizado', code: variantForm.customColorCode }
+        : colorOptions.find(c => c.id.toString() === variantForm.colorId) || null
 
   const handleSaveVariant = async () => {
     try {
@@ -676,87 +688,52 @@ const StepVariantDetails = ({ activeStep, handlePrev, steps, mode, productId, pr
                 </Typography>
                 <Grid container spacing={2}>
                   <Grid size={{ xs: 12, sm: 8 }}>
-                    <CustomTextField
-                      select
+                    <Autocomplete
                       fullWidth
                       size='small'
-                      label='Seleccionar Color'
-                      value={variantForm.colorId}
-                      onChange={e => {
-                        setVariantForm(prev => ({ ...prev, colorId: e.target.value }))
+                      loading={colorsLoading}
+                      disabled={colorsLoading}
+                      options={colorOptions}
+                      value={selectedColorOption}
+                      onChange={(_, newValue) => {
+                        setVariantForm(prev => ({ ...prev, colorId: newValue ? newValue.id.toString() : '' }))
                         setColorError(null)
                       }}
-                      error={!!colorError}
-                      helperText={colorError || ''}
-                      disabled={colorsLoading}
-                      SelectProps={{
-                        renderValue: selected => {
-                          if (!selected) return 'Selecciona un color'
+                      getOptionLabel={option => option.name}
+                      isOptionEqualToValue={(option, value) => option.id === value.id}
 
-                          if (selected === 'custom' && variantForm.customColorName) {
-                            return (
-                              <Box display='flex' alignItems='center' gap={1}>
-                                <Box
-                                  sx={{
-                                    width: 16,
-                                    height: 16,
-                                    borderRadius: '50%',
-                                    backgroundColor: variantForm.customColorCode || '#000000',
-                                    border: '1px solid #ddd'
-                                  }}
-                                />
-                                <Typography variant='body2'>{variantForm.customColorName}</Typography>
-                              </Box>
-                            )
-                          }
+                      // Limita el listado visible a ~5 opciones; el resto se ve con scroll
+                      ListboxProps={{ style: { maxHeight: 220, overflowY: 'auto' } }}
+                      renderOption={(props, option) => {
+                        const { key, ...optionProps } = props as typeof props & { key?: string }
 
-                          const selectedColor = colors?.find(c => c.id.toString() === selected)
-
-                          if (selectedColor) {
-                            return (
-                              <Box display='flex' alignItems='center' gap={1}>
-                                <Box
-                                  sx={{
-                                    width: 16,
-                                    height: 16,
-                                    borderRadius: '50%',
-                                    backgroundColor: selectedColor.code,
-                                    border: '1px solid #ddd'
-                                  }}
-                                />
-                                <Typography variant='body2'>{selectedColor.name}</Typography>
-                              </Box>
-                            )
-                          }
-
-                          return 'Selecciona un color'
-                        }
+                        return (
+                          <li key={key ?? option.id} {...optionProps}>
+                            <Box display='flex' alignItems='center' gap={1}>
+                              <Box
+                                sx={{
+                                  width: 16,
+                                  height: 16,
+                                  borderRadius: '50%',
+                                  backgroundColor: option.code,
+                                  border: '1px solid #ddd'
+                                }}
+                              />
+                              <Typography variant='body2'>{option.name}</Typography>
+                            </Box>
+                          </li>
+                        )
                       }}
-                    >
-                      <MenuItem value=''>Selecciona un color</MenuItem>
-                      {colors?.map(color => (
-                        <MenuItem key={color.id} value={color.id.toString()}>
-                          <Box display='flex' alignItems='center' gap={1}>
-                            <Box
-                              sx={{
-                                width: 16,
-                                height: 16,
-                                borderRadius: '50%',
-                                backgroundColor: color.code,
-                                border: '1px solid #ddd'
-                              }}
-                            />
-                            <Typography variant='body2'>{color.name}</Typography>
-                          </Box>
-                        </MenuItem>
-                      ))}
-                      <MenuItem value='custom'>
-                        <Box display='flex' alignItems='center' gap={1}>
-                          <i className='tabler-plus' style={{ fontSize: '16px' }} />
-                          <Typography variant='body2'>Color personalizado</Typography>
-                        </Box>
-                      </MenuItem>
-                    </CustomTextField>
+                      renderInput={params => (
+                        <CustomTextField
+                          {...params}
+                          label='Seleccionar Color'
+                          placeholder='Buscar color...'
+                          error={!!colorError}
+                          helperText={colorError || ''}
+                        />
+                      )}
+                    />
                   </Grid>
                   <Grid size={{ xs: 12, sm: 4 }}>
                     <Button

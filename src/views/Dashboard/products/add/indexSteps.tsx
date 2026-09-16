@@ -141,24 +141,20 @@ const ProductWizard = ({ mode = 'create', productId }: ProductWizardProps) => {
     return false
   }
 
-  const getStepStatus = (stepIndex: number): 'active' | 'completed' | 'disabled' => {
+  const getStepStatus = (stepIndex: number): 'active' | 'completed' | 'disabled' | 'pending' => {
     if (stepIndex === activeStep) return 'active'
     if (stepIndex < activeStep) return 'completed'
     if (isStepDisabled(stepIndex)) return 'disabled'
 
-    return 'active'
+    // Disponible pero no es el paso actual (ej. en modo editar, viendo el paso 0)
+    return 'pending'
   }
 
   return (
     <Card className='flex flex-col lg:flex-row'>
-      <CardContent className='max-lg:border-be lg:border-ie lg:min-is-[300px]'>
+      <CardContent className='max-lg:border-be lg:border-ie lg:is-[200px] lg:shrink-0'>
         <StepperWrapper>
-          <Stepper
-            activeStep={activeStep}
-            orientation='vertical'
-            connector={<></>}
-            className='flex flex-col gap-4 min-is-[220px]'
-          >
+          <Stepper activeStep={activeStep} orientation='vertical' connector={<></>} className='flex flex-col gap-3'>
             {steps.map((label, index) => {
               const stepStatus = getStepStatus(index)
               const isDisabled = isStepDisabled(index)
@@ -167,12 +163,20 @@ const ProductWizard = ({ mode = 'create', productId }: ProductWizardProps) => {
                 <Step key={index} onClick={() => !isDisabled && handleStepClick(index)}>
                   <StepLabel
                     icon={<></>}
-                    className={classnames('p-1', {
+                    className={classnames('p-1 rounded', {
                       'cursor-pointer': !isDisabled,
                       'cursor-not-allowed opacity-50': isDisabled
                     })}
+                    sx={
+                      stepStatus === 'active'
+                        ? {
+                            bgcolor: 'var(--mui-palette-primary-lightOpacity)',
+                            borderInlineStart: '3px solid var(--mui-palette-primary-main)'
+                          }
+                        : { borderInlineStart: '3px solid transparent' }
+                    }
                   >
-                    <div className='step-label'>
+                    <div className='flex flex-col items-center text-center gap-1 is-full'>
                       <CustomAvatar
                         variant='rounded'
                         skin={stepStatus === 'active' ? 'filled' : stepStatus === 'completed' ? 'filled' : 'light'}
@@ -180,15 +184,15 @@ const ProductWizard = ({ mode = 'create', productId }: ProductWizardProps) => {
                           stepStatus === 'disabled' ? 'secondary' : stepStatus === 'completed' ? 'success' : 'primary'
                         }
                         {...(stepStatus === 'active' && { className: 'shadow-primarySm' })}
-                        size={38}
+                        size={32}
                       >
                         {stepStatus === 'completed' ? (
-                          <i className='tabler-check !text-[22px]' />
+                          <i className='tabler-check !text-[18px]' />
                         ) : (
-                          <i className={classnames(label.icon as string, '!text-[22px]')} />
+                          <i className={classnames(label.icon as string, '!text-[18px]')} />
                         )}
                       </CustomAvatar>
-                      <div className='flex flex-col'>
+                      <div className='flex flex-col items-center'>
                         <Typography
                           color='text.primary'
                           className={classnames('step-title', {

@@ -87,12 +87,10 @@ class VariantServiceClass {
   }
 
   async getColors(): Promise<Color[]> {
-    // GET /colors está paginado (doc backend); limit alto para traerlos todos en una página
-    const response = await apiClient.get<{ data: Color[] }>('/api/colors', {
-      params: { limit: 1000, page: 1 }
-    })
+    // Confirmado con response real: NO está paginado, devuelve el array directo (el doc estaba desactualizado)
+    const response = await apiClient.get<Color[]>('/api/colors')
 
-    return response.data.data
+    return response.data
   }
 
   async getBrands(): Promise<BrandsResponse> {
