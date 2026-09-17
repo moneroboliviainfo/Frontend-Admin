@@ -4,8 +4,26 @@ import { useEffect, useState } from 'react'
 
 import { useRouter, usePathname } from 'next/navigation'
 
+import Cookies from 'js-cookie'
+
 import { authService } from '@/services/authService'
 import { initLogRocket, identifyUser } from '@/libs/logrocket'
+import { canAccessRoute, getHomeRouteByRole } from '@/utils/menuPermissions'
+import type { AuthUser, Role } from '@/types/api/auth'
+
+const getUserRole = (): Role | null => {
+  try {
+    const userCookie = Cookies.get('auth-user')
+
+    if (!userCookie) return null
+
+    const user: AuthUser = JSON.parse(userCookie)
+
+    return user.role
+  } catch {
+    return null
+  }
+}
 
 interface AuthGuardProps {
   children: React.ReactNode
@@ -34,40 +52,38 @@ const AuthGuard = ({ children }: AuthGuardProps) => {
         }
       }
 
-      const protectedPaths = [
-        '/home',
-        '/customers',
-        '/apps',
-        '/pages',
-        '/forms',
-        '/tables',
-        '/charts',
-        '/products',
-        '/users',
-        '/branches'
-      ]
-
       const publicPaths = ['/login', '/register', '/forgot-password']
 
-      const isProtectedPath = protectedPaths.some(path => pathname.startsWith(path))
       const isPublicPath = publicPaths.some(path => pathname.startsWith(path))
 
       if (pathname === '/') {
-        router.replace(isAuth ? '/home' : '/login')
+        router.replace(isAuth ? getHomeRouteByRole(null, getUserRole()) : '/login')
 
         return
       }
 
-      if (isProtectedPath && !isAuth) {
+      // Todo lo que no es público requiere sesión (antes solo se protegía una lista
+      // manual de rutas, y quedaban afuera módulos como /sales, /discounts, etc.)
+      if (!isPublicPath && !isAuth) {
         router.replace(`/login?redirect=${pathname}`)
 
         return
       }
 
       if (isPublicPath && isAuth) {
-        router.replace('/home')
+        router.replace(getHomeRouteByRole(null, getUserRole()))
 
         return
+      }
+
+      if (isAuth && !isPublicPath) {
+        const role = getUserRole()
+
+        if (!canAccessRoute(role, pathname)) {
+          router.replace(getHomeRouteByRole(null, role))
+
+          return
+        }
       }
 
       setIsChecking(false)

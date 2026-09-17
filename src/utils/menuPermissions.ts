@@ -22,37 +22,33 @@ export const filterMenuByRole = (
   }
 
   if (role === 'MANAGER') {
-    const managerExcluded = ['ADMINISTRACIÓN', 'Usuarios', 'Sucursales']
+    // Nota: 'VENTAS' (la sección) no se excluye porque ahí vive 'Ventas', que
+    // sí puede ver — solo se excluye 'SIAT' puntualmente dentro de esa sección.
+    const managerExcluded = [
+      'ADMINISTRACIÓN',
+      'Usuarios',
+      'Sucursales',
+      'CLIENTES',
+      'Clientes',
+      'CATÁLOGO',
+      'Productos',
+      'Categorías',
+      'Descuentos',
+      'Outfits',
+      'CONTENIDO',
+      'Sliders',
+      'Anuncios',
+      'Banners',
+      'SIAT'
+    ]
 
-    return menuItems
-      .filter((item: any) => !managerExcluded.includes(item.label))
-      .map((item: any) => {
-        if (item.label === 'SIAT' && item.children) {
-          return {
-            ...item,
-            children: item.children.filter((child: any) => ['Facturación Online'].includes(child.label))
-          }
-        }
-
-        return item
-      })
+    return menuItems.filter((item: any) => !managerExcluded.includes(item.label))
   }
 
   if (role === 'CASHIER') {
-    const allowedMenus = ['MÓDULO VENTAS', 'Ventas', 'FACTURACIÓN SIAT', 'SIAT']
+    const allowedMenus = ['VENTAS', 'Ventas']
 
-    return menuItems
-      .filter((item: any) => allowedMenus.includes(item.label))
-      .map((item: any) => {
-        if (item.label === 'SIAT' && item.children) {
-          return {
-            ...item,
-            children: item.children.filter((child: any) => child.label === 'Facturación Online')
-          }
-        }
-
-        return item
-      })
+    return menuItems.filter((item: any) => allowedMenus.includes(item.label))
   }
 
   return []
@@ -69,9 +65,35 @@ export const getHomeRouteByRole = (_userEmail: string | null, userRole?: Role | 
 
 export const canAccessRoute = (role: Role | null, route: string): boolean => {
   if (!role) return false
-  if (role === 'ADMIN') return true
 
-  const adminOnlyRoutes = ['/users', '/branches', '/siat/eventos', '/siat/paquetes', '/siat/cafc']
+  if (role === 'ADMIN') {
+    // El ADMIN ve todo el catálogo/configuración, pero no opera ventas en tienda
+    return !route.startsWith('/sales/instore')
+  }
 
-  return !adminOnlyRoutes.some(r => route.startsWith(r))
+  if (role === 'MANAGER') {
+    const managerBlockedRoutes = [
+      '/users',
+      '/branches',
+      '/customers',
+      '/products',
+      '/category',
+      '/discounts',
+      '/outfits',
+      '/sliders',
+      '/advertisement',
+      '/banners',
+      '/siat'
+    ]
+
+    return !managerBlockedRoutes.some(r => route.startsWith(r))
+  }
+
+  if (role === 'CASHIER') {
+    const cashierAllowedRoutes = ['/sales']
+
+    return cashierAllowedRoutes.some(r => route.startsWith(r))
+  }
+
+  return false
 }

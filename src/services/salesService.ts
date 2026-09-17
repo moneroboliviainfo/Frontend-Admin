@@ -46,7 +46,7 @@ import type {
 class CartServiceClass {
   //Agregar items al carrito
   async addToCart(data: CartRequest): Promise<CartResponse> {
-    const response = await apiClient.post<CartResponse>('/api/cart', data)
+    const response = await apiClient.post<CartResponse>('/api/cart?type=in_store', data)
 
     return response.data
   }

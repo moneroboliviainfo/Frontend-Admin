@@ -244,28 +244,34 @@ const ProductCatalog: React.FC<ProductCatalogProps> = ({
                         {item.price ? formatCurrency(item.price) : '-'}
                       </Typography>
                     )}
-                    {item.stock > 0 ? (
+                    <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 0.5 }}>
                       <Chip
                         label={`Stock: ${item.stock}`}
                         size='small'
-                        color={item.stock > 10 ? 'success' : 'warning'}
+                        color={item.stock > 10 ? 'success' : item.stock > 0 ? 'warning' : 'error'}
                       />
-                    ) : item.warehouseStock > 0 ? (
-                      <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 0.5 }}>
-                        <Chip label={`Hay ${item.warehouseStock} en bodega`} size='small' color='info' variant='outlined' />
-                        <Button
-                          size='small'
-                          variant='outlined'
-                          color='info'
-                          onClick={e => handleOpenTransfer(e, item)}
-                          startIcon={<i className='tabler-transfer' style={{ fontSize: '14px' }} />}
-                        >
-                          Traer a tienda
-                        </Button>
-                      </Box>
-                    ) : (
-                      <Chip label='Stock: 0' size='small' color='error' />
-                    )}
+                      {item.warehouseStock > 0 && (
+                        <>
+                          <Typography
+                            variant='caption'
+                            color='text.secondary'
+                            sx={{ fontSize: '0.68rem', lineHeight: 1.2 }}
+                          >
+                            Bodega: {item.warehouseStock} disp.
+                          </Typography>
+                          <Button
+                            size='small'
+                            variant='outlined'
+                            color='info'
+                            onClick={e => handleOpenTransfer(e, item)}
+                            startIcon={<i className='tabler-transfer' style={{ fontSize: '12px' }} />}
+                            sx={{ fontSize: '0.68rem', lineHeight: 1.2, py: 0.25, px: 1, minWidth: 0 }}
+                          >
+                            Traer a tienda
+                          </Button>
+                        </>
+                      )}
+                    </Box>
                   </CardContent>
                 </Card>
               </Grid>

@@ -89,7 +89,8 @@ const getPaymentLabel = (paymentType: string): string => {
   const labels: Record<string, string> = {
     cash: 'Efectivo',
     card: 'Tarjeta',
-    qr: 'QR'
+    qr: 'QR',
+    card_online: 'Tarjeta Online'
   }
 
   return labels[paymentType] || paymentType
