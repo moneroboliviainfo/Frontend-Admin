@@ -9,6 +9,7 @@ import LinearProgress from '@mui/material/LinearProgress'
 import { toast } from 'react-toastify'
 
 import type { MediaFile } from '@/schemas/variant.schema'
+import { convertImageToWebp } from '@/utils/convertImageToWebp'
 
 type Props = {
   mediaFiles: MediaFile[]
@@ -105,12 +106,19 @@ const VariantMediaUploader = ({
           await new Promise(resolve => setTimeout(resolve, 50))
         }
 
+        // El backend solo acepta imágenes en webp — se convierte acá antes de guardarlo
+        const processedFile = file.type.startsWith('image/') ? await convertImageToWebp(file) : file
+
         const mediaFile: MediaFile = {
           id: tempId,
-          file,
-          url: URL.createObjectURL(file),
-          type: file.type.startsWith('image/') ? 'image' : file.type.startsWith('video/') ? 'video' : 'document',
-          name: file.name,
+          file: processedFile,
+          url: URL.createObjectURL(processedFile),
+          type: processedFile.type.startsWith('image/')
+            ? 'image'
+            : processedFile.type.startsWith('video/')
+              ? 'video'
+              : 'document',
+          name: processedFile.name,
           source: 'new' as const
         }
 
