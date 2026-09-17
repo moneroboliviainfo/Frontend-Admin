@@ -257,6 +257,7 @@ const PointOfSale: React.FC = () => {
           color: variant.color,
           size: typeof size.size === 'string' ? size.size : size.size?.name,
           stock: size.availableStock || size.quantity || 0,
+          warehouseStock: size.warehouseStock || 0,
           multimedia: variant.multimedia,
           product: variant.product,
           price: variant.product?.price

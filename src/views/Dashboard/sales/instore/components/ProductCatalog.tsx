@@ -1,4 +1,4 @@
-import React from 'react'
+import React, { useState } from 'react'
 
 import {
   Grid,
@@ -14,8 +14,18 @@ import {
   TablePagination,
   Stepper,
   Step,
-  StepLabel
+  StepLabel,
+  Dialog,
+  DialogTitle,
+  DialogContent,
+  DialogActions,
+  Button
 } from '@mui/material'
+
+import { toast } from 'react-toastify'
+
+import { useTransferStock } from '@/hooks/useVariants'
+import { useBranchContext } from '@/contexts/BranchContext'
 
 interface ProductCatalogProps {
   searchTerm: string
@@ -46,6 +56,48 @@ const ProductCatalog: React.FC<ProductCatalogProps> = ({
   onPageChange,
   onProductClick
 }) => {
+  const [transferTarget, setTransferTarget] = useState<any | null>(null)
+  const [transferQty, setTransferQty] = useState<string>('')
+  const transferStock = useTransferStock()
+
+  // Solo aplica si algún día un ADMIN entra al POS; MANAGER/CASHIER se resuelven solos
+  const { selectedBranchId, isAdmin } = useBranchContext()
+  const branchId = isAdmin ? (selectedBranchId ?? undefined) : undefined
+
+  const handleOpenTransfer = (e: React.MouseEvent, item: any) => {
+    e.stopPropagation()
+    setTransferTarget(item)
+    setTransferQty('')
+  }
+
+  const handleCloseTransfer = () => {
+    setTransferTarget(null)
+    setTransferQty('')
+  }
+
+  const handleConfirmTransfer = async () => {
+    const quantity = Math.min(parseInt(transferQty) || 0, transferTarget?.warehouseStock || 0)
+
+    if (!transferTarget || quantity <= 0) {
+      toast.warning('Ingresa una cantidad mayor a 0')
+
+      return
+    }
+
+    try {
+      await transferStock.mutateAsync({
+        variantId: transferTarget.variantSizeId,
+        quantity,
+        direction: 'warehouse_to_floor',
+        branchId
+      })
+      toast.success('Stock enviado a tienda exitosamente')
+      handleCloseTransfer()
+    } catch (error: any) {
+      toast.error(error?.response?.data?.message || 'Error al enviar stock a tienda')
+    }
+  }
+
   const formatCurrency = (amount: number | string) => {
     const numAmount = typeof amount === 'string' ? parseFloat(amount) : amount
 
@@ -57,7 +109,8 @@ const ProductCatalog: React.FC<ProductCatalogProps> = ({
   }
 
   return (
-    <Card sx={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
+    <>
+      <Card sx={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
       <Box sx={{ p: 3, borderBottom: 1, borderColor: 'divider' }}>
         <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 3 }}>
           <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
@@ -191,11 +244,28 @@ const ProductCatalog: React.FC<ProductCatalogProps> = ({
                         {item.price ? formatCurrency(item.price) : '-'}
                       </Typography>
                     )}
-                    <Chip
-                      label={`Stock: ${item.stock}`}
-                      size='small'
-                      color={item.stock > 10 ? 'success' : item.stock > 0 ? 'warning' : 'error'}
-                    />
+                    {item.stock > 0 ? (
+                      <Chip
+                        label={`Stock: ${item.stock}`}
+                        size='small'
+                        color={item.stock > 10 ? 'success' : 'warning'}
+                      />
+                    ) : item.warehouseStock > 0 ? (
+                      <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 0.5 }}>
+                        <Chip label={`Hay ${item.warehouseStock} en bodega`} size='small' color='info' variant='outlined' />
+                        <Button
+                          size='small'
+                          variant='outlined'
+                          color='info'
+                          onClick={e => handleOpenTransfer(e, item)}
+                          startIcon={<i className='tabler-transfer' style={{ fontSize: '14px' }} />}
+                        >
+                          Traer a tienda
+                        </Button>
+                      </Box>
+                    ) : (
+                      <Chip label='Stock: 0' size='small' color='error' />
+                    )}
                   </CardContent>
                 </Card>
               </Grid>
@@ -219,7 +289,43 @@ const ProductCatalog: React.FC<ProductCatalogProps> = ({
           }}
         />
       )}
-    </Card>
+      </Card>
+
+      <Dialog open={!!transferTarget} onClose={handleCloseTransfer} maxWidth='xs' fullWidth>
+        <DialogTitle>Traer stock a tienda</DialogTitle>
+        <DialogContent>
+          <Typography variant='body2' color='text.secondary' sx={{ mb: 1 }}>
+            {transferTarget?.displayName} · {transferTarget?.color?.name} · Talla {transferTarget?.size}
+          </Typography>
+          <Typography variant='body2' sx={{ mb: 2 }}>
+            Disponible en bodega: {transferTarget?.warehouseStock}
+          </Typography>
+          <TextField
+            fullWidth
+            type='number'
+            size='small'
+            label='Cantidad a traer'
+            placeholder='0'
+            value={transferQty}
+            onChange={e => setTransferQty(e.target.value)}
+            inputProps={{ max: transferTarget?.warehouseStock || 0, min: 0 }}
+          />
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={handleCloseTransfer} color='secondary' disabled={transferStock.isPending}>
+            Cancelar
+          </Button>
+          <Button
+            onClick={handleConfirmTransfer}
+            variant='contained'
+            disabled={transferStock.isPending}
+            startIcon={transferStock.isPending ? <CircularProgress size={16} /> : <i className='tabler-check' />}
+          >
+            {transferStock.isPending ? 'Enviando...' : 'Confirmar'}
+          </Button>
+        </DialogActions>
+      </Dialog>
+    </>
   )
 }
 

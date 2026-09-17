@@ -8,13 +8,15 @@ import Button from '@mui/material/Button'
 import Box from '@mui/material/Box'
 import Typography from '@mui/material/Typography'
 import CircularProgress from '@mui/material/CircularProgress'
+import ToggleButton from '@mui/material/ToggleButton'
+import ToggleButtonGroup from '@mui/material/ToggleButtonGroup'
 
-import { toast } from 'react-toastify'
 import { z } from 'zod'
 
 import CustomTextField from '@core/components/mui/TextField'
 import { useSubtractStock } from '@/hooks/useVariants'
 import { useBranchContext } from '@/contexts/BranchContext'
+import type { StockLocation } from '@/types/api/variants'
 
 const subtractStockSchema = z.object({
   quantity: z.number().positive('La cantidad debe ser mayor a 0'),
@@ -27,18 +29,24 @@ type Props = {
   variants: Array<{
     id: number
     size: { name: string }
+    warehouseStock: number
     availableStock: number
   }>
   variantId: number
+  showMessage: (message: string, severity: 'success' | 'error' | 'info' | 'warning') => void
 }
 
-const SubtractStockModal = ({ open, onClose, variants }: Props) => {
+const SubtractStockModal = ({ open, onClose, variants, showMessage }: Props) => {
+  const [location, setLocation] = useState<StockLocation>('warehouse')
   const [quantities, setQuantities] = useState<Record<number, number>>({})
   const [reasons, setReasons] = useState<Record<number, string>>({})
   const [errors, setErrors] = useState<Record<number, { quantity?: string; reason?: string }>>({})
   const subtractStock = useSubtractStock()
   const { selectedBranchId, isAdmin } = useBranchContext()
   const branchId = isAdmin ? (selectedBranchId ?? undefined) : undefined
+
+  const getMaxStock = (variant: { warehouseStock: number; availableStock: number }) =>
+    location === 'warehouse' ? variant.warehouseStock : variant.availableStock
 
   const handleQuantityChange = (variantId: number, value: string) => {
     const numValue = parseInt(value) || 0
@@ -79,7 +87,7 @@ const SubtractStockModal = ({ open, onClose, variants }: Props) => {
       const variantsToUpdate = Object.entries(quantities).filter(([_, qty]) => qty > 0)
 
       if (variantsToUpdate.length === 0) {
-        toast.warning('Ingresa al menos una cantidad mayor a 0')
+        showMessage('Ingresa al menos una cantidad mayor a 0', 'warning')
 
         return
       }
@@ -124,14 +132,19 @@ const SubtractStockModal = ({ open, onClose, variants }: Props) => {
           }
         }
 
-        if (variant && quantity > variant.availableStock) {
-          hasErrors = true
+        if (variant) {
+          const maxStock = getMaxStock(variant)
 
-          if (!newErrors[Number(variantId)]) {
-            newErrors[Number(variantId)] = {}
+          if (quantity > maxStock) {
+            hasErrors = true
+
+            if (!newErrors[Number(variantId)]) {
+              newErrors[Number(variantId)] = {}
+            }
+
+            newErrors[Number(variantId)].quantity =
+              `No puede ser mayor al stock en ${location === 'warehouse' ? 'bodega' : 'tienda'} (${maxStock})`
           }
-
-          newErrors[Number(variantId)].quantity = `No puede ser mayor al stock disponible (${variant.availableStock})`
         }
       }
 
@@ -148,21 +161,21 @@ const SubtractStockModal = ({ open, onClose, variants }: Props) => {
           variantId: Number(variantId),
           quantity: -quantity,
           reason: reason!,
+          location,
           branchId
         }
 
         await subtractStock.mutateAsync(payload)
       }
 
-      toast.success('Stock reducido exitosamente')
+      showMessage('Stock reducido exitosamente', 'success')
       setQuantities({})
       setReasons({})
       setErrors({})
       await new Promise(resolve => setTimeout(resolve, 300))
       onClose()
-    } catch (error) {
-      toast.error('Error al quitar stock')
-      console.error(error)
+    } catch (error: any) {
+      showMessage(error?.response?.data?.message || 'Error al quitar stock', 'error')
     }
   }
 
@@ -176,9 +189,34 @@ const SubtractStockModal = ({ open, onClose, variants }: Props) => {
       </DialogTitle>
 
       <DialogContent>
-        <Typography variant='body2' color='text.secondary' sx={{ mb: 3 }}>
+        <Typography variant='body2' color='text.secondary' sx={{ mb: 2 }}>
           Ingresa la cantidad a quitar para cada talla y la razón (obligatoria)
         </Typography>
+
+        <ToggleButtonGroup
+          value={location}
+          exclusive
+          size='small'
+          onChange={(_, newValue) => {
+            if (newValue !== null) {
+              setLocation(newValue)
+              setErrors({})
+            }
+          }}
+          sx={{
+            mb: 3,
+            '& .MuiToggleButton-root.Mui-selected': {
+              bgcolor: 'primary.main',
+              color: 'primary.contrastText',
+              '&:hover': {
+                bgcolor: 'primary.dark'
+              }
+            }
+          }}
+        >
+          <ToggleButton value='warehouse'>Bodega</ToggleButton>
+          <ToggleButton value='sales_floor'>Tienda</ToggleButton>
+        </ToggleButtonGroup>
 
         <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
           {variants.map(variant => (
@@ -202,7 +240,7 @@ const SubtractStockModal = ({ open, onClose, variants }: Props) => {
                 <Box sx={{ flex: 1 }}>
                   <Typography variant='subtitle2'>Talla {variant.size.name}</Typography>
                   <Typography variant='caption' color='text.secondary'>
-                    Stock actual: {variant.availableStock}
+                    {location === 'warehouse' ? 'En bodega' : 'En tienda'}: {getMaxStock(variant)}
                   </Typography>
                 </Box>
 

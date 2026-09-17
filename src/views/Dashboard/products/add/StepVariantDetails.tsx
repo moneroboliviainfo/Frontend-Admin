@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useRef } from 'react'
 import type { SyntheticEvent } from 'react'
 
 import { useRouter } from 'next/navigation'
@@ -48,6 +48,7 @@ import VariantsList from './components/VariantsList'
 import VariantMediaUploader from './components/VariantMediaUploader'
 import AddStockModal from './components/AddStockModal'
 import SubtractStockModal from './components/SubtractStockModal'
+import TransferStockModal from './components/TransferStockModal'
 
 type SnackbarMessage = {
   key: number
@@ -82,11 +83,19 @@ const StepVariantDetails = ({ activeStep, handlePrev, steps, mode, productId, pr
   const [editingVariantId, setEditingVariantId] = useState<number | null>(null)
   const [variantToLoadId, setVariantToLoadId] = useState<number | null>(null)
   const [colorToLoadId, setColorToLoadId] = useState<number | null>(null)
+
+  // Evita procesar el mismo color 2 veces (React StrictMode duplica efectos en desarrollo)
+  const processedColorLoadRef = useRef<number | null>(null)
+
+  // true cuando el reload de la variante es solo para refrescar stock (Agregar/Quitar/Enviar a Tienda),
+  // no una selección nueva del usuario — evita mostrar "Color cargado" de nuevo en ese caso
+  const isSilentRefreshRef = useRef(false)
   const [colorError, setColorError] = useState<string | null>(null)
   const [filesError, setFilesError] = useState<string | null>(null)
   const [sizesError, setSizesError] = useState<string | null>(null)
   const [addStockModalOpen, setAddStockModalOpen] = useState(false)
   const [subtractStockModalOpen, setSubtractStockModalOpen] = useState(false)
+  const [transferStockModalOpen, setTransferStockModalOpen] = useState(false)
   const [isMediaUploading, setIsMediaUploading] = useState(false)
   const [isSavingVariant, setIsSavingVariant] = useState(false)
   const [savingMessage, setSavingMessage] = useState('')
@@ -108,6 +117,7 @@ const StepVariantDetails = ({ activeStep, handlePrev, steps, mode, productId, pr
   // Sucursal activa: solo el ADMIN la manda (MANAGER/CASHIER se resuelven solos en el backend)
   const { selectedBranchId, isAdmin } = useBranchContext()
   const branchId = isAdmin ? (selectedBranchId ?? undefined) : undefined
+  const previousBranchIdRef = useRef(branchId)
 
   const { data: colors, isLoading: colorsLoading } = useColors()
   const { data: existingVariants, isLoading: variantsLoading } = useVariantsByProduct(productId)
@@ -181,6 +191,21 @@ const StepVariantDetails = ({ activeStep, handlePrev, steps, mode, productId, pr
     setUrlsToDelete([])
   }
 
+  // Si el ADMIN cambia de sucursal mientras edita una variante, el stock que se ve
+  // (bodega/tienda) queda de la sucursal vieja — se reinicia el form, como si fuera
+  // a crear una variante nueva, hasta que vuelva a clickear una variante puntual.
+  useEffect(() => {
+    if (previousBranchIdRef.current !== branchId) {
+      previousBranchIdRef.current = branchId
+
+      if (isEditing) {
+        handleClearForm()
+        showMessage('Cambiaste de sucursal — seleccioná la variante de nuevo para ver su stock', 'info')
+      }
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [branchId])
+
   const handleAddSize = () => {
     setVariantForm(prev => ({
       ...prev,
@@ -233,7 +258,11 @@ const StepVariantDetails = ({ activeStep, handlePrev, steps, mode, productId, pr
     variantForm.colorId === ''
       ? null
       : variantForm.colorId === 'custom'
-        ? { id: 'custom', name: variantForm.customColorName || 'Color personalizado', code: variantForm.customColorCode }
+        ? {
+            id: 'custom',
+            name: variantForm.customColorName || 'Color personalizado',
+            code: variantForm.customColorCode
+          }
         : colorOptions.find(c => c.id.toString() === variantForm.colorId) || null
 
   const handleSaveVariant = async () => {
@@ -512,7 +541,8 @@ const StepVariantDetails = ({ activeStep, handlePrev, steps, mode, productId, pr
         return {
           id: v.id,
           size: sizeValue,
-          quantity: v.availableStock || v.quantity || 0
+          quantity: v.availableStock || v.quantity || 0,
+          warehouseStock: v.warehouseStock || 0
         }
       })
 
@@ -527,14 +557,20 @@ const StepVariantDetails = ({ activeStep, handlePrev, steps, mode, productId, pr
 
       if (variantToLoad.color?.id) {
         setOriginalColorId(variantToLoad.color.id)
-        setColorToLoadId(variantToLoad.color.id)
+
+        if (!isSilentRefreshRef.current) {
+          setColorToLoadId(variantToLoad.color.id)
+        }
       }
 
+      isSilentRefreshRef.current = false
       setVariantToLoadId(null)
     }
   }, [variantToLoad, variantToLoadId])
   useEffect(() => {
-    if (colorToLoad && colorToLoadId) {
+    if (colorToLoad && colorToLoadId && processedColorLoadRef.current !== colorToLoadId) {
+      processedColorLoadRef.current = colorToLoadId
+
       const colorExistsInList = colors?.some(c => c.id === colorToLoadId)
 
       if (colorExistsInList) {
@@ -555,6 +591,13 @@ const StepVariantDetails = ({ activeStep, handlePrev, steps, mode, productId, pr
       setColorToLoadId(null)
     }
   }, [colorToLoad, colorToLoadId, colors, showMessage])
+
+  // Libera la guarda una vez que el ciclo terminó, para permitir cargar el mismo color más adelante
+  useEffect(() => {
+    if (colorToLoadId === null) {
+      processedColorLoadRef.current = null
+    }
+  }, [colorToLoadId])
 
   if (isCreateMode && !productCreated) {
     return (
@@ -634,7 +677,10 @@ const StepVariantDetails = ({ activeStep, handlePrev, steps, mode, productId, pr
               />
 
               <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 1 }}>
-                <i className='tabler-info-circle' style={{ fontSize: '16px', color: 'var(--mui-palette-text-secondary)' }} />
+                <i
+                  className='tabler-info-circle'
+                  style={{ fontSize: '16px', color: 'var(--mui-palette-text-secondary)' }}
+                />
                 <Typography variant='caption' color='text.secondary'>
                   Por favor no cierres esta ventana
                 </Typography>
@@ -701,8 +747,6 @@ const StepVariantDetails = ({ activeStep, handlePrev, steps, mode, productId, pr
                       }}
                       getOptionLabel={option => option.name}
                       isOptionEqualToValue={(option, value) => option.id === value.id}
-
-                      // Limita el listado visible a ~5 opciones; el resto se ve con scroll
                       ListboxProps={{ style: { maxHeight: 220, overflowY: 'auto' } }}
                       renderOption={(props, option) => {
                         const { key, ...optionProps } = props as typeof props & { key?: string }
@@ -760,7 +804,7 @@ const StepVariantDetails = ({ activeStep, handlePrev, steps, mode, productId, pr
                     Tallas y Stock
                   </Typography>
 
-                  <Box sx={{ display: 'flex', gap: 1 }}>
+                  <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap' }}>
                     {isEditing && variantForm.sizes.some(s => s.id) && (
                       <>
                         <Button
@@ -781,6 +825,15 @@ const StepVariantDetails = ({ activeStep, handlePrev, steps, mode, productId, pr
                         >
                           Quitar Stock
                         </Button>
+                        <Button
+                          variant='contained'
+                          size='small'
+                          color='info'
+                          startIcon={<i className='tabler-transfer' />}
+                          onClick={() => setTransferStockModalOpen(true)}
+                        >
+                          Mover Variante
+                        </Button>
                       </>
                     )}
                     <Button
@@ -794,47 +847,68 @@ const StepVariantDetails = ({ activeStep, handlePrev, steps, mode, productId, pr
                   </Box>
                 </Box>
 
-                {variantForm.sizes.map((size, index) => (
-                  <Grid container spacing={1} key={index} sx={{ mb: 1, alignItems: 'center' }}>
-                    <Grid size={{ xs: 5 }}>
-                      <CustomTextField
-                        fullWidth
-                        size='small'
-                        value={size.size}
-                        onChange={e => handleSizeChange(index, 'size', e.target.value)}
-                        placeholder='Talla (S, M, L ...)'
-                        disabled={!!size.id}
-                        error={!!sizesError}
-                      />
-                    </Grid>
-                    <Grid size={{ xs: 5 }}>
-                      <CustomTextField
-                        fullWidth
-                        size='small'
-                        type='number'
-                        placeholder='0'
-                        value={size.quantity || ''}
-                        onChange={e => {
-                          const value = e.target.value
+                <Alert severity='info' sx={{ mb: 2 }}>
+                  El stock que crees o agregues acá entra a la <strong>bodega</strong> de la sucursal — no queda
+                  disponible para vender hasta que uses &quot;Enviar a Tienda&quot;.
+                </Alert>
 
-                          handleSizeChange(index, 'quantity', value === '' ? 0 : parseInt(value) || 0)
-                        }}
-                        disabled={!!size.id}
-                        error={!!sizesError}
-                        sx={{
-                          '& input[type=number]': {
-                            MozAppearance: 'textfield'
-                          },
-                          '& input[type=number]::-webkit-outer-spin-button, & input[type=number]::-webkit-inner-spin-button':
-                            {
-                              WebkitAppearance: 'none',
-                              margin: 0
-                            }
-                        }}
-                      />
+                {variantForm.sizes.map((size, index) =>
+                  size.id ? (
+                    <Grid container spacing={1} key={index} sx={{ mb: 1, alignItems: 'center' }}>
+                      <Grid size={{ xs: 4 }}>
+                        <CustomTextField fullWidth size='small' value={size.size} label='Talla' disabled />
+                      </Grid>
+                      <Grid size={{ xs: 4 }}>
+                        <CustomTextField
+                          fullWidth
+                          size='small'
+                          value={size.warehouseStock || 0}
+                          label='Bodega'
+                          disabled
+                        />
+                      </Grid>
+                      <Grid size={{ xs: 4 }}>
+                        <CustomTextField fullWidth size='small' value={size.quantity || 0} label='Tienda' disabled />
+                      </Grid>
                     </Grid>
-                    <Grid size={{ xs: 2 }}>
-                      {!size.id && (
+                  ) : (
+                    <Grid container spacing={1} key={index} sx={{ mb: 1, alignItems: 'center' }}>
+                      <Grid size={{ xs: 5 }}>
+                        <CustomTextField
+                          fullWidth
+                          size='small'
+                          value={size.size}
+                          onChange={e => handleSizeChange(index, 'size', e.target.value)}
+                          placeholder='Talla (S, M, L ...)'
+                          error={!!sizesError}
+                        />
+                      </Grid>
+                      <Grid size={{ xs: 5 }}>
+                        <CustomTextField
+                          fullWidth
+                          size='small'
+                          type='number'
+                          placeholder='0'
+                          value={size.quantity || ''}
+                          onChange={e => {
+                            const value = e.target.value
+
+                            handleSizeChange(index, 'quantity', value === '' ? 0 : parseInt(value) || 0)
+                          }}
+                          error={!!sizesError}
+                          sx={{
+                            '& input[type=number]': {
+                              MozAppearance: 'textfield'
+                            },
+                            '& input[type=number]::-webkit-outer-spin-button, & input[type=number]::-webkit-inner-spin-button':
+                              {
+                                WebkitAppearance: 'none',
+                                margin: 0
+                              }
+                          }}
+                        />
+                      </Grid>
+                      <Grid size={{ xs: 2 }}>
                         <IconButton
                           size='small'
                           color='error'
@@ -843,10 +917,10 @@ const StepVariantDetails = ({ activeStep, handlePrev, steps, mode, productId, pr
                         >
                           <i className='tabler-trash' />
                         </IconButton>
-                      )}
+                      </Grid>
                     </Grid>
-                  </Grid>
-                ))}
+                  )
+                )}
                 {sizesError && (
                   <Typography
                     variant='caption'
@@ -1018,6 +1092,7 @@ const StepVariantDetails = ({ activeStep, handlePrev, steps, mode, productId, pr
               setAddStockModalOpen(false)
 
               if (editingVariantId) {
+                isSilentRefreshRef.current = true
                 setVariantToLoadId(editingVariantId)
               }
             }}
@@ -1026,9 +1101,10 @@ const StepVariantDetails = ({ activeStep, handlePrev, steps, mode, productId, pr
               .map(s => ({
                 id: s.id!,
                 size: { name: s.size },
-                availableStock: s.quantity
+                warehouseStock: s.warehouseStock || 0
               }))}
             variantId={editingVariantId!}
+            showMessage={showMessage}
           />
         )}
         {isEditing && variantForm.sizes.length > 0 && (
@@ -1038,6 +1114,7 @@ const StepVariantDetails = ({ activeStep, handlePrev, steps, mode, productId, pr
               setSubtractStockModalOpen(false)
 
               if (editingVariantId) {
+                isSilentRefreshRef.current = true
                 setVariantToLoadId(editingVariantId)
               }
             }}
@@ -1046,9 +1123,33 @@ const StepVariantDetails = ({ activeStep, handlePrev, steps, mode, productId, pr
               .map(s => ({
                 id: s.id!,
                 size: { name: s.size },
-                availableStock: s.quantity
+                warehouseStock: s.warehouseStock || 0,
+                availableStock: s.quantity || 0
               }))}
             variantId={editingVariantId!}
+            showMessage={showMessage}
+          />
+        )}
+        {isEditing && variantForm.sizes.length > 0 && (
+          <TransferStockModal
+            open={transferStockModalOpen}
+            onClose={() => {
+              setTransferStockModalOpen(false)
+
+              if (editingVariantId) {
+                isSilentRefreshRef.current = true
+                setVariantToLoadId(editingVariantId)
+              }
+            }}
+            variants={variantForm.sizes
+              .filter(s => s.id)
+              .map(s => ({
+                id: s.id!,
+                size: { name: s.size },
+                availableStock: s.quantity,
+                warehouseStock: s.warehouseStock || 0
+              }))}
+            showMessage={showMessage}
           />
         )}
 

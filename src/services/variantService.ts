@@ -11,7 +11,9 @@ import type {
   BrandsResponse,
   AddStockRequest,
   SubtractStockRequest,
-  AddStockResponse
+  AddStockResponse,
+  TransferStockRequest,
+  StockTransfer
 } from '@/types/api/variants'
 
 class VariantServiceClass {
@@ -53,6 +55,14 @@ class VariantServiceClass {
 
   async subtractStock({ branchId, ...body }: SubtractStockRequest): Promise<AddStockResponse> {
     const response = await apiClient.post<AddStockResponse>('/api/variants/subtractstock', body, {
+      params: branchId ? { branchId } : undefined
+    })
+
+    return response.data
+  }
+
+  async transferStock({ branchId, ...body }: TransferStockRequest): Promise<StockTransfer> {
+    const response = await apiClient.post<StockTransfer>('/api/stock-transfers', body, {
       params: branchId ? { branchId } : undefined
     })
 

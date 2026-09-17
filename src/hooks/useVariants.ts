@@ -10,7 +10,8 @@ import type {
   UpdateVariantDto,
   CreateBrandDto,
   AddStockRequest,
-  SubtractStockRequest
+  SubtractStockRequest,
+  TransferStockRequest
 } from '@/types/api/variants'
 
 export const useVariantsByProduct = (productId: string | number | undefined) => {
@@ -115,6 +116,27 @@ export const useSubtractStock = () => {
     },
     onError: error => {
       console.error('Error subtracting stock:', error)
+    }
+  })
+}
+
+export const useTransferStock = () => {
+  const queryClient = useQueryClient()
+
+  return useMutation({
+    mutationFn: (data: TransferStockRequest) => variantService.transferStock(data),
+    onSuccess: () => {
+      queryClient.invalidateQueries({
+        queryKey: ['variants'],
+        refetchType: 'active'
+      })
+      queryClient.invalidateQueries({
+        queryKey: ['variant'],
+        refetchType: 'active'
+      })
+    },
+    onError: error => {
+      console.error('Error transferring stock:', error)
     }
   })
 }

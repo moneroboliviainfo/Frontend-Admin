@@ -9,8 +9,6 @@ import Box from '@mui/material/Box'
 import Typography from '@mui/material/Typography'
 import CircularProgress from '@mui/material/CircularProgress'
 
-import { toast } from 'react-toastify'
-
 import CustomTextField from '@core/components/mui/TextField'
 import { useAddStock } from '@/hooks/useVariants'
 import { useBranchContext } from '@/contexts/BranchContext'
@@ -21,12 +19,13 @@ type Props = {
   variants: Array<{
     id: number
     size: { name: string }
-    availableStock: number
+    warehouseStock: number
   }>
   variantId: number
+  showMessage: (message: string, severity: 'success' | 'error' | 'info' | 'warning') => void
 }
 
-const AddStockModal = ({ open, onClose, variants }: Props) => {
+const AddStockModal = ({ open, onClose, variants, showMessage }: Props) => {
   const [quantities, setQuantities] = useState<Record<number, number>>({})
   const addStock = useAddStock()
   const { selectedBranchId, isAdmin } = useBranchContext()
@@ -46,7 +45,7 @@ const AddStockModal = ({ open, onClose, variants }: Props) => {
       const variantsToUpdate = Object.entries(quantities).filter(([_, qty]) => qty > 0)
 
       if (variantsToUpdate.length === 0) {
-        toast.warning('Ingresa al menos una cantidad mayor a 0')
+        showMessage('Ingresa al menos una cantidad mayor a 0', 'warning')
 
         return
       }
@@ -59,13 +58,12 @@ const AddStockModal = ({ open, onClose, variants }: Props) => {
         })
       }
 
-      toast.success('Stock actualizado exitosamente')
+      showMessage('Stock actualizado exitosamente', 'success')
       setQuantities({})
       await new Promise(resolve => setTimeout(resolve, 300))
       onClose()
-    } catch (error) {
-      toast.error('Error al agregar stock')
-      console.error(error)
+    } catch (error: any) {
+      showMessage(error?.response?.data?.message || 'Error al agregar stock', 'error')
     }
   }
 
@@ -100,7 +98,7 @@ const AddStockModal = ({ open, onClose, variants }: Props) => {
               <Box sx={{ flex: 1 }}>
                 <Typography variant='subtitle2'>Talla {variant.size.name}</Typography>
                 <Typography variant='caption' color='text.secondary'>
-                  Stock actual: {variant.availableStock}
+                  En bodega: {variant.warehouseStock}
                 </Typography>
               </Box>
 

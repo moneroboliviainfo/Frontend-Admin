@@ -82,10 +82,13 @@ export type AddStockRequest = {
   branchId?: number // va como query param, no en el body (lo separa variantService)
 }
 
+export type StockLocation = 'warehouse' | 'sales_floor'
+
 export type SubtractStockRequest = {
   variantId: number
   quantity: number
   reason?: string
+  location?: StockLocation // default: 'warehouse' (bodega) si no se manda
   branchId?: number // idem AddStockRequest
 }
 
@@ -96,6 +99,23 @@ export type AddStockResponse = {
   variant: {
     id: number
   }
+}
+
+export type StockTransferDirection = 'warehouse_to_floor' | 'floor_to_warehouse'
+
+export type TransferStockRequest = {
+  variantId: number
+  quantity: number
+  direction: StockTransferDirection
+  reason?: string
+  branchId?: number // idem AddStockRequest — va como query param, no en el body
+}
+
+export type StockTransfer = {
+  id: number
+  direction: StockTransferDirection
+  quantity: number
+  createdAt: string
 }
 export interface MediaFile {
   id: string
