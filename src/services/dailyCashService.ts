@@ -1,15 +1,21 @@
 import { apiClient } from '@/libs/axios'
-import type { DailyCashResponse, CreateDailyCashRequest } from '@/types/api/dailyCash'
+import type { DailyCash, OpenDailyCashRequest, CloseDailyCashRequest } from '@/types/api/dailyCash'
 
 class DailyCashServiceClass {
-  async getDailyCash(): Promise<DailyCashResponse> {
-    const response = await apiClient.get<DailyCashResponse>('/api/dailyCash')
+  async getCurrentDailyCash(): Promise<DailyCash> {
+    const response = await apiClient.get<DailyCash>('/api/dailyCash/current')
 
     return response.data
   }
 
-  async createDailyCash(data: CreateDailyCashRequest): Promise<DailyCashResponse> {
-    const response = await apiClient.post<DailyCashResponse>('/api/dailyCash', data)
+  async openDailyCash(data: OpenDailyCashRequest): Promise<DailyCash> {
+    const response = await apiClient.post<DailyCash>('/api/dailyCash/open', data)
+
+    return response.data
+  }
+
+  async closeDailyCash(id: number, data: CloseDailyCashRequest): Promise<DailyCash> {
+    const response = await apiClient.post<DailyCash>(`/api/dailyCash/${id}/close`, data)
 
     return response.data
   }

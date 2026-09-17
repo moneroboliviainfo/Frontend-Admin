@@ -848,8 +848,8 @@ const StepVariantDetails = ({ activeStep, handlePrev, steps, mode, productId, pr
                 </Box>
 
                 <Alert severity='info' sx={{ mb: 2 }}>
-                  El stock que crees o agregues acá entra a la <strong>bodega</strong> de la sucursal — no queda
-                  disponible para vender hasta que uses &quot;Enviar a Tienda&quot;.
+                  El stock que crees o agregues aqui entra a la <strong>bodega</strong> de la sucursal — no queda
+                  disponible para vender hasta que lo &quot;Envies a Tienda&quot;.
                 </Alert>
 
                 {variantForm.sizes.map((size, index) =>

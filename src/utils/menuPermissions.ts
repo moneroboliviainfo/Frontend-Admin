@@ -9,7 +9,16 @@ export const filterMenuByRole = (
   const role = userRole || 'ADMIN'
 
   if (role === 'ADMIN') {
-    return menuItems
+    return menuItems.map((item: any) => {
+      if (item.label === 'Ventas' && item.children) {
+        return {
+          ...item,
+          children: item.children.filter((child: any) => child.label !== 'Venta en Tienda')
+        }
+      }
+
+      return item
+    })
   }
 
   if (role === 'MANAGER') {

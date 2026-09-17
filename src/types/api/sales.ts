@@ -356,6 +356,9 @@ export interface OrdersListParams {
   orderId?: number
   name?: string
   ci?: string
+
+  // Solo lo manda un ADMIN; MANAGER/CASHIER se resuelven solos en el backend
+  branchId?: number
 }
 
 export interface OrdersListMeta {

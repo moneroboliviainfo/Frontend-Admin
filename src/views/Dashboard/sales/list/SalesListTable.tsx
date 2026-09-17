@@ -16,6 +16,7 @@ import Box from '@mui/material/Box'
 
 import { useOrders } from '@/hooks/useSales'
 import { useUserRole } from '@/hooks/useUserRole'
+import { useBranchContext } from '@/contexts/BranchContext'
 import { cartService } from '@/services/salesService'
 import OrderDetailsModal from './SaleDetailsModal'
 import TableFilters from './TableFilters'
@@ -115,6 +116,10 @@ const OrdersListTable = () => {
   const searchParams = useSearchParams()
   const { isCashier } = useUserRole()
 
+  // Sucursal activa: solo el ADMIN la manda (MANAGER/CASHIER se resuelven solos en el backend)
+  const { selectedBranchId, isAdmin, isReady } = useBranchContext()
+  const branchId = isAdmin ? (selectedBranchId ?? undefined) : undefined
+
   const [page, setPage] = useState(0)
   const [limit, setLimit] = useState(10)
   const [selectedOrder, setSelectedOrder] = useState<Order | null>(null)
@@ -140,8 +145,9 @@ const OrdersListTable = () => {
     paymentType: paymentTypeFilter === 'all' ? undefined : (paymentTypeFilter as 'cash' | 'card' | 'qr'),
     orderId: appliedSearch.orderId ? parseInt(appliedSearch.orderId, 10) : undefined,
     name: appliedSearch.name || undefined,
-    ci: appliedSearch.ci || undefined
-  })
+    ci: appliedSearch.ci || undefined,
+    branchId
+  }, isReady)
 
   // Detectar parámetro showOrderId para abrir modal automáticamente (después de editar una orden)
   useEffect(() => {
@@ -188,7 +194,8 @@ const OrdersListTable = () => {
         type: typeFilter === 'all' ? undefined : (typeFilter as 'in_store' | 'online'),
         startDate: startDate || undefined,
         endDate: endDate || undefined,
-        paymentType: paymentTypeFilter === 'all' ? undefined : (paymentTypeFilter as 'cash' | 'card' | 'qr')
+        paymentType: paymentTypeFilter === 'all' ? undefined : (paymentTypeFilter as 'cash' | 'card' | 'qr'),
+        branchId
       })
 
       // Crear un URL para el blob y descargar el archivo

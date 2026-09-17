@@ -29,7 +29,7 @@ import {
   useGetOrder,
   useUpdateOrder
 } from '@/hooks/useSales'
-import { useDailyCash, useCreateDailyCash } from '@/hooks/useDailyCash'
+import { useDailyCash, useOpenDailyCash, useCloseDailyCash } from '@/hooks/useDailyCash'
 import { useVariants } from '@/hooks/useVariants'
 import type { CartItem, RepriceResponse, Order, GenerateQRResponse, BillingInfo } from '@/types/api/sales'
 import type { Variant, VariantSize } from '@/types/api/variants'
@@ -67,6 +67,11 @@ const PointOfSale: React.FC = () => {
   const [dailyCashModalOpen, setDailyCashModalOpen] = useState(false)
   const [initialAmount, setInitialAmount] = useState('')
   const [dailyCashError, setDailyCashError] = useState('')
+
+  const [closeDailyCashModalOpen, setCloseDailyCashModalOpen] = useState(false)
+  const [closingAmount, setClosingAmount] = useState('')
+  const [closingNote, setClosingNote] = useState('')
+  const [closeDailyCashError, setCloseDailyCashError] = useState('')
 
   const [searchTerm, setSearchTerm] = useState('')
   const [debouncedSearch, setDebouncedSearch] = useState('')
@@ -107,7 +112,8 @@ const PointOfSale: React.FC = () => {
   const skipDebounceRef = useRef(false)
 
   const { data: dailyCashData, isLoading: isDailyCashLoading, error: dailyCashApiError } = useDailyCash()
-  const createDailyCash = useCreateDailyCash()
+  const openDailyCash = useOpenDailyCash()
+  const closeDailyCash = useCloseDailyCash()
 
   const addToCartMutation = useAddToCart()
   const repriceMutation = useRepriceCart()
@@ -696,8 +702,8 @@ const PointOfSale: React.FC = () => {
     }
 
     try {
-      await createDailyCash.mutateAsync({
-        quantity: String(amount)
+      await openDailyCash.mutateAsync({
+        openingAmount: String(amount)
       })
 
       setDailyCashModalOpen(false)
@@ -705,6 +711,29 @@ const PointOfSale: React.FC = () => {
     } catch (error: any) {
       console.error('Error al crear daily cash:', error)
       setDailyCashError(error?.response?.data?.message || 'Error al registrar el valor inicial')
+    }
+  }
+
+  const handleSubmitCloseDailyCash = async () => {
+    setCloseDailyCashError('')
+
+    if (!closingAmount.trim() || !dailyCashData) {
+      setCloseDailyCashError('Debe ingresar el monto de cierre')
+
+      return
+    }
+
+    try {
+      await closeDailyCash.mutateAsync({
+        id: dailyCashData.id,
+        data: { closingAmount, closingNote: closingNote.trim() || undefined }
+      })
+
+      setCloseDailyCashModalOpen(false)
+      router.push('/home')
+    } catch (error: any) {
+      console.error('Error al cerrar daily cash:', error)
+      setCloseDailyCashError(error?.response?.data?.message || 'Error al cerrar caja')
     }
   }
 
@@ -782,9 +811,9 @@ const PointOfSale: React.FC = () => {
               onClick={handleSubmitDailyCash}
               variant='contained'
               color='primary'
-              disabled={createDailyCash.isPending}
+              disabled={openDailyCash.isPending}
             >
-              {createDailyCash.isPending ? 'Guardando...' : 'Registrar'}
+              {openDailyCash.isPending ? 'Guardando...' : 'Registrar'}
             </Button>
           </DialogActions>
         </Dialog>
@@ -801,6 +830,31 @@ const PointOfSale: React.FC = () => {
           <Alert severity='error' onClose={() => setErrorMessage('')}>
             {errorMessage}
           </Alert>
+        </Box>
+      )}
+
+      {dailyCashData && (
+        <Box
+          sx={{
+            px: 3,
+            pt: 2,
+            display: 'flex',
+            justifyContent: 'space-between',
+            alignItems: 'center'
+          }}
+        >
+          <Typography variant='body2' color='text.secondary'>
+            Caja abierta: Bs {dailyCashData.openingAmount}
+          </Typography>
+          <Button
+            size='small'
+            color='secondary'
+            variant='outlined'
+            startIcon={<i className='tabler-lock' />}
+            onClick={() => setCloseDailyCashModalOpen(true)}
+          >
+            Cerrar Caja
+          </Button>
         </Box>
       )}
 
@@ -888,6 +942,53 @@ const PointOfSale: React.FC = () => {
         editingOrderId={editingOrderId}
         billing={billing}
       />
+
+      <Dialog open={closeDailyCashModalOpen} maxWidth='sm' fullWidth>
+        <DialogTitle>Cerrar Caja</DialogTitle>
+        <DialogContent>
+          <Box sx={{ pt: 2, display: 'flex', flexDirection: 'column', gap: 3 }}>
+            <Alert severity='info'>Monto de apertura: Bs {dailyCashData?.openingAmount}</Alert>
+
+            <TextField
+              label='Monto de Cierre (Bs)'
+              type='text'
+              inputMode='decimal'
+              value={closingAmount}
+              onChange={e => setClosingAmount(e.target.value.replace(/[^0-9.]/g, ''))}
+              fullWidth
+              autoFocus
+              error={!!closeDailyCashError}
+              helperText={closeDailyCashError}
+            />
+
+            <TextField
+              label='Nota (opcional)'
+              value={closingNote}
+              onChange={e => setClosingNote(e.target.value)}
+              fullWidth
+              multiline
+              rows={2}
+            />
+          </Box>
+        </DialogContent>
+        <DialogActions>
+          <Button
+            onClick={() => setCloseDailyCashModalOpen(false)}
+            color='secondary'
+            disabled={closeDailyCash.isPending}
+          >
+            Cancelar
+          </Button>
+          <Button
+            onClick={handleSubmitCloseDailyCash}
+            variant='contained'
+            color='primary'
+            disabled={closeDailyCash.isPending}
+          >
+            {closeDailyCash.isPending ? 'Cerrando...' : 'Confirmar Cierre'}
+          </Button>
+        </DialogActions>
+      </Dialog>
     </Box>
   )
 }

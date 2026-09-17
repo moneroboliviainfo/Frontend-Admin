@@ -68,12 +68,13 @@ export const useCancelOrder = () => {
   })
 }
 
-export const useOrders = (params: OrdersListParams) => {
+export const useOrders = (params: OrdersListParams, enabled: boolean = true) => {
   return useQuery({
     queryKey: ['orders', params],
     queryFn: () => cartService.getOrders(params),
     staleTime: 30000,
-    refetchOnWindowFocus: true
+    refetchOnWindowFocus: true,
+    enabled
   })
 }
 
