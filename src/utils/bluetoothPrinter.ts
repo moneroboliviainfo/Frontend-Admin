@@ -304,6 +304,7 @@ const combineBytes = (...arrays: Uint8Array[]): Uint8Array => {
 // Funciones de formato
 const unidades = ['', 'UN', 'DOS', 'TRES', 'CUATRO', 'CINCO', 'SEIS', 'SIETE', 'OCHO', 'NUEVE']
 const decenas = ['', 'DIEZ', 'VEINTE', 'TREINTA', 'CUARENTA', 'CINCUENTA', 'SESENTA', 'SETENTA', 'OCHENTA', 'NOVENTA']
+
 const especiales = [
   'DIEZ',
   'ONCE',
@@ -316,6 +317,7 @@ const especiales = [
   'DIECIOCHO',
   'DIECINUEVE'
 ]
+
 const centenas = [
   '',
   'CIENTO',

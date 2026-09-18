@@ -683,10 +683,9 @@ const OrderDetailsModal = ({ open, onClose, order: orderProp }: OrderDetailsModa
 
   // Permitir facturar si:
   // - Status es 'sent' (no cancelled_for_edit ni otros)
-  // - NO hay factura (si existe factura, aunque esté anulada, no se puede emitir nueva)
+  // - NO hay factura, o la que hay quedó ANULADA (se puede emitir una nueva)
   // - Tiene datos de facturación
   // NOTA: Cuando se edita una orden, se crea una NUEVA orden. La original queda cancelled_for_edit.
-  // Si la factura quedó ANULADA, también se puede emitir una nueva (no solo revertir la anterior).
   const canInvoice =
     (order.status === 'sent' || (order.status === 'paid' && order.payment_type === 'card_online')) &&
     (!order.factura || order.factura.estado === 'ANULADA') &&
