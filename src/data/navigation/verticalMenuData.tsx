@@ -40,11 +40,11 @@ const getFullMenuData = (): VerticalMenuDataType[] => [
     label: 'SIAT',
     icon: 'tabler-file-invoice',
     children: [
-      {
+      /*  {
         label: 'Facturación Online',
         icon: 'tabler-receipt',
         href: '/siat/facturacion/'
-      },
+      }, */
       {
         label: 'Eventos Significativos',
         icon: 'tabler-alert-triangle',

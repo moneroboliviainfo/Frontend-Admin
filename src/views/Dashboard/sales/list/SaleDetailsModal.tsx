@@ -55,6 +55,7 @@ import {
   useEventosSignificativosBySucursal
 } from '@/hooks/useSales'
 import { printInvoice } from '@/utils/invoicePrinter'
+import { useUserRole } from '@/hooks/useUserRole'
 import type { Order, Branch, Cafc, Factura, BillingInfo, TipoDocumentoIdentidad, OrderFacturaDetalle, EventoSignificativo } from '@/types/api/sales'
 
 interface SnackbarMessage {
@@ -191,6 +192,9 @@ const OrderDetailsModal = ({ open, onClose, order: orderProp }: OrderDetailsModa
   const sendOrderMutation = useSendOrder()
   const cancelForEditMutation = useCancelOrderForEdit()
 
+  // MANAGER/CASHIER ya tienen su sucursal fija desde el login (user.branch) — no eligen
+  const { userBranch, needsBranchSelector, hasFixedBranch } = useUserRole()
+
   // Hooks de facturación
   const { data: branchesData, isLoading: isLoadingBranches } = useBranches()
   const facturarMutation = useFacturar()
@@ -264,6 +268,14 @@ const OrderDetailsModal = ({ open, onClose, order: orderProp }: OrderDetailsModa
       setNitValidationMessage('')
     }
   }, [open, order?.billing])
+
+  // MANAGER/CASHIER: la sucursal ya viene fija del login, se autocompleta sin elegir.
+  // Se re-sincroniza siempre (no solo si está vacía) porque resetFacturaState la limpia.
+  useEffect(() => {
+    if (hasFixedBranch && userBranch?.id && selectedBranchId !== userBranch.id) {
+      setSelectedBranchId(userBranch.id)
+    }
+  }, [hasFixedBranch, userBranch?.id, selectedBranchId])
 
   // Resetear estados de facturación cuando cambia la orden o se cierra el modal
   useEffect(() => {
@@ -1173,32 +1185,43 @@ const OrderDetailsModal = ({ open, onClose, order: orderProp }: OrderDetailsModa
                     </Box>
                   ) : (
                     <>
-                      {/* Selector de sucursal */}
-                      <FormControl fullWidth size='small' sx={{ mb: 2 }}>
-                        <InputLabel>Sucursal *</InputLabel>
-                        <Select
-                          value={selectedBranchId}
-                          label='Sucursal *'
-                          onChange={e => {
-                            setSelectedBranchId(e.target.value as number)
-                            setSelectedEventoId('')
-                            setFechaEmisionContingencia('')
-                          }}
-                          disabled={isLoadingBranches}
-                        >
-                          {isLoadingBranches ? (
-                            <MenuItem value=''>Cargando...</MenuItem>
-                          ) : (
-                            branchesData
-                              ?.filter((b: Branch) => b.active)
-                              .map((branch: Branch) => (
-                                <MenuItem key={branch.id} value={branch.id}>
-                                  {branch.alias}
-                                </MenuItem>
-                              ))
-                          )}
-                        </Select>
-                      </FormControl>
+                      {/* Selector de sucursal: ADMIN elige, MANAGER/CASHIER ya la traen fija del login */}
+                      {needsBranchSelector ? (
+                        <FormControl fullWidth size='small' sx={{ mb: 2 }}>
+                          <InputLabel>Sucursal *</InputLabel>
+                          <Select
+                            value={selectedBranchId}
+                            label='Sucursal *'
+                            onChange={e => {
+                              setSelectedBranchId(e.target.value as number)
+                              setSelectedEventoId('')
+                              setFechaEmisionContingencia('')
+                            }}
+                            disabled={isLoadingBranches}
+                          >
+                            {isLoadingBranches ? (
+                              <MenuItem value=''>Cargando...</MenuItem>
+                            ) : (
+                              branchesData
+                                ?.filter((b: Branch) => b.active)
+                                .map((branch: Branch) => (
+                                  <MenuItem key={branch.id} value={branch.id}>
+                                    {branch.alias}
+                                  </MenuItem>
+                                ))
+                            )}
+                          </Select>
+                        </FormControl>
+                      ) : (
+                        <TextField
+                          fullWidth
+                          size='small'
+                          label='Sucursal'
+                          value={userBranch?.name || ''}
+                          disabled
+                          sx={{ mb: 2 }}
+                        />
+                      )}
 
                       {/* Sección de contingencia */}
                       <Collapse in={showContingencia}>

@@ -33,6 +33,7 @@ import {
   useEventosSignificativosBySucursal
 } from '@/hooks/useSales'
 import { printInvoice } from '@/utils/invoicePrinter'
+import { useUserRole } from '@/hooks/useUserRole'
 
 interface SuccessDialogProps {
   open: boolean
@@ -65,6 +66,9 @@ const SuccessDialog: React.FC<SuccessDialogProps> = ({
   const [selectedEventoId, setSelectedEventoId] = useState<number | ''>('')
   const [fechaEmisionContingencia, setFechaEmisionContingencia] = useState<string>('')
 
+  // MANAGER/CASHIER ya tienen su sucursal fija desde el login (user.branch) — no eligen
+  const { userBranch, needsBranchSelector, hasFixedBranch } = useUserRole()
+
   // Hooks
   const { data: branchesData, isLoading: isLoadingBranches } = useBranches()
   const facturarMutation = useFacturar()
@@ -74,19 +78,12 @@ const SuccessDialog: React.FC<SuccessDialogProps> = ({
   const orderId = isEditingOrder ? editingOrderId : orderData?.id
   const billingInfo = billing || orderData?.billing
 
-  // Filtrar solo sucursal con código 3 para ventas en tienda
-  const instoreBranch = useMemo(() => {
-    if (!branchesData) return null
-
-    return branchesData.find((b: Branch) => b.codigoSucursal === 3 && b.active)
-  }, [branchesData])
-
-  // Auto-seleccionar sucursal código 3 cuando cargue
+  // MANAGER/CASHIER: se autocompleta con la sucursal del login (por id, no por codigoSucursal)
   useEffect(() => {
-    if (instoreBranch && !selectedBranchId) {
-      setSelectedBranchId(instoreBranch.id)
+    if (hasFixedBranch && userBranch?.id && selectedBranchId !== userBranch.id) {
+      setSelectedBranchId(userBranch.id)
     }
-  }, [instoreBranch, selectedBranchId])
+  }, [hasFixedBranch, userBranch?.id, selectedBranchId])
 
   // Obtener sucursal seleccionada
   const selectedBranch = useMemo(() => {
@@ -384,28 +381,36 @@ const SuccessDialog: React.FC<SuccessDialogProps> = ({
               </Alert>
             )}
 
-            {/* Selector de sucursal */}
-            <FormControl fullWidth size='small' sx={{ mb: 2 }}>
-              <InputLabel>Sucursal *</InputLabel>
-              <Select
-                value={selectedBranchId}
-                label='Sucursal *'
-                onChange={e => {
-                  setSelectedBranchId(e.target.value as number)
-                  setSelectedEventoId('')
-                  setFechaEmisionContingencia('')
-                }}
-                disabled={isLoadingBranches}
-              >
-                {isLoadingBranches ? (
-                  <MenuItem value=''>Cargando...</MenuItem>
-                ) : instoreBranch ? (
-                  <MenuItem value={instoreBranch.id}>{instoreBranch.alias}</MenuItem>
-                ) : (
-                  <MenuItem value=''>No hay sucursal disponible</MenuItem>
-                )}
-              </Select>
-            </FormControl>
+            {/* Selector de sucursal: ADMIN elige, MANAGER/CASHIER ya la traen fija del login */}
+            {needsBranchSelector ? (
+              <FormControl fullWidth size='small' sx={{ mb: 2 }}>
+                <InputLabel>Sucursal *</InputLabel>
+                <Select
+                  value={selectedBranchId}
+                  label='Sucursal *'
+                  onChange={e => {
+                    setSelectedBranchId(e.target.value as number)
+                    setSelectedEventoId('')
+                    setFechaEmisionContingencia('')
+                  }}
+                  disabled={isLoadingBranches}
+                >
+                  {isLoadingBranches ? (
+                    <MenuItem value=''>Cargando...</MenuItem>
+                  ) : (
+                    branchesData
+                      ?.filter((b: Branch) => b.active)
+                      .map((branch: Branch) => (
+                        <MenuItem key={branch.id} value={branch.id}>
+                          {branch.alias}
+                        </MenuItem>
+                      ))
+                  )}
+                </Select>
+              </FormControl>
+            ) : (
+              <TextField fullWidth size='small' label='Sucursal' value={userBranch?.name || ''} disabled sx={{ mb: 2 }} />
+            )}
 
             {/* Sección de contingencia */}
             <Collapse in={showContingencia}>
