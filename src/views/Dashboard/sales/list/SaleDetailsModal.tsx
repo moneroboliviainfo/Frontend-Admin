@@ -686,8 +686,11 @@ const OrderDetailsModal = ({ open, onClose, order: orderProp }: OrderDetailsModa
   // - NO hay factura (si existe factura, aunque esté anulada, no se puede emitir nueva)
   // - Tiene datos de facturación
   // NOTA: Cuando se edita una orden, se crea una NUEVA orden. La original queda cancelled_for_edit.
-  // NOTA: Después de anular, solo se puede REVERTIR, no emitir nueva factura en la misma orden.
-  const canInvoice = (order.status === 'sent' || (order.status === 'paid' && order.payment_type === 'card_online')) && !order.factura && billingInfo
+  // Si la factura quedó ANULADA, también se puede emitir una nueva (no solo revertir la anterior).
+  const canInvoice =
+    (order.status === 'sent' || (order.status === 'paid' && order.payment_type === 'card_online')) &&
+    (!order.factura || order.factura.estado === 'ANULADA') &&
+    billingInfo
 
   // Se puede anular solo si la factura está VALIDADA (no REVERTIDA, ya que la reversión es única)
   const canAnular = order.factura && order.factura.estado === 'VALIDADA'
@@ -1078,7 +1081,7 @@ const OrderDetailsModal = ({ open, onClose, order: orderProp }: OrderDetailsModa
             </Alert>
           )}
 
-          {/* Sección de facturación para órdenes sin factura */}
+          {/* Sección de facturación: órdenes sin factura, o con la factura anterior anulada */}
           {canInvoice && (
             <Card variant='outlined'>
               <CardContent>
@@ -1093,7 +1096,7 @@ const OrderDetailsModal = ({ open, onClose, order: orderProp }: OrderDetailsModa
                       onClick={() => setShowFacturacion(true)}
                       startIcon={<i className='tabler-file-invoice' />}
                     >
-                      Facturar
+                      {order.factura?.estado === 'ANULADA' ? 'Emitir Nueva Factura' : 'Facturar'}
                     </Button>
                   )}
                 </Box>

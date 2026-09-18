@@ -98,8 +98,38 @@ const ESC_POS = {
   FEED_5_LINES: new Uint8Array([ESC, 0x64, 0x05]),
   CUT_PAPER: new Uint8Array([GS, 0x56, 0x01]),
   LINE_SEPARATOR: new Uint8Array([
-    0x2d, 0x2d, 0x2d, 0x2d, 0x2d, 0x2d, 0x2d, 0x2d, 0x2d, 0x2d, 0x2d, 0x2d, 0x2d, 0x2d, 0x2d, 0x2d,
-    0x2d, 0x2d, 0x2d, 0x2d, 0x2d, 0x2d, 0x2d, 0x2d, 0x2d, 0x2d, 0x2d, 0x2d, 0x2d, 0x2d, 0x2d, 0x2d,
+    0x2d,
+    0x2d,
+    0x2d,
+    0x2d,
+    0x2d,
+    0x2d,
+    0x2d,
+    0x2d,
+    0x2d,
+    0x2d,
+    0x2d,
+    0x2d,
+    0x2d,
+    0x2d,
+    0x2d,
+    0x2d,
+    0x2d,
+    0x2d,
+    0x2d,
+    0x2d,
+    0x2d,
+    0x2d,
+    0x2d,
+    0x2d,
+    0x2d,
+    0x2d,
+    0x2d,
+    0x2d,
+    0x2d,
+    0x2d,
+    0x2d,
+    0x2d,
     LF
   ])
 }
@@ -274,8 +304,30 @@ const combineBytes = (...arrays: Uint8Array[]): Uint8Array => {
 // Funciones de formato
 const unidades = ['', 'UN', 'DOS', 'TRES', 'CUATRO', 'CINCO', 'SEIS', 'SIETE', 'OCHO', 'NUEVE']
 const decenas = ['', 'DIEZ', 'VEINTE', 'TREINTA', 'CUARENTA', 'CINCUENTA', 'SESENTA', 'SETENTA', 'OCHENTA', 'NOVENTA']
-const especiales = ['DIEZ', 'ONCE', 'DOCE', 'TRECE', 'CATORCE', 'QUINCE', 'DIECISEIS', 'DIECISIETE', 'DIECIOCHO', 'DIECINUEVE']
-const centenas = ['', 'CIENTO', 'DOSCIENTOS', 'TRESCIENTOS', 'CUATROCIENTOS', 'QUINIENTOS', 'SEISCIENTOS', 'SETECIENTOS', 'OCHOCIENTOS', 'NOVECIENTOS']
+const especiales = [
+  'DIEZ',
+  'ONCE',
+  'DOCE',
+  'TRECE',
+  'CATORCE',
+  'QUINCE',
+  'DIECISEIS',
+  'DIECISIETE',
+  'DIECIOCHO',
+  'DIECINUEVE'
+]
+const centenas = [
+  '',
+  'CIENTO',
+  'DOSCIENTOS',
+  'TRESCIENTOS',
+  'CUATROCIENTOS',
+  'QUINIENTOS',
+  'SEISCIENTOS',
+  'SETECIENTOS',
+  'OCHOCIENTOS',
+  'NOVECIENTOS'
+]
 
 const convertirMenorMil = (n: number): string => {
   if (n === 0) return ''
@@ -369,10 +421,24 @@ const formatTime = (dateString: string): string => {
 
 const getUnidadMedidaLabel = (codigo: number): string => {
   const unidadesMedida: Record<number, string> = {
-    1: 'BOBINAS', 2: 'BALDE', 3: 'BARRILES', 4: 'BOLSA', 5: 'BOTELLAS',
-    6: 'CAJA', 7: 'CARTONES', 14: 'DOCENA', 17: 'GRAMO', 22: 'KILOGRAMO',
-    28: 'LITRO', 30: 'METRO', 42: 'PAQUETE', 43: 'PAR', 47: 'PIEZAS',
-    57: 'UNIDAD', 58: 'UNIDAD', 62: 'OTRO'
+    1: 'BOBINAS',
+    2: 'BALDE',
+    3: 'BARRILES',
+    4: 'BOLSA',
+    5: 'BOTELLAS',
+    6: 'CAJA',
+    7: 'CARTONES',
+    14: 'DOCENA',
+    17: 'GRAMO',
+    22: 'KILOGRAMO',
+    28: 'LITRO',
+    30: 'METRO',
+    42: 'PAQUETE',
+    43: 'PAR',
+    47: 'PIEZAS',
+    57: 'UNIDAD',
+    58: 'UNIDAD',
+    62: 'OTRO'
   }
 
   return unidadesMedida[codigo] || 'UNIDAD'
@@ -470,7 +536,9 @@ export const printInvoiceBluetooth = async (factura: Factura): Promise<void> => 
       await writeToprinter(ESC_POS.BOLD_OFF)
       await printLine(detalle.descripcion)
       await printLine(`UM: ${getUnidadMedidaLabel(detalle.unidadMedida)}`)
-      await printLine(`${detalle.cantidad.toFixed(2)} x ${detalle.precioUnitario.toFixed(2)} = ${detalle.subTotal.toFixed(2)}`)
+      await printLine(
+        `${detalle.cantidad.toFixed(2)} x ${detalle.precioUnitario.toFixed(2)} = ${detalle.subTotal.toFixed(2)}`
+      )
 
       if (detalle.montoDescuento && detalle.montoDescuento > 0) {
         await printLine(`Desc: -${detalle.montoDescuento.toFixed(2)}`)
@@ -521,9 +589,10 @@ export const printInvoiceBluetooth = async (factura: Factura): Promise<void> => 
 
     await writeToprinter(ESC_POS.FEED_LINE)
 
-    const tipoEmision = factura.codigoEmision === 1
-      ? 'Documento Fiscal Digital emitido en modalidad de facturacion en linea'
-      : 'Documento Fiscal Digital emitido en modalidad de facturacion fuera de linea'
+    const tipoEmision =
+      factura.codigoEmision === 1
+        ? 'Documento Fiscal Digital emitido en modalidad de facturacion en linea'
+        : 'Documento Fiscal Digital emitido en modalidad de facturacion fuera de linea'
 
     const tipoChunks = tipoEmision.match(/.{1,32}/g) || [tipoEmision]
 
@@ -535,7 +604,7 @@ export const printInvoiceBluetooth = async (factura: Factura): Promise<void> => 
     await writeToprinter(ESC_POS.FEED_LINE)
     await writeToprinter(ESC_POS.ALIGN_CENTER)
 
-    const qrUrl = `https://pilotosiat.impuestos.gob.bo/consulta/QR?nit=${factura.nitEmisor}&cuf=${factura.cuf}&numero=${factura.numeroFactura}&t=2`
+    const qrUrl = `https://siat.impuestos.gob.bo/consulta/QR?nit=${factura.nitEmisor}&cuf=${factura.cuf}&numero=${factura.numeroFactura}&t=2`
 
     try {
       const qrCommands = generateQRCommand(qrUrl)

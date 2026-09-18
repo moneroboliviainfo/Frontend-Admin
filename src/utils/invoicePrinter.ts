@@ -305,7 +305,7 @@ export const generateInvoiceHTML = (factura: Factura): string => {
     .join('')
 
   // URL del SIAT para verificación de factura
-  const siatVerificationUrl = `https://pilotosiat.impuestos.gob.bo/consulta/QR?nit=${factura.nitEmisor}&cuf=${factura.cuf}&numero=${factura.numeroFactura}&t=2`
+  const siatVerificationUrl = `https://siat.impuestos.gob.bo/consulta/QR?nit=${factura.nitEmisor}&cuf=${factura.cuf}&numero=${factura.numeroFactura}&t=2`
 
   // URL para generar QR (codificando la URL del SIAT)
   const qrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=150x150&data=${encodeURIComponent(siatVerificationUrl)}`
