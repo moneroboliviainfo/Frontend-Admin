@@ -77,6 +77,17 @@ export const getAllowedBranchCodes = (email: string | null, userRole?: StaticRol
   return null // Todos permitidos (excepto los excluidos)
 }
 
+// Restringe el acceso directo por URL, no solo lo que se ve en el menú
+export const canAccessRoute = (userEmail: string | null, route: string, userRole?: StaticRole): boolean => {
+  const role = userRole || getRoleFromEmail(userEmail)
+
+  if (role === 'FACTURACION_JUNIN') {
+    return route.startsWith('/siat/facturacion')
+  }
+
+  return true
+}
+
 export const getHomeRouteByRole = (userEmail: string | null, userRole?: StaticRole): string => {
   const role = userRole || getRoleFromEmail(userEmail)
 

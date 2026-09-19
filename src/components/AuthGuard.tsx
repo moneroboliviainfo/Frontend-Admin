@@ -8,6 +8,7 @@ import { CircularProgress, Box } from '@mui/material'
 
 import { authService } from '@/services/authService'
 import { initLogRocket, identifyUser } from '@/libs/logrocket'
+import { getHomeRouteByRole, canAccessRoute } from '@/utils/menuPermissions'
 
 interface AuthGuardProps {
   children: React.ReactNode
@@ -26,14 +27,11 @@ const AuthGuard = ({ children }: AuthGuardProps) => {
   useEffect(() => {
     const checkAuth = () => {
       const isAuth = authService.isAuthenticated()
+      const userEmail = isAuth ? authService.getUserEmail() : null
 
       // Identificar usuario en LogRocket si está autenticado
-      if (isAuth) {
-        const userEmail = authService.getUserEmail()
-
-        if (userEmail) {
-          identifyUser(userEmail, { email: userEmail })
-        }
+      if (userEmail) {
+        identifyUser(userEmail, { email: userEmail })
       }
 
       const protectedPaths = ['/home', '/customers', '/apps', '/pages', '/forms', '/tables', '/charts', '/products']
@@ -43,7 +41,7 @@ const AuthGuard = ({ children }: AuthGuardProps) => {
       const isPublicPath = publicPaths.some(path => pathname.startsWith(path))
 
       if (pathname === '/') {
-        router.replace(isAuth ? '/home' : '/login')
+        router.replace(isAuth ? getHomeRouteByRole(userEmail) : '/login')
 
         return
       }
@@ -55,7 +53,13 @@ const AuthGuard = ({ children }: AuthGuardProps) => {
       }
 
       if (isPublicPath && isAuth) {
-        router.replace('/home')
+        router.replace(getHomeRouteByRole(userEmail))
+
+        return
+      }
+
+      if (isAuth && !isPublicPath && !canAccessRoute(userEmail, pathname)) {
+        router.replace(getHomeRouteByRole(userEmail))
 
         return
       }
