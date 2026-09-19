@@ -919,6 +919,7 @@ const StepVariantDetails = ({ activeStep, handlePrev, steps, mode, productId, pr
             isLoading={variantsLoading}
             editingVariantId={editingVariantId}
             onVariantClick={handleEditVariant}
+            productName={productName}
           />
         </Grid>
 

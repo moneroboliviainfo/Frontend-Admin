@@ -22,9 +22,10 @@ type Props = {
   isLoading: boolean
   editingVariantId: number | null
   onVariantClick: (variant: Variant) => void
+  productName?: string
 }
 
-const VariantsList = ({ variants, isLoading, editingVariantId, onVariantClick }: Props) => {
+const VariantsList = ({ variants, isLoading, editingVariantId, onVariantClick, productName }: Props) => {
   const [qrModalOpen, setQrModalOpen] = useState(false)
 
   const [selectedVariant, setSelectedVariant] = useState<{
@@ -196,6 +197,7 @@ const VariantsList = ({ variants, isLoading, editingVariantId, onVariantClick }:
           variantId={selectedVariant.id}
           colorName={selectedVariant.colorName}
           sizeName={selectedVariant.sizeName}
+          productName={productName}
         />
       )}
     </Card>
