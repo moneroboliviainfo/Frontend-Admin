@@ -130,15 +130,18 @@ const getFedexTrackingNumber = (order: Order): string | null => {
 // El PDF de la guía: preferimos el documento combinado (MERGED_LABEL_DOCUMENTS),
 // si no está disponible caemos al primer documento que haya.
 const getFedexPdfUrl = (order: Order): string | null => {
-  if (order.fedex_shipping_data) return order.fedex_shipping_data
+  const shipment = order.fedex_shipment_response?.output?.transactionShipments?.[0]
 
-  const shipmentDocuments = order.fedex_shipment_response?.output?.transactionShipments?.[0]?.shipmentDocuments
+  if (!shipment) return null
 
-  if (!shipmentDocuments?.length) return null
+  // Con más de un bulto, FedEx genera un documento combinado (MERGED_LABEL_DOCUMENTS).
+  const merged = shipment.shipmentDocuments?.find(doc => doc.contentType === 'MERGED_LABEL_DOCUMENTS')
 
-  const merged = shipmentDocuments.find(doc => doc.contentType === 'MERGED_LABEL_DOCUMENTS')
+  if (merged?.url) return merged.url
+  if (shipment.shipmentDocuments?.[0]?.url) return shipment.shipmentDocuments[0].url
 
-  return merged?.url || shipmentDocuments[0].url
+  // Con un solo bulto no hay documento combinado — el label vive en pieceResponses.
+  return shipment.pieceResponses?.[0]?.packageDocuments?.[0]?.url || null
 }
 
 const formatDate = (dateString: string): string => {

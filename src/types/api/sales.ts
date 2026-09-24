@@ -163,12 +163,22 @@ export interface FedexShipmentDocument {
   docType: string
 }
 
+export interface FedexPieceResponse {
+  masterTrackingNumber: string
+  trackingNumber: string
+  packageDocuments?: FedexShipmentDocument[]
+}
+
 export interface FedexTransactionShipment {
   masterTrackingNumber: string
   serviceType: string
   serviceName: string
   shipDatestamp: string
-  shipmentDocuments: FedexShipmentDocument[]
+
+  // Solo viene cuando hay más de un bulto (el PDF combinado). Con un solo
+  // producto/bulto, FedEx no genera este documento — el label vive en pieceResponses.
+  shipmentDocuments?: FedexShipmentDocument[]
+  pieceResponses?: FedexPieceResponse[]
 }
 
 export interface FedexShipmentResponse {
@@ -176,6 +186,37 @@ export interface FedexShipmentResponse {
   output: {
     transactionShipments: FedexTransactionShipment[]
   }
+}
+
+// Datos enviados a FedEx para generar el envío (destinatario, servicio, paquete) —
+// NO es una URL, a pesar del nombre del campo.
+export interface FedexShippingData {
+  recipient: {
+    personName: string
+    emailAddress: string
+    phoneNumber: string
+    address: {
+      streetLines: string[]
+      cityName: string
+      stateOrProvinceCode: string
+      postalCode: string
+      countryCode: string
+      residential: boolean
+    }
+  }
+  service: {
+    serviceType: string
+    serviceName: string
+    code: string
+    amountUSD: number
+    amountBOB: number
+    currency: string
+  }
+  packageCount: number
+  calculatedWeightKg: number
+  totalItemQuantity: number
+  unitPriceUsd: number
+  customsValueUsd: number
 }
 
 export interface Order {
@@ -189,7 +230,7 @@ export interface Order {
   totalPrice: string
   address_data: any | null
   trackingCode: string | null
-  fedex_shipping_data: string | null
+  fedex_shipping_data: FedexShippingData | null
   fedex_shipment_response: FedexShipmentResponse | null
   fedexShipmentCancelled: boolean
   createdAt: string
