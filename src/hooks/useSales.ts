@@ -79,8 +79,8 @@ export const useOrders = (params: OrdersListParams) => {
 
 export const useSendOrder = () => {
   return useMutation({
-    mutationFn: ({ orderId, dhlCode }: { orderId: number; dhlCode?: string }) =>
-      cartService.sendOrder(orderId, dhlCode),
+    mutationFn: ({ orderId, trackingCode }: { orderId: number; trackingCode?: string }) =>
+      cartService.sendOrder(orderId, trackingCode),
     onError: (error: any) => {
       console.error('Error sending order:', error)
       throw error

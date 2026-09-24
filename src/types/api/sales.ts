@@ -155,6 +155,29 @@ export interface OrderFacturaDetalle {
   subTotal: string
 }
 
+export interface FedexShipmentDocument {
+  url: string
+  contentType: string
+  copiesToPrint: number
+  trackingNumber?: string
+  docType: string
+}
+
+export interface FedexTransactionShipment {
+  masterTrackingNumber: string
+  serviceType: string
+  serviceName: string
+  shipDatestamp: string
+  shipmentDocuments: FedexShipmentDocument[]
+}
+
+export interface FedexShipmentResponse {
+  transactionId: string
+  output: {
+    transactionShipments: FedexTransactionShipment[]
+  }
+}
+
 export interface Order {
   id: number
   type: 'in_store' | 'online'
@@ -165,7 +188,10 @@ export interface Order {
   shipment_price: number
   totalPrice: string
   address_data: any | null
-  dhl_code: string | null
+  trackingCode: string | null
+  fedex_shipping_data: string | null
+  fedex_shipment_response: FedexShipmentResponse | null
+  fedexShipmentCancelled: boolean
   createdAt: string
   expiresAt: string | null
   edited: boolean

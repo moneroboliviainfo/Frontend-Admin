@@ -54,7 +54,7 @@ class CartServiceClass {
   //  Verificar disponibilidad y obtener precios actualizados
 
   async repriceCart(token: string): Promise<RepriceResponse> {
-    const response = await apiClient.post<RepriceResponse>(`/api/orders/reprice/${token}?type=in_store`)
+    const response = await apiClient.post<RepriceResponse>('/api/orders/reprice', { items: token, type: 'in_store' })
 
     return response.data
   }
@@ -87,9 +87,10 @@ class CartServiceClass {
     return response.data
   }
 
-  async sendOrder(orderId: number, dhlCode?: string): Promise<Order> {
-    const payload = dhlCode ? { dhl_code: dhlCode } : {}
-    const response = await apiClient.put<Order>(`/api/orders/${orderId}`, payload)
+  // Marca la orden como enviada por FedEx
+  async sendOrder(orderId: number, trackingCode?: string): Promise<Order> {
+    const payload = trackingCode ? { trackingCode } : {}
+    const response = await apiClient.put<Order>(`/api/orders/change-status/${orderId}`, payload)
 
     return response.data
   }

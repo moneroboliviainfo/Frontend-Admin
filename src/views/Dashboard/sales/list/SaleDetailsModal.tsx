@@ -121,6 +121,26 @@ const getTipoLabel = (tipo: string): string => {
   return tipo === 'in_store' ? 'En Tienda' : 'En Línea'
 }
 
+// El número de guía real vive en la respuesta cruda de FedEx (masterTrackingNumber);
+// trackingCode es solo lo que el back guardó aparte, puede quedar null igual.
+const getFedexTrackingNumber = (order: Order): string | null => {
+  return order.trackingCode || order.fedex_shipment_response?.output?.transactionShipments?.[0]?.masterTrackingNumber || null
+}
+
+// El PDF de la guía: preferimos el documento combinado (MERGED_LABEL_DOCUMENTS),
+// si no está disponible caemos al primer documento que haya.
+const getFedexPdfUrl = (order: Order): string | null => {
+  if (order.fedex_shipping_data) return order.fedex_shipping_data
+
+  const shipmentDocuments = order.fedex_shipment_response?.output?.transactionShipments?.[0]?.shipmentDocuments
+
+  if (!shipmentDocuments?.length) return null
+
+  const merged = shipmentDocuments.find(doc => doc.contentType === 'MERGED_LABEL_DOCUMENTS')
+
+  return merged?.url || shipmentDocuments[0].url
+}
+
 const formatDate = (dateString: string): string => {
   const date = new Date(dateString)
 
@@ -143,8 +163,8 @@ const OrderDetailsModal = ({ open, onClose, order: orderProp }: OrderDetailsModa
   // Usar los datos refrescados si existen, sino usar el prop original
   const order = orderData ?? orderProp
 
-  const [dhlCode, setDhlCode] = useState('')
-  const [showDhlInput, setShowDhlInput] = useState(false)
+  const [trackingCode, setTrackingCode] = useState('')
+  const [showTrackingInput, setShowTrackingInput] = useState(false)
   const [showCancelConfirm, setShowCancelConfirm] = useState(false)
   const [showEditConfirm, setShowEditConfirm] = useState(false)
   const [snackPack, setSnackPack] = useState<SnackbarMessage[]>([])
@@ -418,12 +438,12 @@ const OrderDetailsModal = ({ open, onClose, order: orderProp }: OrderDetailsModa
     try {
       await sendOrderMutation.mutateAsync({
         orderId: order.id,
-        dhlCode: dhlCode.trim() || undefined
+        trackingCode: trackingCode.trim() || undefined
       })
       showMessage('Orden enviada exitosamente', 'success')
       queryClient.invalidateQueries({ queryKey: ['orders'] })
-      setShowDhlInput(false)
-      setDhlCode('')
+      setShowTrackingInput(false)
+      setTrackingCode('')
       setTimeout(() => {
         onClose()
       }, 1500)
@@ -1674,14 +1694,40 @@ const OrderDetailsModal = ({ open, onClose, order: orderProp }: OrderDetailsModa
                       </Typography>
                     </Grid>
                   )}
-                  {order.dhl_code && (
-                    <Grid size={{ xs: 12 }}>
+                </Grid>
+              </CardContent>
+            </Card>
+          )}
+
+          {(getFedexTrackingNumber(order) || getFedexPdfUrl(order)) && (
+            <Card variant='outlined'>
+              <CardContent>
+                <Typography variant='h6' className='mb-4 text-textPrimary'>
+                  Envío FedEx
+                </Typography>
+                <Grid container spacing={3} alignItems='center'>
+                  {getFedexTrackingNumber(order) && (
+                    <Grid size={{ xs: 12, sm: getFedexPdfUrl(order) ? 6 : 12 }}>
                       <Typography variant='overline' className='text-textSecondary text-xs font-medium block'>
-                        Código DHL
+                        Código de Seguimiento
                       </Typography>
                       <Typography variant='h6' className='font-bold mt-1'>
-                        {order.dhl_code}
+                        {getFedexTrackingNumber(order)}
                       </Typography>
+                    </Grid>
+                  )}
+                  {getFedexPdfUrl(order) && (
+                    <Grid size={{ xs: 12, sm: 6 }}>
+                      <Button
+                        component='a'
+                        href={getFedexPdfUrl(order)!}
+                        target='_blank'
+                        rel='noopener noreferrer'
+                        variant='outlined'
+                        startIcon={<i className='tabler-file-download' />}
+                      >
+                        Descargar PDF
+                      </Button>
                     </Grid>
                   )}
                 </Grid>
@@ -1889,37 +1935,39 @@ const OrderDetailsModal = ({ open, onClose, order: orderProp }: OrderDetailsModa
                   </Button>
                 )}
 
-                {!showDhlInput && order.payment_type !== 'card_online' && (
+                {!showTrackingInput && (
                   <Button
                     variant='contained'
                     color='primary'
-                    onClick={() => setShowDhlInput(true)}
+                    onClick={() => {
+                      setTrackingCode(getFedexTrackingNumber(order) || '')
+                      setShowTrackingInput(true)
+                    }}
                     disabled={cancelOrderMutation.isPending || sendOrderMutation.isPending}
                     startIcon={<i className='tabler-truck' />}
                   >
-                    Enviar Pedido
+                    Enviar por FedEx
                   </Button>
                 )}
 
-                {showDhlInput && (
+                {showTrackingInput && (
                   <>
                     {!order.shipment && (
                       <TextField
                         size='small'
-                        label='Código DHL'
-                        value={dhlCode}
-                        onChange={e => setDhlCode(e.target.value)}
-                        placeholder='Ej: DHL-123456'
+                        label='Código de Seguimiento FedEx'
+                        value={trackingCode}
+                        onChange={e => setTrackingCode(e.target.value)}
+                        placeholder='Ej: 794658135200'
                         className='max-sm:is-full sm:is-[200px]'
                         disabled={sendOrderMutation.isPending}
-                        required
                       />
                     )}
                     <Button
                       variant='outlined'
                       onClick={() => {
-                        setShowDhlInput(false)
-                        setDhlCode('')
+                        setShowTrackingInput(false)
+                        setTrackingCode('')
                       }}
                       disabled={sendOrderMutation.isPending}
                     >
@@ -1929,7 +1977,7 @@ const OrderDetailsModal = ({ open, onClose, order: orderProp }: OrderDetailsModa
                       variant='contained'
                       color='success'
                       onClick={handleSendOrder}
-                      disabled={sendOrderMutation.isPending || (!order.shipment && !dhlCode.trim())}
+                      disabled={sendOrderMutation.isPending}
                       startIcon={
                         sendOrderMutation.isPending ? (
                           <CircularProgress size={20} color='inherit' />

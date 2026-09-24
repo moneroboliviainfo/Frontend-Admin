@@ -397,7 +397,18 @@ const OrdersListTable = () => {
                       />
                     </td>
                     <td className='p-4'>
-                      <Typography variant='body2'>{getTipoLabel(order.type)}</Typography>
+                      <Box className='flex items-center gap-2'>
+                        <Typography variant='body2'>{getTipoLabel(order.type)}</Typography>
+                        {order.fedex_shipping_data && (
+                          <Chip
+                            label='FedEx'
+                            variant='tonal'
+                            color='info'
+                            size='small'
+                            icon={<i className='tabler-truck' style={{ fontSize: '14px' }} />}
+                          />
+                        )}
+                      </Box>
                     </td>
                     <td className='p-4'>
                       <Typography variant='body2'>
