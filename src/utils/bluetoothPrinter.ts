@@ -84,6 +84,11 @@ const LF = 0x0a
 
 const ESC_POS = {
   INIT: new Uint8Array([ESC, 0x40]),
+
+  // Font B: fuente condensada del propio hardware — reduce el tamaño de letra
+  // sin tocar el ancho de página ni los comandos de alineación (son independientes).
+  FONT_B: new Uint8Array([ESC, 0x4d, 0x01]),
+
   ALIGN_LEFT: new Uint8Array([ESC, 0x61, 0x00]),
   ALIGN_CENTER: new Uint8Array([ESC, 0x61, 0x01]),
   ALIGN_RIGHT: new Uint8Array([ESC, 0x61, 0x02]),
@@ -405,6 +410,7 @@ export const printInvoiceBluetooth = async (factura: Factura): Promise<void> => 
   try {
     await writeToprinter(ESC_POS.INIT)
     await new Promise(resolve => setTimeout(resolve, 100))
+    await writeToprinter(ESC_POS.FONT_B)
 
     // ENCABEZADO
     await writeToprinter(ESC_POS.ALIGN_CENTER)
@@ -415,7 +421,6 @@ export const printInvoiceBluetooth = async (factura: Factura): Promise<void> => 
     await printLine('CON DERECHO A CREDITO FISCAL')
     await writeToprinter(ESC_POS.BOLD_OFF)
 
-    await writeToprinter(ESC_POS.FEED_LINE)
     await printLine(factura.razonSocialEmisor)
     await printLine(`${factura.nombreSucursal} ${factura.codigoSucursal}`)
     await printLine(`No. Punto de Venta ${factura.codigoPuntoVenta}`)
@@ -475,8 +480,6 @@ export const printInvoiceBluetooth = async (factura: Factura): Promise<void> => 
       if (detalle.montoDescuento && detalle.montoDescuento > 0) {
         await printLine(`Desc: -${detalle.montoDescuento.toFixed(2)}`)
       }
-
-      await writeToprinter(ESC_POS.FEED_LINE)
     }
 
     await writeToprinter(ESC_POS.LINE_SEPARATOR)
@@ -535,7 +538,7 @@ export const printInvoiceBluetooth = async (factura: Factura): Promise<void> => 
     await writeToprinter(ESC_POS.FEED_LINE)
     await writeToprinter(ESC_POS.ALIGN_CENTER)
 
-    const qrUrl = `https://pilotosiat.impuestos.gob.bo/consulta/QR?nit=${factura.nitEmisor}&cuf=${factura.cuf}&numero=${factura.numeroFactura}&t=2`
+    const qrUrl = `https://siat.impuestos.gob.bo/consulta/QR?nit=${factura.nitEmisor}&cuf=${factura.cuf}&numero=${factura.numeroFactura}&t=2`
 
     try {
       const qrCommands = generateQRCommand(qrUrl)
@@ -552,7 +555,7 @@ export const printInvoiceBluetooth = async (factura: Factura): Promise<void> => 
     }
 
     // FINALIZAR
-    await writeToprinter(ESC_POS.FEED_5_LINES)
+    await writeToprinter(ESC_POS.FEED_3_LINES)
     await writeToprinter(ESC_POS.CUT_PAPER)
 
     console.log('Factura impresa exitosamente via Bluetooth')
