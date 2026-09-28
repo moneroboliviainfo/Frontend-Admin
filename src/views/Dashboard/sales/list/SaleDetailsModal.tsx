@@ -55,7 +55,16 @@ import {
   useEventosSignificativosBySucursal
 } from '@/hooks/useSales'
 import { printInvoice } from '@/utils/invoicePrinter'
-import type { Order, Branch, Cafc, Factura, BillingInfo, TipoDocumentoIdentidad, OrderFacturaDetalle, EventoSignificativo } from '@/types/api/sales'
+import type {
+  Order,
+  Branch,
+  Cafc,
+  Factura,
+  BillingInfo,
+  TipoDocumentoIdentidad,
+  OrderFacturaDetalle,
+  EventoSignificativo
+} from '@/types/api/sales'
 
 interface SnackbarMessage {
   message: string
@@ -124,7 +133,9 @@ const getTipoLabel = (tipo: string): string => {
 // El número de guía real vive en la respuesta cruda de FedEx (masterTrackingNumber);
 // trackingCode es solo lo que el back guardó aparte, puede quedar null igual.
 const getFedexTrackingNumber = (order: Order): string | null => {
-  return order.trackingCode || order.fedex_shipment_response?.output?.transactionShipments?.[0]?.masterTrackingNumber || null
+  return (
+    order.trackingCode || order.fedex_shipment_response?.output?.transactionShipments?.[0]?.masterTrackingNumber || null
+  )
 }
 
 // El PDF de la guía: preferimos el documento combinado (MERGED_LABEL_DOCUMENTS),
@@ -486,6 +497,9 @@ const OrderDetailsModal = ({ open, onClose, order: orderProp }: OrderDetailsModa
   }
 
   const canEditOrder = () => {
+    // Las órdenes online con envío FedEx ya generado no se pueden editar
+    if (order.type === 'online' && order.fedex_shipping_data) return false
+
     if (order.status === 'cancelled_for_edit') return true
     if (!['paid', 'sent'].includes(order.status)) return false
 
@@ -548,7 +562,14 @@ const OrderDetailsModal = ({ open, onClose, order: orderProp }: OrderDetailsModa
   }
 
   const handleEmitirContingencia = async () => {
-    if (!order.id || !selectedBranchId || !billingInfo || !selectedEventoId || !selectedCafcId || !fechaEmisionContingencia) {
+    if (
+      !order.id ||
+      !selectedBranchId ||
+      !billingInfo ||
+      !selectedEventoId ||
+      !selectedCafcId ||
+      !fechaEmisionContingencia
+    ) {
       setFacturaError('Faltan datos para emitir la factura por contingencia')
 
       return
@@ -1014,19 +1035,41 @@ const OrderDetailsModal = ({ open, onClose, order: orderProp }: OrderDetailsModa
                         <table style={{ width: '100%', borderCollapse: 'collapse' }}>
                           <thead>
                             <tr style={{ backgroundColor: 'rgba(0,0,0,0.04)' }}>
-                              <th style={{ padding: '8px 12px', textAlign: 'left', fontSize: '12px', fontWeight: 600 }}>Producto</th>
-                              <th style={{ padding: '8px 12px', textAlign: 'center', fontSize: '12px', fontWeight: 600 }}>Cant.</th>
-                              <th style={{ padding: '8px 12px', textAlign: 'right', fontSize: '12px', fontWeight: 600 }}>P. Unit.</th>
-                              <th style={{ padding: '8px 12px', textAlign: 'right', fontSize: '12px', fontWeight: 600 }}>Subtotal</th>
+                              <th style={{ padding: '8px 12px', textAlign: 'left', fontSize: '12px', fontWeight: 600 }}>
+                                Producto
+                              </th>
+                              <th
+                                style={{ padding: '8px 12px', textAlign: 'center', fontSize: '12px', fontWeight: 600 }}
+                              >
+                                Cant.
+                              </th>
+                              <th
+                                style={{ padding: '8px 12px', textAlign: 'right', fontSize: '12px', fontWeight: 600 }}
+                              >
+                                P. Unit.
+                              </th>
+                              <th
+                                style={{ padding: '8px 12px', textAlign: 'right', fontSize: '12px', fontWeight: 600 }}
+                              >
+                                Subtotal
+                              </th>
                             </tr>
                           </thead>
                           <tbody>
                             {order.factura.detalles.map((detalle: OrderFacturaDetalle, index: number) => (
                               <tr key={detalle.id || index} style={{ borderTop: '1px solid rgba(0,0,0,0.08)' }}>
                                 <td style={{ padding: '8px 12px', fontSize: '13px' }}>{detalle.descripcion}</td>
-                                <td style={{ padding: '8px 12px', textAlign: 'center', fontSize: '13px' }}>{parseFloat(detalle.cantidad).toFixed(0)}</td>
-                                <td style={{ padding: '8px 12px', textAlign: 'right', fontSize: '13px' }}>Bs. {parseFloat(detalle.precioUnitario).toFixed(2)}</td>
-                                <td style={{ padding: '8px 12px', textAlign: 'right', fontSize: '13px', fontWeight: 600 }}>Bs. {parseFloat(detalle.subTotal).toFixed(2)}</td>
+                                <td style={{ padding: '8px 12px', textAlign: 'center', fontSize: '13px' }}>
+                                  {parseFloat(detalle.cantidad).toFixed(0)}
+                                </td>
+                                <td style={{ padding: '8px 12px', textAlign: 'right', fontSize: '13px' }}>
+                                  Bs. {parseFloat(detalle.precioUnitario).toFixed(2)}
+                                </td>
+                                <td
+                                  style={{ padding: '8px 12px', textAlign: 'right', fontSize: '13px', fontWeight: 600 }}
+                                >
+                                  Bs. {parseFloat(detalle.subTotal).toFixed(2)}
+                                </td>
                               </tr>
                             ))}
                           </tbody>
@@ -1255,7 +1298,12 @@ const OrderDetailsModal = ({ open, onClose, order: orderProp }: OrderDetailsModa
                             </Select>
                           </FormControl>
 
-                          <FormControl fullWidth size='small' sx={{ mb: 2 }} disabled={isLoadingEventos || !selectedBranchId}>
+                          <FormControl
+                            fullWidth
+                            size='small'
+                            sx={{ mb: 2 }}
+                            disabled={isLoadingEventos || !selectedBranchId}
+                          >
                             <InputLabel>Evento Significativo *</InputLabel>
                             <Select
                               value={selectedEventoId}
@@ -1708,9 +1756,9 @@ const OrderDetailsModal = ({ open, onClose, order: orderProp }: OrderDetailsModa
                 <Typography variant='h6' className='mb-4 text-textPrimary'>
                   Envío FedEx
                 </Typography>
-                <Grid container spacing={3} alignItems='center'>
+                <Grid container spacing={3}>
                   {getFedexTrackingNumber(order) && (
-                    <Grid size={{ xs: 12, sm: getFedexPdfUrl(order) ? 6 : 12 }}>
+                    <Grid size={{ xs: 12, sm: 4 }}>
                       <Typography variant='overline' className='text-textSecondary text-xs font-medium block'>
                         Código de Seguimiento
                       </Typography>
@@ -1719,8 +1767,28 @@ const OrderDetailsModal = ({ open, onClose, order: orderProp }: OrderDetailsModa
                       </Typography>
                     </Grid>
                   )}
+                  {order.fedex_shipping_data && (
+                    <>
+                      <Grid size={{ xs: 6, sm: 4 }}>
+                        <Typography variant='overline' className='text-textSecondary text-xs font-medium block'>
+                          Cantidad de Cajas
+                        </Typography>
+                        <Typography variant='h6' className='font-bold mt-1'>
+                          {order.fedex_shipping_data.packageCount}
+                        </Typography>
+                      </Grid>
+                      <Grid size={{ xs: 6, sm: 4 }}>
+                        <Typography variant='overline' className='text-textSecondary text-xs font-medium block'>
+                          Peso Total en Kilos
+                        </Typography>
+                        <Typography variant='h6' className='font-bold mt-1'>
+                          {order.fedex_shipping_data.calculatedWeightKg} kg
+                        </Typography>
+                      </Grid>
+                    </>
+                  )}
                   {getFedexPdfUrl(order) && (
-                    <Grid size={{ xs: 12, sm: 6 }}>
+                    <Grid size={{ xs: 12 }}>
                       <Button
                         component='a'
                         href={getFedexPdfUrl(order)!}
