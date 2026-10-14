@@ -1,0 +1,66 @@
+# Cambios en `develop` — 9 y 10 de octubre de 2026
+
+Qué cambió en el backend desde [12-changelog-2026-09.md](12-changelog-2026-09.md),
+**qué se rompe** y **qué tiene que hacer el front**. El detalle está en los
+docs enlazados (ya actualizados).
+
+## Resumen
+
+| # | Cambio | Impacto en el front | Detalle |
+|---|---|---|---|
+| 1 | **Pedidos cobrados al pedir** (anticipo, no se factura): efectivo, tarjeta o QR | Flujo nuevo en "nuevo pedido": cotizar → cobrar → crear | [13](13-prepaid-branch-requests.md) §3 |
+| 2 | **Cobro del anticipo por QR**: estado nuevo `pending_payment` | Pantalla de espera del QR | [13](13-prepaid-branch-requests.md) §4 |
+| 3 | **Devoluciones** del anticipo (efectivo, caja de la tienda que pidió) | Lista + botón "Devolver" + badge `pendingRefunds` | [13](13-prepaid-branch-requests.md) §5 |
+| 4 | **Venta de retiro con anticipo**: reprice devuelve `advanceApplied` y `amountDue` | El POS cobra `amountDue`, no `total` | [13](13-prepaid-branch-requests.md) §6 |
+| 5 | **Anticipo perdido** si el cliente no retira a tiempo | Mostrar `advanceForfeited`; nuevo `409` al enlazar | [13](13-prepaid-branch-requests.md) §7 |
+| 6 | **Configuración** de los plazos (`/settings`), antes variables de entorno | Pantalla nueva (admin) | [13](13-prepaid-branch-requests.md) §2 |
+| 7 | Los plazos **vencen a las 23:59** (hora de Bolivia) y se fijan al recibir | Nada si ya usabas `pickupDeadline`/`holdUntil` | [11](11-central-warehouse-and-branch-transfers.md) §5.5 |
+| 8 | **Cierre de caja** con desglose (ventas, anticipos, devoluciones) | Mostrar el desglose | [07](07-branches-daily-cash-billing.md) |
+| 9 | QR de una venta de retiro: **solo por el saldo** | Saldo 0 → confirmar en efectivo | [04](04-cart-checkout-payments.md) |
+| 10 | Datos del cliente **opcionales** en pedidos sin cobro; CI nuevo | Formulario de pedido | [11](11-central-warehouse-and-branch-transfers.md) §5.3 |
+
+---
+
+## ⚠️ Lo que rompe (revisar sí o sí)
+
+1. **Estado nuevo `pending_payment`** en los traslados. Un `switch` sobre
+   `status` sin `default` va a romper; agregá la etiqueta "Esperando pago".
+2. **El POS tiene que cobrar `amountDue`**, no `total`, en la venta de
+   retiro de un pedido cobrado. Si cobra `total`, el cliente paga dos veces
+   el anticipo. Sin pedido cobrado son iguales, así que usar siempre
+   `amountDue` es seguro.
+3. **`expectedAmount` del cierre de caja ahora incluye anticipos y resta
+   devoluciones.** Si el front recalculaba o explicaba el esperado como
+   "suma de ventas", ya no cuadra: usá el desglose (`salesAmount`,
+   `advancesAmount`, `refundsAmount`).
+4. **Un pedido `pending_payment` es invisible para la tienda origen** (no
+   aparece en su listado; su detalle da `404`). No lo trates como error.
+5. **Actores `null` del sistema**: un anticipo pagado por QR tiene
+   `payments[].createdBy: null`, y la salida de stock que genera aparece en
+   el kardex con `user: null`. Mostralo como "Sistema (pago QR)".
+6. **Plazos al fin del día**: un pedido recibido hoy vence a las 23:59 del
+   último día, no a la hora exacta de recepción. Si el front calculaba
+   fechas a partir de `receivedAt`, dejá de hacerlo: usá `pickupDeadline` y
+   `holdUntil`.
+
+Cambios que **no** rompen pero conviene saber:
+- `customerName`/`customerPhone` ya no son obligatorios en un pedido sin
+  cobro (con cobro sí, más `customerCi`).
+- `GET /branch-transfers/pending-count` trae `pendingRefunds`.
+- El reprice trae siempre `advanceApplied` y `amountDue`.
+
+---
+
+## Checklist para el front
+
+- [ ] **Configuración** (ADMIN/SUPERVISOR): plazo de retiro y días de apartado (`GET/PATCH /settings`), con la aclaración "aplica a los pedidos que se reciban desde ahora".
+- [ ] **Nuevo pedido**: opción de cobro (sin cobro / efectivo / tarjeta / QR); **cotizar** (`requests/quote`) y mandar `expectedTotal`; nombre, teléfono y CI obligatorios con cobro; manejar el `409` de "el total cambió" (volver a cotizar).
+- [ ] **Pantalla de espera del QR**: `generate-qr/request/:id`, pollear `GET /branch-transfers/:id`, estados de 13 §4.3, botones "Generar otro QR" y "Anular".
+- [ ] Etiqueta del estado **`pending_payment`** en listados y detalle.
+- [ ] **Devoluciones pendientes**: `?pendingRefund=true`, badge `pendingRefunds`, botón "Devolver Bs `refundPending`" (`requests/:id/refund`).
+- [ ] **POS – venta de retiro**: mostrar anticipo y "a cobrar" (`advanceApplied` / `amountDue`); cobrar `amountDue`; con saldo 0, venta en efectivo.
+- [ ] **POS – corregir venta de retiro**: ofrecer **editar**, no cancelar + nueva.
+- [ ] Mostrar **anticipo perdido** (`advanceForfeited`) y avisar al marcar "no retirado" un pedido cobrado.
+- [ ] Detalle del pedido: cobro (`advanceAmount`, `advancePaidAt`), movimientos (`payments`), precio congelado por línea.
+- [ ] **Cierre de caja**: desglose ventas / anticipos / devoluciones.
+- [ ] Kardex y movimientos: `user: null` → "Sistema".
