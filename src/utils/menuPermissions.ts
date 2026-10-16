@@ -8,17 +8,20 @@ export const filterMenuByRole = (
 ): VerticalMenuDataType[] => {
   const role = userRole || 'ADMIN'
 
-  if (role === 'ADMIN') {
-    return menuItems.map((item: any) => {
-      if (item.label === 'Ventas' && item.children) {
-        return {
-          ...item,
-          children: item.children.filter((child: any) => child.label !== 'Venta en Tienda')
+  // SUPERVISOR = ADMIN salvo Usuarios
+  if (role === 'ADMIN' || role === 'SUPERVISOR') {
+    return menuItems
+      .filter((item: any) => role === 'ADMIN' || item.label !== 'Usuarios')
+      .map((item: any) => {
+        if (item.label === 'Ventas' && item.children) {
+          return {
+            ...item,
+            children: item.children.filter((child: any) => child.label !== 'Venta en Tienda')
+          }
         }
-      }
 
-      return item
-    })
+        return item
+      })
   }
 
   if (role === 'MANAGER') {
@@ -67,8 +70,11 @@ export const canAccessRoute = (role: Role | null, route: string): boolean => {
   if (!role) return false
 
   if (role === 'ADMIN') {
-    // El ADMIN ve todo el catálogo/configuración, pero no opera ventas en tienda
     return !route.startsWith('/sales/instore')
+  }
+
+  if (role === 'SUPERVISOR') {
+    return !route.startsWith('/sales/instore') && !route.startsWith('/users')
   }
 
   if (role === 'MANAGER') {

@@ -98,8 +98,13 @@ const UserFormDialog = ({ open, onClose, onSuccess }: Props) => {
     }
 
     try {
-      if (form.rol === 'admin') {
-        await createAdmin.mutateAsync({ name: form.name, email: form.email, password: form.password })
+      if (form.rol === 'admin' || form.rol === 'supervisor') {
+        await createAdmin.mutateAsync({
+          name: form.name,
+          email: form.email,
+          password: form.password,
+          rol: form.rol
+        })
       } else {
         await createStaff.mutateAsync({
           name: form.name,
@@ -120,6 +125,8 @@ const UserFormDialog = ({ open, onClose, onSuccess }: Props) => {
 
   // BranchContext ya devuelve solo sucursales activas
   const activeBranches = branches
+
+  const roleHasNoBranch = form.rol === 'admin' || form.rol === 'supervisor'
 
   return (
     <Dialog open={open} onClose={handleClose} maxWidth='sm' fullWidth>
@@ -160,16 +167,19 @@ const UserFormDialog = ({ open, onClose, onSuccess }: Props) => {
             onChange={e => {
               const rol = e.target.value as CreateUserFormData['rol']
 
-              setForm(prev => ({ ...prev, rol, branchId: rol === 'admin' ? undefined : prev.branchId }))
+              const noBranch = rol === 'admin' || rol === 'supervisor'
+
+              setForm(prev => ({ ...prev, rol, branchId: noBranch ? undefined : prev.branchId }))
               setErrors(prev => ({ ...prev, rol: undefined, branchId: undefined }))
             }}
           >
             <MenuItem value='admin'>Administrador</MenuItem>
+            <MenuItem value='supervisor'>Supervisor</MenuItem>
             <MenuItem value='manager'>Encargado</MenuItem>
             <MenuItem value='cashier'>Cajero</MenuItem>
           </CustomTextField>
 
-          {form.rol !== 'admin' && (
+          {!roleHasNoBranch && (
             <CustomTextField
               select
               fullWidth
@@ -188,7 +198,7 @@ const UserFormDialog = ({ open, onClose, onSuccess }: Props) => {
             </CustomTextField>
           )}
 
-          {form.rol !== 'admin' && activeBranches.length === 0 && !isLoadingBranches && (
+          {!roleHasNoBranch && activeBranches.length === 0 && !isLoadingBranches && (
             <Alert severity='warning'>No hay sucursales activas disponibles. Creá una sucursal primero.</Alert>
           )}
         </Box>

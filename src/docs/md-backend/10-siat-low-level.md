@@ -1,6 +1,6 @@
 # SIAT de bajo nivel (soporte técnico / panel interno)
 
-Todo lo de acá es **ADMIN-only** y es la integración SOAP directa con el SIN
+Todo lo de acá es **ADMIN + SUPERVISOR** y es la integración SOAP directa con el SIN
 (Servicio de Impuestos Nacionales de Bolivia). El frontend de **ventas**
 (POS/storefront) nunca llama nada de esto — usa
 `POST /orders/:orderId/facturar` (ver
@@ -72,6 +72,14 @@ Existe un cronjob de envío batch (mencionado en el layout de módulos) — esto
 endpoints son para forzar/inspeccionar manualmente, no para que el flujo de
 venta normal los llame.
 
+`POST /paquetes/validacion/:id` actualiza cada factura del paquete según el
+**veredicto de SIAT** (`VALIDADA`, `RECHAZADA` u `OBSERVADA`), y solo las que
+siguen `ENVIADA` (no pisa anuladas, revertidas ni reemplazadas). Si SIAT
+todavía no dio veredicto, las facturas quedan `ENVIADA`: reintentá más tarde.
+Si SIAT no responde → `503`. Una factura `RECHAZADA` se corrige
+refacturando su orden (ver
+[07-branches-daily-cash-billing.md](07-branches-daily-cash-billing.md)).
+
 ## CAFC (`/cafc`) — Código de Autorización de Facturación en Contingencia
 
 ```
@@ -107,10 +115,18 @@ en el código, no es un error de este doc.
   `POST /orders/:orderId/facturar`, que arma el `CreateFacturaDto` con los
   datos de la orden y llama a esto por dentro.
 - `anulacion`/`reversion` — no tienen contraparte en `/orders`; si tu panel
-  de soporte necesita anular una factura ya emitida, es acá.
+  de soporte necesita anular una factura ya emitida, es acá. Reglas:
+  - solo se anula una factura `VALIDADA` (otro estado → `400` con el motivo);
+  - una `ANULADA` se revierte **o** se refactura su orden, no las dos: si ya
+    tiene factura de reemplazo, revertir da `400`;
+  - una `REVERTIDA` es vigente y **definitiva**: no se puede volver a anular.
+  Tabla completa de estados en
+  [07-branches-daily-cash-billing.md](07-branches-daily-cash-billing.md).
+- El total facturado del listado (`GET /facturacion/facturacion`) cuenta las
+  facturas `VALIDADA` y `REVERTIDA`.
 - **PDF**: `GET /facturacion/facturacion/:id/representacion-grafica` es el
-  único lugar donde se puede pedir el PDF de una factura por API, y es
-  ADMIN-only a propósito — ver la nota en
+  único lugar donde se puede pedir el PDF de una factura por API, y es solo
+  ADMIN/SUPERVISOR a propósito — ver la nota en
   [07-branches-daily-cash-billing.md](07-branches-daily-cash-billing.md)
   sobre por qué el POS no lo usa.
 

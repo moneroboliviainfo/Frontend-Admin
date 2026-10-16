@@ -19,8 +19,12 @@ export const useUserRole = () => {
     userBranch,
     isCashier: role === 'CASHIER',
     isManager: role === 'MANAGER',
+
+    // isAdmin es estricto (solo ADMIN crea/edita usuarios); para el resto, isAdminLike
     isAdmin: role === 'ADMIN',
-    needsBranchSelector: role === 'ADMIN',
+    isSupervisor: role === 'SUPERVISOR',
+    isAdminLike: role === 'ADMIN' || role === 'SUPERVISOR',
+    needsBranchSelector: role === 'ADMIN' || role === 'SUPERVISOR',
     hasFixedBranch: role === 'MANAGER' || role === 'CASHIER'
   }
 }

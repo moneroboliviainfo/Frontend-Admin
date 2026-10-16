@@ -14,6 +14,7 @@ import { useBranchContext } from '@/contexts/BranchContext'
 
 const roleLabels: Record<string, string> = {
   ADMIN: 'Administrador',
+  SUPERVISOR: 'Supervisor',
   MANAGER: 'Encargado',
   CASHIER: 'Cajero'
 }

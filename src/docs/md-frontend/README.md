@@ -30,6 +30,7 @@ falta, en el propio código.
 | [04-modulo-sucursales.md](04-modulo-sucursales.md) | CRUD de Sucursales: endpoints, shape de `siatBranch`, reglas |
 | [05-pendientes-y-bugs-conocidos.md](05-pendientes-y-bugs-conocidos.md) | Todo lo que quedó identificado como roto, inconsistente, o pendiente de decidir |
 | [06-productos-y-stock-por-sucursal.md](06-productos-y-stock-por-sucursal.md) | Qué es global (catálogo) vs qué es por sucursal (stock), mapa de endpoints confirmado con responses reales |
+| [07-migracion-bodega-y-anticipos.md](07-migracion-bodega-y-anticipos.md) | Checklist de control: rol SUPERVISOR, portado desde `main`, bodega central, traslados entre sucursales, pedidos con anticipo |
 
 ## Contexto del negocio (recordatorio rápido)
 

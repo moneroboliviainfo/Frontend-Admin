@@ -27,6 +27,7 @@ import ChangePasswordDialog from './ChangePasswordDialog'
 
 const roleLabels: Record<Role, string> = {
   ADMIN: 'Administrador',
+  SUPERVISOR: 'Supervisor',
   MANAGER: 'Encargado',
   CASHIER: 'Cajero'
 }

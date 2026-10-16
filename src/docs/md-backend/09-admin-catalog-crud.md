@@ -1,6 +1,6 @@
 # CRUD administrativo (panel de back-office)
 
-Todo lo de acá es **ADMIN-only** salvo que se indique lo contrario, y es CRUD
+Todo lo de acá es **ADMIN + SUPERVISOR** salvo que se indique lo contrario, y es CRUD
 simple: crear, listar, ver uno, editar, borrar. No tiene la complejidad de
 ventas/inventario — es el panel donde el admin arma el catálogo. El
 equivalente **público** de lectura (sin auth) de varios de estos módulos ya
@@ -9,7 +9,12 @@ mitad de escritura + la lectura admin (que trae campos que el público no ve).
 
 Patrón general salvo que se diga otra cosa: `whitelist: true` +
 `forbidNonWhitelisted: true` (400 si mandás un campo no declarado en el DTO),
-`@Auth(Roles.ADMIN)` en todos los endpoints salvo el `GET` público marcado.
+`@Auth(Roles.ADMIN, Roles.SUPERVISOR)` en todos los endpoints salvo el `GET`
+público marcado.
+
+**SUPERVISOR**: en este doc, **(A) significa ADMIN y SUPERVISOR**. La única
+excepción es crear y editar usuarios (`POST /users/admin`,
+`POST /users/staff`, `PATCH /users/:id`), que son solo ADMIN — ver Users.
 
 ## Categories
 
@@ -194,16 +199,19 @@ Subís la imagen **antes** de crear/editar el producto/categoría/etc., y le
 mandás la URL devuelta en el campo correspondiente del DTO (`image`,
 `images`, etc. — confirmar el campo exacto por entidad en Swagger).
 
-## Users (staff: ADMIN/MANAGER/CASHIER)
+## Users (staff: ADMIN/SUPERVISOR/MANAGER/CASHIER)
 
 ```
-POST   /users/admin              (A)   { name, email, password } → crea otro ADMIN, sin sucursal
-POST   /users/staff              (A)   { name, email, password, rol: MANAGER|CASHIER, branchId } → crea MANAGER/CASHIER atado a una sucursal
-GET    /users?limit=&page=&search=   (A)
-GET    /users/:id                (A)
-PATCH  /users/:id                (A)   { name?, email?, password?, branchId?, enabled? }
+POST   /users/admin              (solo ADMIN)   { name, email, password, rol?: "admin" | "supervisor" } → crea un ADMIN (default) o un SUPERVISOR, sin sucursal
+POST   /users/staff              (solo ADMIN)   { name, email, password, rol: MANAGER|CASHIER, branchId } → crea MANAGER/CASHIER atado a una sucursal
+GET    /users?limit=&page=&search=   (ADMIN, SUPERVISOR)
+GET    /users/:id                (ADMIN, SUPERVISOR)
+PATCH  /users/:id                (solo ADMIN)   { name?, email?, password?, branchId?, enabled? }
 PATCH  /users/me/password        cualquier staff logueado — { currentPassword, newPassword }
 ```
+- El SUPERVISOR **ve** usuarios pero no los crea ni edita.
+- `branchId` de la **bodega principal** no es válido para un usuario
+  (`404`): la bodega no tiene personal asignado.
 - **No existe `DELETE /users/:id`.** Deshabilitar a alguien es
   `PATCH /users/:id { "enabled": false }` — eso además invalida su sesión
   activa (`sessionId` a null), así que el token que ya tenía en el celular
@@ -218,9 +226,10 @@ PATCH  /users/me/password        cualquier staff logueado — { currentPassword,
   con un PATCH, hay que borrar (deshabilitar) y crear de nuevo si hace falta
   cambiarlo. `branchId` en el PATCH sí sirve para mover a un manager/cashier
   de sucursal.
-- ADMIN no tiene sucursal (`branch: null` siempre) — mandarle `branchId` a un
-  ADMIN vía `POST /users/admin` no aplica (el DTO ni lo acepta); intentar
-  poner `branchId` en el PATCH de un usuario que es ADMIN tira 400.
+- ADMIN y SUPERVISOR no tienen sucursal (`branch: null` siempre) — mandarles
+  `branchId` vía `POST /users/admin` no aplica (el DTO ni lo acepta);
+  intentar poner `branchId` en el PATCH de un usuario ADMIN o SUPERVISOR tira
+  `400 ADMIN no debe tener sucursal fija` / `400 SUPERVISOR no debe tener sucursal fija`.
 
 ## Customers (lado admin — gestión de clientes del storefront)
 

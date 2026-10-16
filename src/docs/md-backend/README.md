@@ -24,6 +24,15 @@ shape exacto de request/response en Swagger.
   (`{ statusCode, message, error }`). Conflictos de unicidad/FK en DB se
   mapean a `409 Conflict`.
 
+## ¿Qué cambió últimamente?
+
+Empezá por [14-changelog-2026-10.md](14-changelog-2026-10.md): los cambios
+del 9 y 10 de octubre de 2026 (pedidos entre sucursales cobrados al pedir,
+cobro por QR, devoluciones, configuración de plazos, desglose del cierre de
+caja), qué se rompe y el checklist del front. Los anteriores, del 28 al 30
+de septiembre (rol supervisor, bodega principal, envíos y pedidos entre
+sucursales, facturas), están en [12-changelog-2026-09.md](12-changelog-2026-09.md).
+
 ## Índice
 
 | Archivo | Contenido |
@@ -38,9 +47,13 @@ shape exacto de request/response en Swagger.
 | [08-customer-account.md](08-customer-account.md) | Cuenta del cliente en el storefront: direcciones, mis órdenes |
 | [09-admin-catalog-crud.md](09-admin-catalog-crud.md) | CRUD administrativo completo: categories, subcategories, sizes, colors, brands, places, outfits, products, discounts, banners, sliders, shipments, files, users, customers |
 | [10-siat-low-level.md](10-siat-low-level.md) | Integración SIAT de bajo nivel (catálogos, códigos CUIS/CUFD, operaciones, paquetes, cafc, facturación directa) — panel de soporte, no lo usa el flujo de venta normal |
+| [11-central-warehouse-and-branch-transfers.md](11-central-warehouse-and-branch-transfers.md) | Bodega principal, envíos de la bodega a las tiendas, pedidos entre sucursales (reserva, retiro, integración con el POS), faltantes y revisión |
+| [12-changelog-2026-09.md](12-changelog-2026-09.md) | Qué cambió (28–30/09/2026), qué rompe y checklist del front |
+| [13-prepaid-branch-requests.md](13-prepaid-branch-requests.md) | Pedidos entre sucursales cobrados al pedir: configuración de plazos, cotizar y cobrar (efectivo, tarjeta, QR), devoluciones, venta de retiro con anticipo, anticipo perdido, caja |
+| [14-changelog-2026-10.md](14-changelog-2026-10.md) | Qué cambió (9–10/10/2026), qué rompe y checklist del front |
 
 Este índice cubre **todos** los controllers del backend — si un endpoint no
-aparece en ninguno de estos 10 archivos, no existe (o es nuevo y este doc
+aparece en ninguno de estos archivos, no existe (o es nuevo y este doc
 quedó desactualizado: avisá).
 
 ## El negocio, en una frase
@@ -48,4 +61,7 @@ quedó desactualizado: avisá).
 Retail de ropa boliviano con tienda **online** y **sucursales físicas (POS)**.
 El mismo backend sirve ambos canales — muchos endpoints se comportan distinto
 según `OrderType` (`in_store` | `online`). Hay facturación electrónica
-obligatoria (SIAT) integrada al flujo de venta.
+obligatoria (SIAT) integrada al flujo de venta. Todo el stock nuevo entra a
+una **bodega principal** y de ahí se envía a las sucursales; una sucursal
+puede **pedirle** a otra una prenda para un cliente, cobrándole o no un
+anticipo al pedir.

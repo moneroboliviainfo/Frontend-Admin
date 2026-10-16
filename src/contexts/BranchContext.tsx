@@ -16,6 +16,7 @@ interface BranchContextType {
   isLoading: boolean
   isAdmin: boolean
   isReady: boolean
+  branchesError: boolean
 }
 
 const BranchContext = createContext<BranchContextType | null>(null)
@@ -28,11 +29,18 @@ const fetchBranches = async (): Promise<BranchListItem[]> => {
 
 export const BranchProvider = ({ children }: { children: ReactNode }) => {
   const { user, isLoading: isAuthLoading } = useAuthContext()
-  const isAdmin = user?.role === 'ADMIN'
+
+  // isAdmin = no tiene sucursal fija, la elige con ?branchId=
+  const isAdmin = user?.role === 'ADMIN' || user?.role === 'SUPERVISOR'
 
   const [selectedBranch, setSelectedBranchState] = useState<BranchListItem | null>(null)
 
-  const { data: branches = [], isLoading: isBranchesLoading } = useQuery({
+  const {
+    data: branches = [],
+    isLoading: isBranchesLoading,
+    isError: branchesError,
+    isFetched: branchesFetched
+  } = useQuery({
     queryKey: ['branches-list'],
     queryFn: fetchBranches,
     enabled: isAdmin && !isAuthLoading,
@@ -53,8 +61,11 @@ export const BranchProvider = ({ children }: { children: ReactNode }) => {
 
   const isLoading = isAuthLoading || (isAdmin && isBranchesLoading)
 
-  // isReady: true cuando podemos hacer peticiones con branchId correcto
-  const isReady = !isAuthLoading && (!isAdmin || selectedBranchId !== null)
+  // Si no hay ninguna sucursal para elegir (fallo la carga o vino vacia) se libera
+  // igual: asi las pantallas muestran su error en vez de cargar para siempre
+  const hasNoBranchAvailable = branchesFetched && branches.length === 0
+
+  const isReady = !isAuthLoading && (!isAdmin || selectedBranchId !== null || hasNoBranchAvailable)
 
   return (
     <BranchContext.Provider
@@ -65,7 +76,8 @@ export const BranchProvider = ({ children }: { children: ReactNode }) => {
         setSelectedBranch,
         isLoading,
         isAdmin,
-        isReady
+        isReady,
+        branchesError
       }}
     >
       {children}

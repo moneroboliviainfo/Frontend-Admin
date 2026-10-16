@@ -23,12 +23,14 @@ import UserEditDialog from './UserEditDialog'
 
 const roleLabels: Record<StaffUser['rol'], string> = {
   admin: 'Administrador',
+  supervisor: 'Supervisor',
   manager: 'Encargado',
   cashier: 'Cajero'
 }
 
-const roleColors: Record<StaffUser['rol'], 'primary' | 'info' | 'secondary'> = {
+const roleColors: Record<StaffUser['rol'], 'primary' | 'info' | 'secondary' | 'warning'> = {
   admin: 'primary',
+  supervisor: 'warning',
   manager: 'info',
   cashier: 'secondary'
 }

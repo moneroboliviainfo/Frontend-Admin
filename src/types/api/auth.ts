@@ -4,15 +4,16 @@ export interface Permission {
 }
 
 // Roles que vienen del backend (en minúsculas)
-export type BackendRole = 'admin' | 'manager' | 'cashier'
+export type BackendRole = 'admin' | 'supervisor' | 'manager' | 'cashier'
 
 // Roles normalizados para usar en el frontend (en mayúsculas)
-export type Role = 'ADMIN' | 'MANAGER' | 'CASHIER'
+export type Role = 'ADMIN' | 'SUPERVISOR' | 'MANAGER' | 'CASHIER'
 
 // Mapeo de roles del backend a frontend
 export const normalizeRole = (backendRole: BackendRole): Role => {
   const roleMap: Record<BackendRole, Role> = {
     admin: 'ADMIN',
+    supervisor: 'SUPERVISOR',
     manager: 'MANAGER',
     cashier: 'CASHIER'
   }

@@ -155,6 +155,85 @@ export interface OrderFacturaDetalle {
   subTotal: string
 }
 
+export interface FedexShipmentDocument {
+  url: string
+  contentType: string
+  copiesToPrint: number
+  trackingNumber?: string
+  docType: string
+}
+
+export interface FedexPieceResponse {
+  masterTrackingNumber: string
+  trackingNumber: string
+  packageDocuments?: FedexShipmentDocument[]
+}
+
+export interface FedexTransactionShipment {
+  masterTrackingNumber: string
+  serviceType: string
+  serviceName: string
+  shipDatestamp: string
+
+  // Solo con más de un bulto; con uno solo el label vive en pieceResponses
+  shipmentDocuments?: FedexShipmentDocument[]
+  pieceResponses?: FedexPieceResponse[]
+}
+
+export interface FedexShipmentResponse {
+  transactionId: string
+  output: {
+    transactionShipments: FedexTransactionShipment[]
+  }
+}
+
+// Ojo: es un objeto con los datos del envío, NO una URL
+export interface FedexShippingData {
+  recipient: {
+    personName: string
+    emailAddress: string
+    phoneNumber: string
+    address: {
+      streetLines: string[]
+      cityName: string
+      stateOrProvinceCode: string
+      postalCode: string
+      countryCode: string
+      residential: boolean
+    }
+  }
+  service: {
+    serviceType: string
+    serviceName: string
+    code: string
+    amountUSD: number
+    amountBOB: number
+    currency: string
+  }
+  packageCount: number
+  calculatedWeightKg: number
+  totalItemQuantity: number
+  unitPriceUsd: number
+  customsValueUsd: number
+}
+
+export interface OrderActor {
+  id: number
+  name: string
+}
+
+export interface FacturaAnterior {
+  id: number
+  numeroFactura: number
+  cuf: string
+  estado: OrderFactura['estado']
+  fechaEmision: string
+  montoTotal: string
+  nombreRazonSocial: string
+  numeroDocumento: string
+  ordenOriginalId: number | null
+}
+
 export interface Order {
   id: number
   type: 'in_store' | 'online'
@@ -165,7 +244,10 @@ export interface Order {
   shipment_price: number
   totalPrice: string
   address_data: any | null
-  dhl_code: string | null
+  trackingCode: string | null
+  fedex_shipping_data: FedexShippingData | null
+  fedex_shipment_response: FedexShipmentResponse | null
+  fedexShipmentCancelled: boolean
   createdAt: string
   expiresAt: string | null
   edited: boolean
@@ -178,6 +260,16 @@ export interface Order {
   address: any | null
   billing: OrderBilling | null
   factura: OrderFactura | null
+
+  // Actores y fechas: null si lo hizo el sistema o el cliente web
+  createdBy?: OrderActor | null
+  editedBy?: OrderActor | null
+  cancelledBy?: OrderActor | null
+  sentBy?: OrderActor | null
+  paidAt?: string | null
+  cancelledAt?: string | null
+  sentAt?: string | null
+  facturasAnteriores?: FacturaAnterior[]
 }
 
 export interface BillingInfo {

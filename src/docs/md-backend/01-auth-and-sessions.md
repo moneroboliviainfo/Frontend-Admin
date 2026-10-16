@@ -7,7 +7,7 @@ no son intercambiables:
 
 | | `User` (staff) | `Customer` (cliente) |
 |---|---|---|
-| Quién | ADMIN / MANAGER / CASHIER | comprador del storefront (o guest) |
+| Quién | ADMIN / SUPERVISOR / MANAGER / CASHIER | comprador del storefront (o guest) |
 | Login | `POST /auth/login` (email+password) | Google OAuth, o token guest |
 | Decorador para leerlo en un endpoint | `@GetUser()` | `@GetCustomer()` |
 | Payload JWT | `{ id, type: 'user', sessionId }` | `{ id, type: 'customer' }` |
@@ -24,6 +24,8 @@ POST /auth/login
 → 200 { "email": "...", "name": "...", "rol": "manager", "token": "<jwt>" }
 ```
 
+`rol` puede ser `admin`, `supervisor`, `manager` o `cashier`.
+
 - **Sesión única**: cada login genera un `sessionId` nuevo y lo graba en el
   usuario. Un login posterior desde otro dispositivo invalida el token
   anterior de inmediato (el JWT viejo sigue siendo válido criptográficamente,
@@ -36,7 +38,8 @@ POST /auth/login
   - **Reset forzado por ADMIN**: `PATCH /users/:id { "password": "..." }`
     (invalida la sesión activa del usuario afectado).
 - No existe endpoint para que un staff se auto-registre. Los usuarios
-  (ADMIN/MANAGER/CASHIER) los crea otro ADMIN — ver
+  (ADMIN/SUPERVISOR/MANAGER/CASHIER) los crea un ADMIN (el SUPERVISOR no
+  crea ni edita usuarios) — ver
   [02-roles-and-permissions.md](02-roles-and-permissions.md).
 
 ## Login / registro de customer

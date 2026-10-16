@@ -29,7 +29,6 @@ import dayjs from 'dayjs'
 import 'dayjs/locale/es'
 
 import { useFacturas, useBranches, useAnularFactura, useRevertirAnulacion } from '@/hooks/useSales'
-import { useUserRole } from '@/hooks/useUserRole'
 import type { Factura, Branch } from '@/types/api/sales'
 import FacturacionForm from './FacturacionForm'
 import { printInvoice } from '@/utils/invoicePrinter'
@@ -71,26 +70,14 @@ const FacturacionList = () => {
   const [facturaParaBt, setFacturaParaBt] = useState<Factura | null>(null)
 
   const { data: branchesData, isLoading: isLoadingBranches } = useBranches()
-  const { excludedBranchCodes, allowedBranchCodes } = useUserRole()
   const anularFacturaMutation = useAnularFactura()
   const revertirAnulacionMutation = useRevertirAnulacion()
 
-  // Filtrar sucursales según el rol del usuario
   const filteredBranches = useMemo(() => {
     if (!branchesData) return []
 
-    return branchesData.filter((b: Branch) => {
-      if (!b.active) return false
-
-      // Si hay códigos permitidos específicos, solo mostrar esos
-      if (allowedBranchCodes !== null) {
-        return allowedBranchCodes.includes(b.codigoSucursal)
-      }
-
-      // Si no, excluir los códigos en la lista de excluidos
-      return !excludedBranchCodes.includes(b.codigoSucursal)
-    })
-  }, [branchesData, excludedBranchCodes, allowedBranchCodes])
+    return branchesData.filter((b: Branch) => b.active)
+  }, [branchesData])
 
   // Obtener sucursal seleccionada
   const selectedBranch = useMemo(() => {

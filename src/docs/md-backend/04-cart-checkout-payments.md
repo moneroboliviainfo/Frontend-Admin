@@ -29,11 +29,14 @@ POST /cart?type=in_store|online
 ## Reprice — recalcular antes de pagar
 
 ```
-POST /orders/reprice/:token?type=in_store|online&branchId=1(opcional)
+POST /orders/reprice
+{ "items": "<jwt del carrito>", "type": "in_store" | "online", "branchId?": 1, "branchTransferId?": 15 }
 
 → 200 {
   "items": [ { "variantId": 2, "quantity": 3, "unit_price": 150, "discountValue": 10, "totalPrice": "405.00" } ],
   "total": "405.00",
+  "advanceApplied": "0.00",   // anticipo ya pagado (solo venta de retiro de un pedido cobrado)
+  "amountDue": "405.00",      // lo que se cobra: total − advanceApplied
   "errorsStock": []
 }
 ```
@@ -45,8 +48,55 @@ POST /orders/reprice/:token?type=in_store|online&branchId=1(opcional)
 - Si algún item no tiene stock suficiente, tira `400` con
   `errorsStock: [variantId, ...]` — mostrá qué producto falló, no un error
   genérico.
+- **Pedidos entre sucursales (solo POS)**: lo reservado para un pedido que
+  espera a su cliente no cuenta como disponible. Si la venta es la del
+  cliente de ese pedido, mandá `branchTransferId` (junto con `branchId`) y
+  esa unidad cuenta. Sin `branchId`, `branchTransferId` se ignora. Si falta
+  stock porque la unidad está reservada, el mensaje lo dice (solo con
+  `type: "in_store"`; al cliente web nunca se le nombran pedidos):
+  `Insufficient stock for variants: [10] (variante 10 reservada para el pedido #15)`.
+  Ver [11-central-warehouse-and-branch-transfers.md](11-central-warehouse-and-branch-transfers.md) §5.4.
+- **Pedido cobrado al pedir**: con su `branchTransferId`, las prendas pagadas
+  vuelven al precio congelado, `advanceApplied` trae el anticipo y
+  `amountDue` lo que falta cobrar. **Mostrá siempre `amountDue` como "a
+  cobrar"** (sin pedido cobrado es igual a `total`). Ver
+  [13-prepaid-branch-requests.md](13-prepaid-branch-requests.md) §6.
 - Usalo para la pantalla de "revisar carrito" antes de confirmar la compra —
   el precio final real es este, no el de `/cart`.
+- `items` acepta también el `fedexShippingToken` (ver envío FedEx abajo): trae
+  el carrito adentro.
+
+## Envío internacional (FedEx) — cotizar
+
+Para pedidos al exterior no se usa `shipment` (catálogo estático de envíos
+nacionales): se cotiza en vivo contra FedEx.
+
+```
+POST /shipping/rates                 # público
+{
+  "items": "<jwt del carrito>",
+  "recipient": {
+    "personName": "John Doe", "emailAddress": "john@example.com", "phoneNumber": "15551234567",
+    "address": {
+      "streetLines": ["123 Main Street"], "cityName": "New York",
+      "stateOrProvinceCode": "NY", "postalCode": "10007", "countryCode": "US",
+      "residential": true
+    }
+  }
+}
+
+→ 200 {
+  "success": true,
+  "fedexShippingToken": "<jwt, vence en 30 min>",
+  "services": [ { "serviceType": "FEDEX_INTERNATIONAL_PRIORITY", "serviceName": "...", "description": "...", "amountUSD": 80.5, "amountBOB": 556.26, "currency": "BOB" } ],
+  "debugMetadata": { ... }
+}
+```
+- El precio a cobrar es `amountBOB` (convertido con el tipo de cambio oficial
+  del BCB).
+- El `fedexShippingToken` **reemplaza al token del carrito** de ahí en
+  adelante: se manda como `items` al crear la orden, junto con el
+  `serviceType` elegido. Si vence (30 min), hay que volver a cotizar.
 
 ## Crear la orden
 
@@ -66,12 +116,21 @@ Authorization: Bearer <token staff>
 {
   "items": "<jwt del carrito>",
   "payment_type": "cash" | "card" | "qr",
-  "billing": { "ci": "12345678", "codigoTipoDocumentoIdentidad": 1, "name?": "...", "email?": "...", "phone?": "...", "complemento?": "..." }
+  "billing": { "ci": "12345678", "codigoTipoDocumentoIdentidad": 1, "name?": "...", "email?": "...", "phone?": "...", "complemento?": "..." },
+  "branchTransferId?": 15
 }
 ```
 No lleva `branchId` en el body — se resuelve por `@GetBranchId()` (la
 sucursal del cajero/manager logueado). Ver
 [02-roles-and-permissions.md](02-roles-and-permissions.md).
+
+`branchTransferId` (opcional): el cliente retira con esta venta un **pedido
+entre sucursales** que llegó a esta tienda. El backend lo marca retirado y
+usa la unidad reservada para él. Errores y detalle en
+[11-central-warehouse-and-branch-transfers.md](11-central-warehouse-and-branch-transfers.md) §5.4.
+Si el pedido se cobró al pedir, la orden guarda `advanceApplied`: se factura
+`totalPrice` y se cobra `totalPrice − advanceApplied`
+([13](13-prepaid-branch-requests.md) §6).
 
 Queda en estado `PENDING`. Según `payment_type`:
 - **`cash` / `card`** (pago en el momento, confirmado a mano) → el
@@ -88,8 +147,9 @@ Authorization: Bearer <token customer o guest>
 {
   "items": "<jwt del carrito>",
   "name": "...", "phone": "...",
-  "shipment": 1,        // id del método de envío
-  "address": 1,         // id de la dirección del customer
+  "shipment": 1,        // id del método de envío nacional — OMITIR para FedEx
+  "selectedServiceType?": "FEDEX_INTERNATIONAL_PRIORITY", // solo FedEx (requerido si no hay shipment)
+  "address": 1,         // id de la dirección del customer (fiscal; para FedEx el destino real va en el token)
   "branchId": 1,         // sucursal elegida para facturar/despachar — SÍ va en el body acá
   "email?": "...",
   "payment_type?": "qr" | "card_online",   // default qr
@@ -99,6 +159,15 @@ Authorization: Bearer <token customer o guest>
 Queda `PENDING`. El pago (QR o Cybersource) la mueve a `PAID` vía webhook, y
 al confirmarse **se factura sola** contra SIAT (fire-and-forget, no bloquea
 la respuesta del webhook).
+
+**Pedido FedEx** (sin `shipment`, con `items` = `fedexShippingToken` +
+`selectedServiceType`): `shipment_price` es el `amountBOB` del servicio
+elegido. Al crear la orden el backend **genera el envío real en FedEx** y la
+orden ya vuelve con `trackingCode`. Si FedEx falla, la orden se cancela y la
+respuesta es `400` ("No se pudo generar el envío FedEx...") — hay que
+reintentar el checkout. Si la orden después se cancela o vence sin pagar, el
+envío en FedEx se cancela solo. El correo de confirmación de pago muestra la
+dirección de destino de FedEx y un botón de rastreo.
 
 ## Pago QR (BNB)
 
@@ -114,6 +183,14 @@ El frontend genera el QR, lo muestra, y **pollea `GET /payments/verify/:id`**
 (o similar) para detectar el pago — no hay push al cliente. El callback de
 BNB no está autenticado (BNB no firma el payload); es un riesgo aceptado a
 propósito, no un bug a reportar.
+
+- **Venta de retiro de un pedido cobrado**: el QR va **solo por el saldo**
+  (`totalPrice − advanceApplied`). Si el saldo es 0 →
+  `400 La orden N no tiene saldo por cobrar (ya se pagó con el anticipo del pedido): confírmala en efectivo`.
+- **Anticipo de un pedido entre sucursales** (no es una orden): se usa
+  `POST /payments/generate-qr/request/:id` (MANAGER/CASHIER) y el pago se
+  detecta polleando `GET /branch-transfers/:id`. Ver
+  [13-prepaid-branch-requests.md](13-prepaid-branch-requests.md) §4.
 
 ## Pago con tarjeta (Cybersource / Linkser) — solo online
 
@@ -141,7 +218,9 @@ GET /web-page/products, /web-page/discounts   (navegar catálogo)
         ↓
 POST /cart (?type=online)                     (armar carrito → token)
         ↓
-POST /orders/reprice/:token?type=online        (revisar totales antes de pagar)
+POST /orders/reprice { items, type: online }   (revisar totales antes de pagar)
+        ↓
+[internacional] POST /shipping/rates → fedexShippingToken + servicios
         ↓
 POST /web-page/orders/online                   (crear orden PENDING, reserva stock)
         ↓
@@ -160,6 +239,11 @@ POST /dailyCash/open                           (abrir caja, una vez por turno)
 GET /billing/:ci                               (buscar cliente por CI, opcional)
         ↓
 POST /cart (?type=in_store) → reprice           (armar venta)
+        ↓
+GET /branch-transfers?awaitingPickup=true&variantIds=...
+                                               (¿alguna prenda es de un pedido que espera?
+                                                si el cajero confirma → branchTransferId
+                                                en reprice y en la venta)
         ↓
 POST /orders/in-store                          (crear orden PENDING)
         ↓

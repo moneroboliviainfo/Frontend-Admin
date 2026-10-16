@@ -9,7 +9,7 @@ import Skeleton from '@mui/material/Skeleton'
 import { useBranchContext } from '@/contexts/BranchContext'
 
 const BranchSwitcher = () => {
-  const { branches, selectedBranch, setSelectedBranch, isLoading, isAdmin } = useBranchContext()
+  const { branches, selectedBranch, setSelectedBranch, isLoading, isAdmin, branchesError } = useBranchContext()
 
   if (!isAdmin) return null
 
@@ -17,7 +17,13 @@ const BranchSwitcher = () => {
     return <Skeleton variant='rounded' width={220} height={34} />
   }
 
-  if (branches.length === 0) return null
+  if (branchesError || branches.length === 0) {
+    return (
+      <Typography variant='body2' color='error' className='max-sm:hidden'>
+        {branchesError ? 'No se pudieron cargar las sucursales' : 'Sin sucursales disponibles'}
+      </Typography>
+    )
+  }
 
   const handleChange = (_: React.MouseEvent<HTMLElement>, newValue: number | null) => {
     if (newValue === null) return
