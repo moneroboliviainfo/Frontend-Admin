@@ -31,6 +31,8 @@ export const filterMenuByRole = (
       'ADMINISTRACIÓN',
       'Usuarios',
       'Sucursales',
+      'INVENTARIO',
+      'Bodega Central',
       'CLIENTES',
       'Clientes',
       'CATÁLOGO',
@@ -79,6 +81,7 @@ export const canAccessRoute = (role: Role | null, route: string): boolean => {
 
   if (role === 'MANAGER') {
     const managerBlockedRoutes = [
+      '/central-warehouse',
       '/users',
       '/branches',
       '/customers',

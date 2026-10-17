@@ -33,6 +33,7 @@ import TablePaginationComponent from '@components/TablePaginationComponent'
 
 // Hooks
 import { useBestsellers } from '@/hooks/useDashboard'
+import { useBranchContext } from '@/contexts/BranchContext'
 import { variantService } from '@/services/variantService'
 
 // Types
@@ -53,6 +54,7 @@ const columnHelper = createColumnHelper<BestsellerItem>()
 
 const BestSellers = () => {
   const { data: bestsellersData, isLoading } = useBestsellers()
+  const { selectedBranchId } = useBranchContext()
   const [rowSelection, setRowSelection] = useState({})
   const [isExportingTotalSales, setIsExportingTotalSales] = useState(false)
   const [startDate, setStartDate] = useState('')
@@ -62,7 +64,7 @@ const BestSellers = () => {
     setIsExportingTotalSales(true)
 
     try {
-      const blob = await variantService.exportTotalSalesToExcel(startDate, endDate)
+      const blob = await variantService.exportTotalSalesToExcel(startDate, endDate, selectedBranchId ?? undefined)
       const url = window.URL.createObjectURL(blob)
       const link = document.createElement('a')
 

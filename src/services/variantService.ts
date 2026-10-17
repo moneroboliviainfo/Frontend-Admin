@@ -13,7 +13,8 @@ import type {
   SubtractStockRequest,
   AddStockResponse,
   TransferStockRequest,
-  StockTransfer
+  StockTransfer,
+  StockMovementsResponse
 } from '@/types/api/variants'
 
 class VariantServiceClass {
@@ -155,27 +156,51 @@ class VariantServiceClass {
     return response.data
   }
 
-  async exportToExcel(): Promise<Blob> {
+  // Kardex de una talla en una sucursal (acepta la bodega central)
+  async getMovements(
+    variantId: number,
+    branchId?: number,
+    page: number = 1,
+    limit: number = 20
+  ): Promise<StockMovementsResponse> {
+    const params = new URLSearchParams({
+      page: page.toString(),
+      limit: limit.toString(),
+      ...(branchId && { branchId: branchId.toString() })
+    })
+
+    const response = await apiClient.get<StockMovementsResponse>(
+      `/api/variants/${variantId}/movements?${params.toString()}`
+    )
+
+    return response.data
+  }
+
+  async exportToExcel(branchId?: number): Promise<Blob> {
     const response = await apiClient.get('/api/variants/export/exel', {
-      responseType: 'blob'
+      responseType: 'blob',
+      params: branchId ? { branchId } : undefined
     })
 
     return response.data
   }
 
-  async exportTransactionsToExcel(): Promise<Blob> {
+  async exportTransactionsToExcel(branchId?: number): Promise<Blob> {
     const response = await apiClient.get('/api/variants/export/transactions/exel', {
-      responseType: 'blob'
+      responseType: 'blob',
+      params: branchId ? { branchId } : undefined
     })
 
     return response.data
   }
 
-  async exportTotalSalesToExcel(startDate?: string, endDate?: string): Promise<Blob> {
+  // La bodega central no acepta total-sales (no vende): va solo con sucursales
+  async exportTotalSalesToExcel(startDate?: string, endDate?: string, branchId?: number): Promise<Blob> {
     const params = new URLSearchParams()
 
     if (startDate) params.append('startDate', startDate)
     if (endDate) params.append('endDate', endDate)
+    if (branchId) params.append('branchId', branchId.toString())
 
     const response = await apiClient.get(`/api/variants/export/total-sales/exel?${params}`, {
       responseType: 'blob'
@@ -184,9 +209,10 @@ class VariantServiceClass {
     return response.data
   }
 
-  async exportCriticalStock(): Promise<Blob> {
+  async exportCriticalStock(branchId?: number): Promise<Blob> {
     const response = await apiClient.get('/api/variants/export/stock-critico', {
-      responseType: 'blob'
+      responseType: 'blob',
+      params: branchId ? { branchId } : undefined
     })
 
     return response.data

@@ -17,11 +17,13 @@ import Divider from '@mui/material/Divider'
 /* import OptionMenu from '@core/components/option-menu' */
 
 // Hooks
+import { useBranchContext } from '@/contexts/BranchContext'
 import { useLowStock } from '@/hooks/useDashboard'
 import { variantService } from '@/services/variantService'
 
 const LowStock = () => {
   const { data: lowStockData, isLoading } = useLowStock()
+  const { selectedBranchId } = useBranchContext()
   const [isExporting, setIsExporting] = useState(false)
   const [isExportingTransactions, setIsExportingTransactions] = useState(false)
   const [isExportingCritical, setIsExportingCritical] = useState(false)
@@ -32,7 +34,7 @@ const LowStock = () => {
     setIsExporting(true)
 
     try {
-      const blob = await variantService.exportToExcel()
+      const blob = await variantService.exportToExcel(selectedBranchId ?? undefined)
       const url = window.URL.createObjectURL(blob)
       const link = document.createElement('a')
 
@@ -53,7 +55,7 @@ const LowStock = () => {
     setIsExportingTransactions(true)
 
     try {
-      const blob = await variantService.exportTransactionsToExcel()
+      const blob = await variantService.exportTransactionsToExcel(selectedBranchId ?? undefined)
       const url = window.URL.createObjectURL(blob)
       const link = document.createElement('a')
 
@@ -74,7 +76,7 @@ const LowStock = () => {
     setIsExportingCritical(true)
 
     try {
-      const blob = await variantService.exportCriticalStock()
+      const blob = await variantService.exportCriticalStock(selectedBranchId ?? undefined)
       const url = window.URL.createObjectURL(blob)
       const link = document.createElement('a')
 

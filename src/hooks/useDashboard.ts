@@ -15,13 +15,16 @@ export const useBestsellers = () => {
   })
 }
 
-export const useLowStock = () => {
+// branchId explicito para pantallas que no miran la sucursal de la navbar (la bodega central)
+export const useLowStock = (branchId?: number, enabled: boolean = true) => {
   const { selectedBranchId, isReady } = useBranchContext()
 
+  const targetBranchId = branchId ?? selectedBranchId
+
   return useQuery({
-    queryKey: ['dashboard', 'lowStock', selectedBranchId],
-    queryFn: () => dashboardService.getLowStock(selectedBranchId),
-    enabled: isReady
+    queryKey: ['dashboard', 'lowStock', targetBranchId],
+    queryFn: () => dashboardService.getLowStock(targetBranchId),
+    enabled: isReady && enabled
   })
 }
 

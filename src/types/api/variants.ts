@@ -125,3 +125,45 @@ export interface MediaFile {
   source: 'new' | 'existing'
   file?: File
 }
+
+export type StockMovementType =
+  | 'ingreso'
+  | 'venta'
+  | 'ajuste'
+  | 'traspaso'
+  | 'envio_bodega'
+  | 'salida_pedido'
+  | 'envio_anulado'
+  | 'pedido_anulado'
+  | 'recepcion'
+  | 'aparecio_en_destino'
+  | 'aparecio_en_origen'
+
+export interface StockMovement {
+  id: number
+  type: StockMovementType
+
+  // El signo distingue una baja de un ajuste positivo dentro de type 'ajuste'
+  quantity: number
+  location: StockLocation
+  reason: string | null
+  user: string | null
+  orderId: number | null
+  stockTransferId: number | null
+  branchTransferId: number | null
+  counterpartBranch: { id: number; name: string } | null
+  createdAt: string
+}
+
+export interface StockMovementsResponse {
+  data: StockMovement[]
+  meta: {
+    total: number
+    page: number
+    lastPage: number
+    limit: number
+    offset: number
+    hasNextPage: boolean
+    hasPreviousPage: boolean
+  }
+}

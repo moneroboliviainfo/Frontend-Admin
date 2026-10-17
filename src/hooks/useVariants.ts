@@ -194,11 +194,18 @@ export const useCreateBrand = () => {
   })
 }
 
-export const useVariants = (page: number = 1, limit: number = 10, search: string = '') => {
+export const useVariants = (
+  page: number = 1,
+  limit: number = 10,
+  search: string = '',
+  branchId?: number,
+  enabled: boolean = true
+) => {
   return useQuery({
-    queryKey: ['variants', 'paginated', page, limit, search],
-    queryFn: () => variantService.getAllVariants(page, limit, search),
-    staleTime: 30000
+    queryKey: ['variants', 'paginated', page, limit, search, branchId],
+    queryFn: () => variantService.getAllVariants(page, limit, search, branchId),
+    staleTime: 30000,
+    enabled
   })
 }
 
@@ -228,5 +235,18 @@ export const useDeleteMultimedia = () => {
     onError: error => {
       console.error('Error deleting multimedia:', error)
     }
+  })
+}
+
+export const useVariantMovements = (
+  variantId: number | null,
+  branchId?: number,
+  page: number = 1,
+  limit: number = 20
+) => {
+  return useQuery({
+    queryKey: ['variant-movements', variantId, branchId, page, limit],
+    queryFn: () => variantService.getMovements(variantId!, branchId, page, limit),
+    enabled: !!variantId
   })
 }

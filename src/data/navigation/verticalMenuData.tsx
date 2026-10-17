@@ -63,6 +63,17 @@ const getFullMenuData = (): VerticalMenuDataType[] => [
     ]
   },
 
+  // INVENTARIO
+  {
+    isSection: true,
+    label: 'INVENTARIO'
+  },
+  {
+    label: 'Bodega Central',
+    icon: 'tabler-building-warehouse',
+    href: '/central-warehouse'
+  },
+
   // CATÁLOGO
   {
     isSection: true,
