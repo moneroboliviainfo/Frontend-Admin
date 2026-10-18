@@ -26,6 +26,7 @@ import { toast } from 'react-toastify'
 
 import { useTransferStock } from '@/hooks/useVariants'
 import RequestFromBranchModal from './RequestFromBranchModal'
+import RequestQrDialog from './RequestQrDialog'
 import type { RequestTarget } from './RequestFromBranchModal'
 import { useBranchContext } from '@/contexts/BranchContext'
 
@@ -66,6 +67,7 @@ const ProductCatalog: React.FC<ProductCatalogProps> = ({
 }) => {
   const [transferTarget, setTransferTarget] = useState<any | null>(null)
   const [requestTarget, setRequestTarget] = useState<RequestTarget | null>(null)
+  const [qrTransferId, setQrTransferId] = useState<number | null>(null)
   const [transferQty, setTransferQty] = useState<string>('')
   const transferStock = useTransferStock()
 
@@ -412,6 +414,16 @@ const ProductCatalog: React.FC<ProductCatalogProps> = ({
       <RequestFromBranchModal
         target={requestTarget}
         onClose={() => setRequestTarget(null)}
+        onAwaitingQr={transferId => {
+          setRequestTarget(null)
+          setQrTransferId(transferId)
+        }}
+        showMessage={(message, severity) => (severity === 'error' ? toast.error(message) : toast.success(message))}
+      />
+
+      <RequestQrDialog
+        transferId={qrTransferId}
+        onClose={() => setQrTransferId(null)}
         showMessage={(message, severity) => (severity === 'error' ? toast.error(message) : toast.success(message))}
       />
     </>

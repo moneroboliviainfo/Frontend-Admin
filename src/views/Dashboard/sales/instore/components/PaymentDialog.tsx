@@ -251,7 +251,15 @@ const PaymentDialog: React.FC<PaymentDialogProps> = ({
     !REQUIRE_BILLING ||
     (billing.ci.trim().length > 0 && isCiFormatValid && (isNitSelected ? nitValidationStatus === 'valid' : true))
 
+  // Anticipo ya pagado al encargar el pedido (0 en una venta normal)
+  const advanceApplied = parseFloat(repriceData?.advanceApplied || '0') || 0
+
   const totalToPay = useMemo(() => {
+    // amountDue = total - anticipo. Cobrar el total le cobraria dos veces el anticipo.
+    if (repriceData?.amountDue) {
+      return parseFloat(repriceData.amountDue)
+    }
+
     if (orderData) {
       return typeof orderData.totalPrice === 'string' ? parseFloat(orderData.totalPrice) : orderData.totalPrice
     }
@@ -340,12 +348,25 @@ const PaymentDialog: React.FC<PaymentDialogProps> = ({
         >
           <Typography variant='h4' color={isEditingOrder ? 'warning' : 'primary'} fontWeight='bold'>
             {isEditingOrder ? 'Nuevo Total: ' : 'Total a pagar: '}
-            {orderData
+            {orderData && !advanceApplied
               ? formatCurrency(orderData.totalPrice)
-              : repriceData
-                ? `Bs ${parseFloat(repriceData.total).toFixed(2)}`
+              : repriceData || orderData
+                ? `Bs ${totalToPay.toFixed(2)}`
                 : 'Bs 0.00'}
           </Typography>
+
+          {/* Con un pedido cobrado por adelantado, el total facturado y lo que
+              se cobra en caja son distintos: hay que mostrar las dos cifras */}
+          {advanceApplied > 0 && repriceData && (
+            <Box sx={{ mt: 2 }}>
+              <Typography variant='body2' color='text.secondary'>
+                Total de la venta: Bs {parseFloat(repriceData.total).toFixed(2)}
+              </Typography>
+              <Typography variant='body2' color='success.main' fontWeight='bold'>
+                Ya pagó al encargar: Bs {advanceApplied.toFixed(2)}
+              </Typography>
+            </Box>
+          )}
         </Paper>
 
         {!orderData && !isEditingOrder && (

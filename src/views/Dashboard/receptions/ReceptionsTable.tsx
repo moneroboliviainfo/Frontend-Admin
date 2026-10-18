@@ -25,10 +25,11 @@ import tableStyles from '@core/styles/table.module.css'
 import { useBranchTransfers, useCancelTransfer, usePendingCount } from '@/hooks/useBranchTransfers'
 import type { BranchTransfer } from '@/types/api/branchTransfer'
 import { prendas, variantes } from '@/views/Dashboard/central-warehouse/units'
+import RequestQrDialog from '@/views/Dashboard/sales/instore/components/RequestQrDialog'
 import ReceiveTransferModal from './ReceiveTransferModal'
 
 // El listado acepta un solo status por consulta: el filtro cambia la vista, no acumula
-type IncomingStatus = 'in_transit' | 'pending_dispatch' | 'not_found'
+type IncomingStatus = 'in_transit' | 'pending_dispatch' | 'pending_payment' | 'not_found'
 
 const formatDate = (value: string | null) => (value ? new Date(value).toLocaleString('es-BO') : '—')
 
@@ -39,6 +40,7 @@ const ReceptionsTable = () => {
   const [toReceive, setToReceive] = useState<BranchTransfer | null>(null)
   const [toCancel, setToCancel] = useState<BranchTransfer | null>(null)
   const [cancelNote, setCancelNote] = useState('')
+  const [qrTransferId, setQrTransferId] = useState<number | null>(null)
   const [snackbar, setSnackbar] = useState<{ message: string; severity: 'success' | 'error' } | null>(null)
 
   const cancelTransfer = useCancelTransfer()
@@ -76,6 +78,7 @@ const ReceptionsTable = () => {
   const emptyMessage = {
     in_transit: 'No hay mercadería en camino',
     pending_dispatch: 'No hay pedidos esperando que los envíen',
+    pending_payment: 'No hay pedidos esperando el pago',
     not_found: 'Ningún pedido quedó sin conseguir'
   }[status]
 
@@ -105,9 +108,18 @@ const ReceptionsTable = () => {
           >
             <MenuItem value='in_transit'>En camino</MenuItem>
             <MenuItem value='pending_dispatch'>Todavía no lo envían</MenuItem>
+            <MenuItem value='pending_payment'>Esperando el pago</MenuItem>
             <MenuItem value='not_found'>No lo tenían</MenuItem>
           </CustomTextField>
         </Box>
+
+        {status === 'pending_payment' && (
+          <Box sx={{ px: 6, pb: 4 }}>
+            <Alert severity='info'>
+              Pedidos con QR que el cliente todavía no pagó. La prenda está apartada solo hasta que venza el QR.
+            </Alert>
+          </Box>
+        )}
 
         {status === 'not_found' && (
           <Box sx={{ px: 6, pb: 4 }}>
@@ -142,7 +154,7 @@ const ReceptionsTable = () => {
                   <th>Viene de</th>
                   <th>Tipo</th>
                   <th>Cliente</th>
-                  <th>{status === 'pending_dispatch' ? 'Lo pidió' : 'Lo envió'}</th>
+                  <th>{status === 'in_transit' || status === 'not_found' ? 'Lo envió' : 'Lo pidió'}</th>
                   <th>Acciones</th>
                 </tr>
               </thead>
@@ -194,11 +206,17 @@ const ReceptionsTable = () => {
                       </td>
                       <td>
                         <Typography variant='body2'>
-                          {formatDate(status === 'pending_dispatch' ? transfer.requestedAt : transfer.dispatchedAt)}
+                          {formatDate(
+                            status === 'pending_dispatch' || status === 'pending_payment'
+                              ? transfer.requestedAt
+                              : transfer.dispatchedAt
+                          )}
                         </Typography>
                         <Typography variant='caption' color='text.secondary'>
-                          {(status === 'pending_dispatch' ? transfer.requestedBy : transfer.dispatchedBy)?.name ||
-                            '—'}
+                          {(status === 'pending_dispatch' || status === 'pending_payment'
+                            ? transfer.requestedBy
+                            : transfer.dispatchedBy
+                          )?.name || '—'}
                         </Typography>
                       </td>
                       <td>
@@ -215,6 +233,16 @@ const ReceptionsTable = () => {
                         {status === 'pending_dispatch' && (
                           <Button size='small' color='secondary' onClick={() => setToCancel(transfer)}>
                             Anular
+                          </Button>
+                        )}
+                        {status === 'pending_payment' && (
+                          <Button
+                            size='small'
+                            variant='tonal'
+                            startIcon={<i className='tabler-qrcode' />}
+                            onClick={() => setQrTransferId(transfer.id)}
+                          >
+                            Ver QR
                           </Button>
                         )}
                         {status === 'not_found' && (
@@ -247,6 +275,12 @@ const ReceptionsTable = () => {
           labelRowsPerPage='Filas por página'
         />
       </Card>
+
+      <RequestQrDialog
+        transferId={qrTransferId}
+        onClose={() => setQrTransferId(null)}
+        showMessage={(message, severity) => setSnackbar({ message, severity })}
+      />
 
       <ReceiveTransferModal
         transfer={toReceive}

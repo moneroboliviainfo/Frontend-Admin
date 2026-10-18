@@ -23,7 +23,12 @@ export interface RepriceItem {
 
 export interface RepriceResponse {
   items: RepriceItem[]
+
+  // total = lo que se FACTURA; amountDue = lo que se COBRA en caja.
+  // Sin pedido cobrado son iguales: usar siempre amountDue para cobrar.
   total: string
+  advanceApplied?: string
+  amountDue?: string
 }
 
 export interface RepriceError {

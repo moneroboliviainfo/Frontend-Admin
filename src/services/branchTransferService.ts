@@ -9,6 +9,10 @@ import type {
   CreateBranchRequest,
   DispatchRequest,
   PickupRequest,
+  QuoteRequest,
+  RefundRequest,
+  RequestQrResponse,
+  QuoteResponse,
   CentralWarehouse,
   MarkLostTransferRequest,
   PendingCount,
@@ -70,6 +74,13 @@ class BranchTransferServiceClass {
     return response.data
   }
 
+  // Cotiza sin reservar nada: su total es el expectedTotal que pide createRequest
+  async quoteRequest(data: QuoteRequest): Promise<QuoteResponse> {
+    const response = await apiClient.post<QuoteResponse>('/api/branch-transfers/requests/quote', data)
+
+    return response.data
+  }
+
   async createRequest(data: CreateBranchRequest): Promise<BranchTransfer> {
     const response = await apiClient.post<BranchTransfer>('/api/branch-transfers/requests', data)
 
@@ -85,6 +96,28 @@ class BranchTransferServiceClass {
 
   async markPickup(transferId: number, data: PickupRequest): Promise<BranchTransfer> {
     const response = await apiClient.post<BranchTransfer>(`/api/branch-transfers/pickup/${transferId}`, data)
+
+    return response.data
+  }
+
+  // QR del anticipo de un pedido. Cada llamada renueva el apartado y anula en
+  // BNB los QR anteriores del mismo pedido.
+  async generateRequestQr(transferId: number, gloss?: string): Promise<RequestQrResponse> {
+    const response = await apiClient.post<RequestQrResponse>(
+      `/api/payments/generate-qr/request/${transferId}`,
+      gloss ? { gloss } : {}
+    )
+
+    return response.data
+  }
+
+  // Devuelve TODO lo pendiente de una vez y siempre en efectivo, desde la caja
+  // de la tienda que pidio (tiene que estar abierta)
+  async refundRequest(transferId: number, data: RefundRequest = {}): Promise<BranchTransfer> {
+    const response = await apiClient.post<BranchTransfer>(
+      `/api/branch-transfers/requests/${transferId}/refund`,
+      data
+    )
 
     return response.data
   }

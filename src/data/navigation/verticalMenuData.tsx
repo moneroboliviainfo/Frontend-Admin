@@ -74,6 +74,11 @@ const getFullMenuData = (): VerticalMenuDataType[] => [
     href: '/central-warehouse'
   },
   {
+    label: 'Plazos de Pedidos',
+    icon: 'tabler-calendar-clock',
+    href: '/settings'
+  },
+  {
     label: 'Inventario',
     icon: 'tabler-package-import',
     href: '/receptions'

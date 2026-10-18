@@ -12,6 +12,7 @@ import TabPanel from '@mui/lab/TabPanel'
 import { usePendingCount } from '@/hooks/useBranchTransfers'
 import AwaitingPickupTable from './AwaitingPickupTable'
 import BranchStockTable from './BranchStockTable'
+import RefundsTable from './RefundsTable'
 import ReceptionsTable from './ReceptionsTable'
 import ToDispatchTable from './ToDispatchTable'
 
@@ -24,6 +25,7 @@ const InventoryView = () => {
   const toReceive = pending?.toReceive || 0
   const toDispatch = pending?.toDispatch || 0
   const awaitingPickup = pending?.awaitingPickup || 0
+  const pendingRefunds = pending?.pendingRefunds || 0
 
   return (
     <TabContext value={tab}>
@@ -44,6 +46,15 @@ const InventoryView = () => {
             <Box className='flex items-center gap-2'>
               <span>Por despachar</span>
               {toDispatch > 0 && <Chip label={toDispatch} size='small' variant='tonal' color='warning' />}
+            </Box>
+          }
+        />
+        <Tab
+          value='refunds'
+          label={
+            <Box className='flex items-center gap-2'>
+              <span>Devoluciones</span>
+              {pendingRefunds > 0 && <Chip label={pendingRefunds} size='small' variant='tonal' color='error' />}
             </Box>
           }
         />
@@ -72,6 +83,10 @@ const InventoryView = () => {
 
       <TabPanel value='pickup' sx={{ p: 0 }}>
         <AwaitingPickupTable />
+      </TabPanel>
+
+      <TabPanel value='refunds' sx={{ p: 0 }}>
+        <RefundsTable />
       </TabPanel>
     </TabContext>
   )

@@ -34,6 +34,8 @@ const itemLabel = (item: BranchTransferItem) => {
 // Los plazos los fija el back al recibir: no se recalculan desde receivedAt
 const formatDay = (value: string | null) => (value ? new Date(value).toLocaleDateString('es-BO') : '—')
 
+const money = (value: string | null) => `Bs ${Number(value ?? 0).toFixed(2)}`
+
 const AwaitingPickupTable = () => {
   const [target, setTarget] = useState<BranchTransfer | null>(null)
   const [note, setNote] = useState('')
@@ -94,6 +96,7 @@ const AwaitingPickupTable = () => {
                   <th>Pedido</th>
                   <th>Cliente</th>
                   <th>Prendas</th>
+                  <th>Cobro</th>
                   <th>Plazos</th>
                   <th>Acciones</th>
                 </tr>
@@ -131,6 +134,31 @@ const AwaitingPickupTable = () => {
                       ))}
                     </td>
                     <td>
+                      {transfer.advanceAmount ? (
+                        <>
+                          <Typography variant='body2'>{money(transfer.advanceAmount)}</Typography>
+                          <Chip
+                            label={
+                              transfer.advanceForfeited
+                                ? 'Anticipo perdido'
+                                : transfer.advancePaidAt
+                                  ? 'Pagado al pedir'
+                                  : 'Esperando pago'
+                            }
+                            size='small'
+                            variant='tonal'
+                            color={
+                              transfer.advanceForfeited ? 'error' : transfer.advancePaidAt ? 'success' : 'warning'
+                            }
+                          />
+                        </>
+                      ) : (
+                        <Typography variant='body2' color='text.secondary'>
+                          Paga al retirar
+                        </Typography>
+                      )}
+                    </td>
+                    <td>
                       <Chip
                         label={`Retira hasta ${formatDay(transfer.pickupDeadline)}`}
                         size='small'
@@ -162,6 +190,14 @@ const AwaitingPickupTable = () => {
             La prenda <strong>deja de estar apartada</strong> para {target?.customerName || 'el cliente'} y vuelve
             a estar disponible para la venta. Esta acción no se puede deshacer.
           </Alert>
+
+          {/* Si pago un anticipo y todavia no lo perdio, marcarlo aca se lo hace perder */}
+          {target?.advancePaidAt && !target?.advanceForfeited && (
+            <Alert severity='error' sx={{ mb: 4 }}>
+              El cliente <strong>pierde los {money(target.advanceAmount)}</strong> que pagó al encargar el pedido.
+              Confírmelo con él antes de marcarlo.
+            </Alert>
+          )}
 
           <CustomTextField
             fullWidth

@@ -463,6 +463,12 @@ const PointOfSale: React.FC = () => {
 
       // El back avisa cuando la unidad esta reservada para un pedido: ese numero
       // es lo que el cajero necesita, no hay que reemplazar el mensaje
+      // Plazo vencido: el anticipo se perdio y el pedido ya no se puede enlazar.
+      // Se desenlaza solo para que el cajero pueda vender la prenda a precio normal.
+      if (errorMsg.includes('el anticipo se perdió')) {
+        setLinkedTransferId(null)
+      }
+
       const reservedFor = errorMsg.match(/reservada para el pedido #(\d+)/)?.[1]
 
       if (reservedFor) {

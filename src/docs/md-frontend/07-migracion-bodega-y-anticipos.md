@@ -248,12 +248,51 @@ Doc: [13-prepaid-branch-requests.md](../md-backend/13-prepaid-branch-requests.md
 > functionality…"* pero **solo movió documentación**; no tocó ningún archivo de
 > `src/`. El mensaje describe lo que hizo el backend, no el front.
 
-- [ ] Configuración de plazos (`GET/PATCH /settings`).
-- [ ] Nuevo pedido con cobro: cotizar (`requests/quote`) → cobrar → crear.
-- [ ] Cobro por QR: pantalla de espera, polling, estado `pending_payment`.
-- [ ] Devoluciones de anticipo (`?pendingRefund=true`, badge, botón Devolver).
-- [ ] POS venta de retiro: **cobrar `amountDue`, nunca `total`**.
-- [ ] Anticipo perdido (`advanceForfeited`).
+- [x] **Configuración de plazos** (`GET/PATCH /settings`), 18/10/2026:
+      pantalla `/settings` en ADMINISTRACIÓN → *Configuración* (ADMIN/SUPERVISOR).
+      Valida los rangos del back (retiro 1-365, apartado 0-365) y que el
+      apartado no supere el retiro. Muestra quién lo cambió por última vez y
+      avisa que aplica solo a los pedidos que se reciban desde ahora.
+      El hook se llama `useAppSettings` para no chocar con el `useSettings`
+      del tema que ya existe en `@core/hooks`.
+- [x] **Nuevo pedido con cobro** (efectivo y tarjeta), 18/10/2026: en el modal
+      "Pedir a otra sucursal" del POS. Selector *Paga al retirar / Efectivo /
+      Tarjeta*; con cobro aparece **Calcular total a cobrar**
+      (`requests/quote`) y los datos del cliente pasan a obligatorios. La
+      cotización se invalida al cambiar sucursal o cantidad, y ante el
+      `409 El total del pedido cambió` se borra para obligar a recotizar.
+      **Falta el QR** (sección 4 del doc 13).
+- [x] **Cobro por QR** (18/10/2026): opción *QR* en el modal de pedido. Al
+      confirmar, el pedido queda `pending_payment` y se abre `RequestQrDialog`,
+      que genera el QR (`POST /payments/generate-qr/request/:id`) y pollea
+      `GET /branch-transfers/:id` **cada 3 s solo mientras está
+      `pending_payment`** (`refetchInterval` que se apaga solo).
+      Estados cubiertos: esperando · QR vencido (Generar otro / Anular) ·
+      pagado · **pagó tarde** (anulado con `refundPending` por devolver).
+      Si BNB falla, el back responde sin lanzar: se mira `success` y se
+      muestra su `message`.
+      No toca el QR de las ventas, que es otro endpoint y otro componente.
+- [x] **Devoluciones** (18/10/2026): pestaña *Devoluciones* en Inventario con
+      badge `pendingRefunds`. Lista `?pendingRefund=true` con cliente, motivo
+      (deducido del estado), lo que pagó y **`refundPending`** —que es el valor
+      del botón, no `refundOwed`—. Confirmar llama
+      `POST /branch-transfers/requests/:id/refund`: devuelve **todo lo
+      pendiente de una vez y siempre en efectivo**, desde la caja de la tienda
+      que pidió (debe estar abierta).
+- [x] **POS venta de retiro**: `totalToPay` usa **`amountDue`** cuando viene, y
+      el diálogo muestra el desglose (*Total de la venta* / *Ya pagó al
+      encargar*). Sin pedido cobrado `amountDue` es igual a `total`, así que
+      usarlo siempre es seguro. El vuelto sale del mismo valor.
+- [x] **Anticipo perdido** (`advanceForfeited`), 18/10/2026: columna *Cobro* en
+      *Pedidos recibidos* (Pagado al pedir / Esperando pago / **Anticipo
+      perdido**) y aviso en rojo al marcar "no retirado" un pedido pagado:
+      *"El cliente pierde los Bs X"*. En el POS, el `409` de plazo vencido
+      **desenlaza el pedido solo**, para poder venderle la prenda a precio
+      normal sin buscar cómo desmarcarlo.
+- [x] **Pedidos esperando el pago**: un pedido con QR queda en
+      `pending_payment` y antes **no aparecía en ninguna pantalla** si el
+      cajero cerraba el QR. Ahora es una opción del filtro de *Por recibir*,
+      con botón **Ver QR** que reabre la pantalla de cobro.
 - [ ] Cierre de caja con desglose.
 - [ ] Usar `pickupDeadline`/`holdUntil`, no recalcular desde `receivedAt`.
 
@@ -266,7 +305,7 @@ Del [14-changelog-2026-10.md](../md-backend/14-changelog-2026-10.md):
 | # | Qué rompe | Estado |
 |---|---|---|
 | 1 | Estado nuevo `pending_payment` en traslados | ✅ etiquetado "Esperando pago" |
-| 2 | El POS debe cobrar `amountDue`, no `total` | ❌ **riesgo: el cliente paga el anticipo dos veces** |
+| 2 | El POS debe cobrar `amountDue`, no `total` | ✅ resuelto el 18/10/2026 |
 | 3 | `expectedAmount` del cierre de caja incluye anticipos y resta devoluciones | ✅ desglose tipado y mostrado al cerrar caja |
 | 4 | Un pedido `pending_payment` es invisible para la tienda origen | ❌ no aplica todavía |
 | 5 | Actores `null` del sistema → mostrar "Sistema" | ✅ en el kardex |
@@ -275,6 +314,12 @@ Del [14-changelog-2026-10.md](../md-backend/14-changelog-2026-10.md):
 ---
 
 ## Pendientes de esta tanda
+
+- [ ] **Pedidos cobrados en el POS**: las prendas ya pagadas no se deberían
+      poder quitar del carrito en la venta de retiro (doc 13 §10).
+- [ ] **Corregir una venta de retiro**: ofrecer editar en vez de cancelar y
+      crear otra (editar no libera el pedido; cancelar sí lo devuelve a
+      "esperando").
 
 - [x] **Anular un pedido antes del despacho** y **ver los propios pedidos**:
       *Por recibir* tiene filtro de estado (En camino · Esperando despacho ·

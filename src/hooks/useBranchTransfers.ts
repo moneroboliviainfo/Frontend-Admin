@@ -10,6 +10,8 @@ import type {
   CreateBranchRequest,
   DispatchRequest,
   PickupRequest,
+  QuoteRequest,
+  RefundRequest,
   MarkLostTransferRequest,
   ReceiveTransferRequest,
   ReviewTransferRequest
@@ -181,5 +183,41 @@ export const useAwaitingPickupFor = (variantIds: number[]) => {
     queryFn: () => branchTransferService.getTransfers({ awaitingPickup: true, variantIds: ids }),
     enabled: ids.length > 0,
     staleTime: 30000
+  })
+}
+
+export const useQuoteBranchRequest = () => {
+  return useMutation({
+    mutationFn: (data: QuoteRequest) => branchTransferService.quoteRequest(data)
+  })
+}
+
+export const useGenerateRequestQr = () => {
+  return useMutation({
+    mutationFn: ({ transferId, gloss }: { transferId: number; gloss?: string }) =>
+      branchTransferService.generateRequestQr(transferId, gloss)
+  })
+}
+
+// Mientras el pedido espera el pago se consulta cada 3s, como pide el doc.
+// Al salir de pending_payment el polleo se corta solo.
+export const useWatchTransferPayment = (transferId: number | null, enabled: boolean) => {
+  return useQuery({
+    queryKey: ['branch-transfer', transferId],
+    queryFn: () => branchTransferService.getTransfer(transferId!),
+    enabled: !!transferId && enabled,
+    refetchInterval: query => (query.state.data?.status === 'pending_payment' ? 3000 : false)
+  })
+}
+
+export const useRefundRequest = () => {
+  const queryClient = useQueryClient()
+
+  return useMutation({
+    mutationFn: ({ transferId, data }: { transferId: number; data?: RefundRequest }) =>
+      branchTransferService.refundRequest(transferId, data),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['branch-transfers'] })
+    }
   })
 }

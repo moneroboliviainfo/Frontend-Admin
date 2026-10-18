@@ -80,6 +80,20 @@ export interface BranchTransfer {
   // Fechas fijadas al recibir: no recalcularlas desde receivedAt
   holdUntil: string | null
   pickupDeadline: string | null
+
+  // Cobro al encargar (pedidos con anticipo)
+  advanceAmount: string | null
+  advancePaidAt: string | null
+  qrExpiresAt: string | null
+
+  // true = el QR vencio y la prenda dejo de estar apartada (el pedido NO se anula solo)
+  paymentExpired: boolean | null
+  refundOwed: string | null
+
+  // Lo que falta devolver: es el valor del boton "Devolver"
+  refundPending: string | null
+  refunded: boolean | null
+  advanceForfeited: boolean | null
   items: BranchTransferItem[]
 }
 
@@ -88,10 +102,35 @@ export type PickupStatus = 'picked_up' | 'not_picked_up' | null
 export interface CreateBranchRequest {
   sourceBranchId: number
   items: { variantId: number; quantity: number }[]
+
+  // Con paymentType el pedido se cobra al encargarlo; ahi expectedTotal y los
+  // datos del cliente pasan a ser obligatorios, y la caja debe estar abierta
+  paymentType?: 'cash' | 'card' | 'qr'
+  expectedTotal?: number
   customerName?: string
   customerPhone?: string
   customerCi?: string
   note?: string
+}
+
+export interface QuoteRequest {
+  sourceBranchId: number
+  items: { variantId: number; quantity: number }[]
+}
+
+export interface QuoteResponse {
+  sourceBranch: TransferBranch
+  items: {
+    variantId: number
+    quantity: number
+    unitPrice: string
+    discountValue: number
+    totalPrice: string
+    available: number
+  }[]
+
+  // No recalcular en el front: este total es el que se manda como expectedTotal
+  total: string
 }
 
 export interface DispatchRequest {
@@ -160,6 +199,7 @@ export interface BranchTransferListParams {
   type?: BranchTransferType
   discrepancyStatus?: 'pending_review' | 'reviewed'
   awaitingPickup?: boolean
+  pendingRefund?: boolean
   variantIds?: string
 
   // Solo ADMIN/SUPERVISOR; acepta la bodega central
@@ -191,4 +231,19 @@ export interface PendingCount {
 export interface CentralWarehouse {
   id: number
   name: string
+}
+
+// Igual que el QR de una venta, mas los datos del pedido
+export interface RequestQrResponse {
+  id: string
+  qr: string
+  success: boolean
+  message: string
+  gloss: string
+  branchTransferId: number
+  qrExpiresAt: string
+}
+
+export interface RefundRequest {
+  note?: string
 }
