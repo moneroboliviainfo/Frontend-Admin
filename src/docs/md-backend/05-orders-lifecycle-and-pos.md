@@ -166,12 +166,12 @@ pedidos − devoluciones**, con el desglose en `salesAmount`,
 `advancesAmount` y `refundsAmount` (ver
 [07-branches-daily-cash-billing.md](07-branches-daily-cash-billing.md)).
 
-## Consultar órdenes (cualquier rol de ventas, y ADMIN)
+## Consultar órdenes (MANAGER, CASHIER, ADMIN y SUPERVISOR)
 
 ```
 GET /orders?limit=&page=&status=&type=&paymentType=&startDate=&endDate=&ci=&name=&orderId=
 GET /orders/:id
-GET /orders/export/exel        (A, M — genera un Excel, no JSON)
+GET /orders/export/exel        (A, S, M — genera un Excel, no JSON)
 ```
 `ci`/`name`/`orderId` buscan por datos de facturación o por id (incluye
 `inherited_id`, o sea encuentra también la orden nueva de una edición).

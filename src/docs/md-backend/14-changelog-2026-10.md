@@ -64,3 +64,19 @@ Cambios que **no** rompen pero conviene saber:
 - [ ] Detalle del pedido: cobro (`advanceAmount`, `advancePaidAt`), movimientos (`payments`), precio congelado por línea.
 - [ ] **Cierre de caja**: desglose ventas / anticipos / devoluciones.
 - [ ] Kardex y movimientos: `user: null` → "Sistema".
+
+---
+
+## Actualización 18 de octubre — stock de la bodega principal separado
+
+| Endpoint | Cambio |
+|---|---|
+| `GET /products/:id`, `GET /outfits/:id` (admin, vista general) | Campo nuevo **`centralWarehouseStock`** por variante (solo la bodega principal). ⚠️ **`warehouseStock` ya no incluye la bodega**: ahora son solo los depósitos de las tiendas. Los 4 campos no se pisan; sumados dan el total. |
+| `GET /variants`, `GET /variants/:id` (con `?branchId`) | `warehouseStock` sin cambios (depósito de esa sucursal). Campo nuevo **`centralWarehouseStock`**: lo que hay en la bodega principal, sea cual sea la sucursal — no sumarlo al stock de la sucursal. |
+| `GET /web-page/products/:id`, `GET /web-page/outfits/:id` (público) | Cada variante trae **solo `availableStock`**: ya no vienen `warehouseStock` ni `inTransitStock`. |
+
+Detalle en [06](06-inventory-and-warehouse.md) "Vista general".
+
+- [ ] Detalle de producto (admin): mostrar `centralWarehouseStock` ("Bodega principal") aparte de `warehouseStock` ("Depósitos de tiendas"); si se sumaba `warehouseStock` para un total, sumar también `centralWarehouseStock`.
+- [ ] Storefront: no usar `warehouseStock`/`inTransitStock` (ya no vienen).
+- [ ] (Opcional) Inventario de una tienda (`/variants?branchId=`): mostrar "En bodega principal: N" con `centralWarehouseStock`, sin sumarlo al stock de la tienda.

@@ -8,6 +8,13 @@ export interface VariantSize {
     | string
   availableStock?: number
   warehouseStock?: number
+
+  // Despachado desde la bodega central y todavia no recibido por esta sucursal
+  inTransitStock?: number
+
+  // Stock en la bodega principal. Viene siempre y NO depende del branchId
+  // consultado: no hay que sumarlo al stock de la sucursal.
+  centralWarehouseStock?: number
   quantity?: number
 }
 
@@ -83,6 +90,15 @@ export type AddStockRequest = {
 }
 
 export type StockLocation = 'warehouse' | 'sales_floor'
+
+// Sobrante de un conteo en una TIENDA: la nota es obligatoria y la bodega da 403
+export type PositiveAdjustmentRequest = {
+  variantId: number
+  quantity: number
+  location: StockLocation
+  note: string
+  branchId?: number
+}
 
 export type SubtractStockRequest = {
   variantId: number

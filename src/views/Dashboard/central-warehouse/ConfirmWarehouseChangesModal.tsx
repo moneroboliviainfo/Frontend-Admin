@@ -75,8 +75,8 @@ const ConfirmWarehouseChangesModal = ({
             {renderLines(outgoing, '-')}
 
             <Alert severity='warning' sx={{ mt: 3 }}>
-              El envío queda <strong>en camino</strong>: sale de la bodega y no está disponible en ningún lado hasta
-              que {branchName} lo reciba. Para deshacerlo hay que anularlo.
+              El envío queda <strong>en camino</strong>: sale de la bodega y no está disponible en ninguna ubicación
+              hasta que {branchName} lo reciba. Para revertirlo debe anularse.
             </Alert>
           </Box>
         )}

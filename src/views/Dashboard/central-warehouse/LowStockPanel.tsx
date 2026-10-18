@@ -55,7 +55,7 @@ const LowStockPanel = ({ warehouseId, onPick }: Props) => {
         <DialogTitle>
           Stock crítico en la bodega
           <Typography variant='body2' color='text.secondary' sx={{ mt: 1 }}>
-            Tocá una prenda para buscarla en la tabla y reponerla
+            Seleccione una prenda para buscarla en la tabla y reponerla
           </Typography>
         </DialogTitle>
 

@@ -89,7 +89,7 @@ Lectura pública: `GET /web-page/places(/:id)`.
 ```
 POST   /outfits                 (A)
 GET    /outfits                 (A)   sin paginar
-GET    /outfits/:id             (A)   con stock (findOneWithStock)
+GET    /outfits/:id             (A)   con stock (findOneWithStock, vista general — ver 06)
 PATCH  /outfits/:id             (A)
 DELETE /outfits/:id             (A)
 ```
@@ -100,7 +100,7 @@ Lectura pública: `GET /web-page/outfits(/:id)`.
 ```
 POST   /products                              (A)   crear producto base
 GET    /products?limit=&page=&search=&days=&discounts=   (A)
-GET    /products/:id                          (A)   con stock (findOneWithStock)
+GET    /products/:id                          (A)   con stock (findOneWithStock, vista general — ver 06)
 PATCH  /products/:id                          (A)
 PUT    /products/add-discounts                (A)   asociar descuento(s) a producto(s) puntuales
 PUT    /products/add-discounts/all             (A)   asociar descuento a TODO el catálogo (o filtro amplio)
@@ -108,6 +108,12 @@ DELETE /products/:id                          (A)
 ```
 - `days`/`discounts` — mismos filtros que en el lado público, ver
   [03-storefront-catalog.md](03-storefront-catalog.md).
+- `GET /products/:id` (y `GET /outfits/:id`) no filtra por sucursal: cada
+  variante trae el stock **general** (`availableStock`, `warehouseStock`,
+  `centralWarehouseStock`, `inTransitStock`, que no se pisan entre sí). El
+  significado de cada campo está en
+  [06-inventory-and-warehouse.md](06-inventory-and-warehouse.md) "Vista
+  general". El listado `GET /products` no trae stock.
 - La creación de **colores + tallas + stock inicial** de un producto (las
   "variantes") es un módulo aparte: ver `POST /variants` en
   [06-inventory-and-warehouse.md](06-inventory-and-warehouse.md) — `products`
@@ -209,7 +215,11 @@ GET    /users/:id                (ADMIN, SUPERVISOR)
 PATCH  /users/:id                (solo ADMIN)   { name?, email?, password?, branchId?, enabled? }
 PATCH  /users/me/password        cualquier staff logueado — { currentPassword, newPassword }
 ```
-- El SUPERVISOR **ve** usuarios pero no los crea ni edita.
+- El SUPERVISOR **ve** usuarios pero no los crea ni edita. Como todo eso
+  pasa por `PATCH /users/:id`, tampoco puede **resetear la password** de
+  otro, **deshabilitar** a nadie ni **cambiar de sucursal** a un
+  manager/cashier (`403`). No le muestres esos botones. Su propia password
+  sí la cambia, con `PATCH /users/me/password`.
 - `branchId` de la **bodega principal** no es válido para un usuario
   (`404`): la bodega no tiene personal asignado.
 - **No existe `DELETE /users/:id`.** Deshabilitar a alguien es

@@ -72,8 +72,8 @@ const SubtractCentralStockModal = ({ target, warehouseId, onClose, showMessage }
 
       <DialogContent>
         <Alert severity='warning' sx={{ mb: 4 }}>
-          Esto <strong>descuenta</strong> de la bodega. Usalo para prenda dañada o inservible, no para un envío que se
-          perdió en el camino.
+          Esta acción <strong>descuenta</strong> stock de la bodega. Corresponde a prendas dañadas o inservibles,
+          no a un envío perdido en el camino.
         </Alert>
 
         <Box sx={{ mb: 4 }}>

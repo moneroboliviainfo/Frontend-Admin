@@ -17,7 +17,10 @@ GET /web-page/products/:id
 - `days` — filtro relacionado a "nuevos" (productos recientes); confirmar
   semántica exacta en Swagger.
 - `GET /web-page/products/:id` devuelve el producto **con stock** ya
-  calculado (`findOneWithStock`) — no hace falta pedirlo aparte.
+  calculado (`findOneWithStock`) — no hace falta pedirlo aparte. Cada
+  variante trae **solo `availableStock`** (vendible, suma de todas las
+  tiendas); los depósitos, la bodega principal y lo que está en camino no se
+  exponen en el storefront. Lo mismo en `GET /web-page/outfits/:id`.
 - Los descuentos que trae un producto ya vienen filtrados por vigencia real:
   un descuento con `isActive: false`, fuera de rango de fechas, o que no
   aplica al canal (`appliesOnline`) **no aparece** — no hace falta que el

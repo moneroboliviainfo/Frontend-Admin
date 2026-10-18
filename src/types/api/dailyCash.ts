@@ -22,7 +22,13 @@ export interface DailyCash {
   status: DailyCashStatus
   openingAmount: string
   closingAmount: string | null
+
+  // expectedAmount = apertura + salesAmount + advancesAmount - refundsAmount.
+  // Las cajas cerradas antes de este cambio traen los tres desgloses en null.
   expectedAmount: string | null
+  salesAmount: string | null
+  advancesAmount: string | null
+  refundsAmount: string | null
   closingNote: string | null
   openedAt: string
   closedAt: string | null

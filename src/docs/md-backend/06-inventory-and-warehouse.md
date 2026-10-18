@@ -61,12 +61,12 @@ POST /stock-transfers (warehouse_to_floor)     → piso de la tienda (recién ah
 ## Catálogo de variantes (admin)
 
 ```
-POST  /variants         (A)      crear color+tallas de un producto, stock inicial → bodega principal
-GET   /variants          (A,M,C)  listar (con stock)
-GET   /variants/:id      (A,M,C)  detalle
-PATCH /variants/:id      (A)      editar (tallas nuevas → también a la bodega principal)
+POST  /variants         (A,S)     crear color+tallas de un producto, stock inicial → bodega principal
+GET   /variants          (A,S,M,C) listar (con stock)
+GET   /variants/:id      (A,S,M,C) detalle
+PATCH /variants/:id      (A,S)     editar (tallas nuevas → también a la bodega principal)
 ```
-(A incluye SUPERVISOR, ver [02](02-roles-and-permissions.md).)
+(A = ADMIN, S = SUPERVISOR, M = MANAGER, C = CASHIER; ver [02](02-roles-and-permissions.md).)
 
 El `branchId` del body de `POST /variants` está **deprecado e ignorado**: el
 stock inicial entra siempre a la bodega principal.
@@ -74,19 +74,34 @@ stock inicial entra siempre a la bodega principal.
 Las respuestas de listado/detalle traen, por variante:
 - `availableStock`: vendible (piso − reservas de venta − reservas de pedidos);
 - `warehouseStock`: en depósito (todavía no vendible);
-- `inTransitStock`: en camino hacia la sucursal.
+- `inTransitStock`: en camino hacia la sucursal;
+- `centralWarehouseStock`: en la bodega principal (ver abajo).
 
-Mostrá los tres si tu UI de inventario los necesita; no asumas que
+Mostrá los que tu UI de inventario necesite; no asumas que
 `availableStock` es "todo lo que hay". Con `?branchId=<bodega>`,
 `availableStock` es siempre 0: su stock es `warehouseStock`.
+
+**Vista general (sin sucursal)** — `GET /products/:id` y `GET /outfits/:id`
+(admin) no filtran por sucursal: suman todas. Ahí los cuatro campos **no se
+pisan** y sumados dan el total. Con `?branchId=X`, `centralWarehouseStock`
+sigue mostrando la bodega principal (cuánto queda por despachar) — no lo
+sumes al stock de X; con `X = bodega` es el mismo número que
+`warehouseStock`.
+
+| Campo | Vista general | Con `?branchId=X` (`/variants`) |
+|---|---|---|
+| `availableStock` | piso de todas las tiendas − reservas | piso de X − reservas |
+| `warehouseStock` | depósitos de las **tiendas** (sin la bodega principal) | depósito de X (si X es la bodega: su stock) |
+| `centralWarehouseStock` | **solo** la bodega principal | **igual**: la bodega principal (no depende de X) |
+| `inTransitStock` | en camino hacia cualquier tienda | en camino hacia X |
 
 ## Consultar stock
 
 ```
-GET /variants/stock/:id?branchId=                    (A,M,C) → número, solo lo vendible
-GET /variants/:id/movements?branchId=                (A,M,C) → kardex paginado
-GET /variants/branch-stock/:variantId                (A,M,C) → disponibilidad en cada tienda
-GET /variants/branch-stock/product-color/:id         (A,M,C) → ídem, todas las tallas
+GET /variants/stock/:id?branchId=                    (A,S,M,C) → número, solo lo vendible
+GET /variants/:id/movements?branchId=                (A,S,M,C) → kardex paginado
+GET /variants/branch-stock/:variantId                (A,S,M,C) → disponibilidad en cada tienda
+GET /variants/branch-stock/product-color/:id         (A,S,M,C) → ídem, todas las tallas
 ```
 
 **Kardex** — cada fila trae: `quantity`, `location`, `type`, `user` (nombre

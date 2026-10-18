@@ -11,6 +11,7 @@ import type {
   BrandsResponse,
   AddStockRequest,
   SubtractStockRequest,
+  PositiveAdjustmentRequest,
   AddStockResponse,
   TransferStockRequest,
   StockTransfer,
@@ -56,6 +57,14 @@ class VariantServiceClass {
 
   async subtractStock({ branchId, ...body }: SubtractStockRequest): Promise<AddStockResponse> {
     const response = await apiClient.post<AddStockResponse>('/api/variants/subtractstock', body, {
+      params: branchId ? { branchId } : undefined
+    })
+
+    return response.data
+  }
+
+  async positiveAdjustment({ branchId, ...body }: PositiveAdjustmentRequest): Promise<AddStockResponse> {
+    const response = await apiClient.post<AddStockResponse>('/api/variants/positive-adjustment', body, {
       params: branchId ? { branchId } : undefined
     })
 

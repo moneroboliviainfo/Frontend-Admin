@@ -135,8 +135,9 @@ const MovementsModal = ({ target, warehouseId, onClose }: Props) => {
                         </Typography>
                       </td>
                       <td>
+                        {/* user null = lo hizo el backend (por ejemplo un pago QR confirmado) */}
                         <Typography variant='body2' color={movement.user ? 'inherit' : 'text.secondary'}>
-                          {movement.user || '—'}
+                          {movement.user || 'Sistema'}
                         </Typography>
                       </td>
                       <td>

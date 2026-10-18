@@ -30,6 +30,10 @@ import {
   useUpdateOrder
 } from '@/hooks/useSales'
 import { useDailyCash, useOpenDailyCash, useCloseDailyCash } from '@/hooks/useDailyCash'
+import type { DailyCash } from '@/types/api/dailyCash'
+import { useAwaitingPickupFor } from '@/hooks/useBranchTransfers'
+import { useUserRole } from '@/hooks/useUserRole'
+import CloseCashSummaryModal from './CloseCashSummaryModal'
 import { useVariants } from '@/hooks/useVariants'
 import type { CartItem, RepriceResponse, Order, GenerateQRResponse, BillingInfo } from '@/types/api/sales'
 import type { Variant, VariantSize } from '@/types/api/variants'
@@ -72,6 +76,7 @@ const PointOfSale: React.FC = () => {
   const [closingAmount, setClosingAmount] = useState('')
   const [closingNote, setClosingNote] = useState('')
   const [closeDailyCashError, setCloseDailyCashError] = useState('')
+  const [closedCash, setClosedCash] = useState<DailyCash | null>(null)
 
   const [searchTerm, setSearchTerm] = useState('')
   const [debouncedSearch, setDebouncedSearch] = useState('')
@@ -112,6 +117,12 @@ const PointOfSale: React.FC = () => {
   const skipDebounceRef = useRef(false)
 
   const { data: dailyCashData, isLoading: isDailyCashLoading, error: dailyCashApiError } = useDailyCash()
+
+  // El POS es de MANAGER/CASHIER: su sucursal viene del login
+  const { userBranch } = useUserRole()
+
+  // Un pedido por venta: enlazarlo marca el pedido entero como retirado
+  const [linkedTransferId, setLinkedTransferId] = useState<number | null>(null)
   const openDailyCash = useOpenDailyCash()
   const closeDailyCash = useCloseDailyCash()
 
@@ -264,6 +275,7 @@ const PointOfSale: React.FC = () => {
           size: typeof size.size === 'string' ? size.size : size.size?.name,
           stock: size.availableStock || size.quantity || 0,
           warehouseStock: size.warehouseStock || 0,
+          inTransitStock: size.inTransitStock || 0,
           multimedia: variant.multimedia,
           product: variant.product,
           price: variant.product?.price
@@ -288,6 +300,26 @@ const PointOfSale: React.FC = () => {
 
     return `${minutes}:${secs.toString().padStart(2, '0')}`
   }
+
+  // Se consulta sobre las variantes visibles del catalogo para poder marcarlas ahi mismo
+  const { data: awaitingPickupData } = useAwaitingPickupFor(
+    allFlattenedVariants.map((variant: any) => variant.variantSizeId)
+  )
+
+  // variantId -> pedido que lo espera, para pintarlo en su tarjeta
+  const pickupByVariant = useMemo(() => {
+    const map: Record<number, { id: number; customerName: string | null }> = {}
+
+    ;(awaitingPickupData?.data || []).forEach(transfer => {
+      transfer.items.forEach(item => {
+        map[item.variantId] = { id: transfer.id, customerName: transfer.customerName }
+      })
+    })
+
+    return map
+  }, [awaitingPickupData])
+
+  const linkedTransfer = (awaitingPickupData?.data || []).find(transfer => transfer.id === linkedTransferId)
 
   const getVariantInfo = (variantId: number) => {
     return allFlattenedVariants.find(v => v.variantSizeId === variantId)
@@ -334,9 +366,23 @@ const PointOfSale: React.FC = () => {
     setCartItems(cartItems.filter(item => item.variantId !== variantId))
   }
 
+  // Al retirar un pedido, la factura suele ir a nombre de quien lo encargo:
+  // se precarga, pero el cajero lo puede cambiar
+  const prefillBillingFromTransfer = () => {
+    if (!linkedTransfer || billing.ci.trim()) return
+
+    setBilling(prev => ({
+      ...prev,
+      ci: linkedTransfer.customerCi || '',
+      name: linkedTransfer.customerName || '',
+      phone: linkedTransfer.customerPhone || ''
+    }))
+  }
+
   const clearCart = () => {
     setCartItems([])
     setCartToken('')
+    setLinkedTransferId(null)
     setRepriceData(null)
     setOrderData(null)
     setCurrentStep('BUILDING_CART')
@@ -385,7 +431,13 @@ const PointOfSale: React.FC = () => {
       setCartToken(cartResponse.token)
 
       if (isEditingOrder) {
-        const repriceResponse = await repriceMutation.mutateAsync(cartResponse.token)
+        const repriceResponse = await repriceMutation.mutateAsync({
+          token: cartResponse.token,
+          branchTransferId: linkedTransferId ?? undefined,
+          branchId: userBranch?.id
+        })
+
+        prefillBillingFromTransfer()
 
         setRepriceData(repriceResponse)
         setCurrentStep('ORDER_CREATED')
@@ -393,7 +445,13 @@ const PointOfSale: React.FC = () => {
         setShowPaymentDialog(true)
       } else {
         // Modo normal: Verificar stock y precios
-        const repriceResponse = await repriceMutation.mutateAsync(cartResponse.token)
+        const repriceResponse = await repriceMutation.mutateAsync({
+          token: cartResponse.token,
+          branchTransferId: linkedTransferId ?? undefined,
+          branchId: userBranch?.id
+        })
+
+        prefillBillingFromTransfer()
 
         setRepriceData(repriceResponse)
         setCurrentStep('ORDER_CREATED')
@@ -403,7 +461,19 @@ const PointOfSale: React.FC = () => {
     } catch (error: any) {
       const errorMsg = error?.response?.data?.message || 'Error al verificar disponibilidad de productos'
 
-      if (errorMsg.includes('Insufficient stock for variant')) {
+      // El back avisa cuando la unidad esta reservada para un pedido: ese numero
+      // es lo que el cajero necesita, no hay que reemplazar el mensaje
+      const reservedFor = errorMsg.match(/reservada para el pedido #(\d+)/)?.[1]
+
+      if (reservedFor) {
+        const variantId = errorMsg.match(/variante (\d+)/)?.[1]
+        const variantInfo = getVariantInfo(Number(variantId))
+
+        setErrorMessage(
+          `${variantInfo?.displayName || 'Esta prenda'} está reservada para el pedido #${reservedFor}. ` +
+            'Si el cliente viene a retirarlo, marque "Entregar este pedido" en la prenda antes de cobrar.'
+        )
+      } else if (errorMsg.includes('Insufficient stock for variant')) {
         const variantId = errorMsg.match(/variant (\d+)/)?.[1]
         const variantInfo = getVariantInfo(Number(variantId))
 
@@ -477,7 +547,8 @@ const PointOfSale: React.FC = () => {
       const payload = {
         items: cartToken,
         payment_type: paymentType,
-        billing
+        billing,
+        ...(linkedTransferId && { branchTransferId: linkedTransferId })
       }
 
       const order = await createOrderMutation.mutateAsync(payload)
@@ -724,13 +795,14 @@ const PointOfSale: React.FC = () => {
     }
 
     try {
-      await closeDailyCash.mutateAsync({
+      // La respuesta trae el esperado y su desglose: se muestra antes de salir
+      const closed = await closeDailyCash.mutateAsync({
         id: dailyCashData.id,
         data: { closingAmount, closingNote: closingNote.trim() || undefined }
       })
 
       setCloseDailyCashModalOpen(false)
-      router.push('/home')
+      setClosedCash(closed)
     } catch (error: any) {
       console.error('Error al cerrar daily cash:', error)
       setCloseDailyCashError(error?.response?.data?.message || 'Error al cerrar caja')
@@ -869,6 +941,9 @@ const PointOfSale: React.FC = () => {
               steps={steps}
               isLoading={isLoadingVariants || isLoading}
               variants={allFlattenedVariants}
+              pickupByVariant={pickupByVariant}
+              linkedTransferId={linkedTransferId}
+              onToggleLink={transferId => setLinkedTransferId(prev => (prev === transferId ? null : transferId))}
               variantsPage={variantsPage}
               variantsLimit={variantsLimit}
               totalVariants={variantsData?.meta?.total || 0}
@@ -942,6 +1017,8 @@ const PointOfSale: React.FC = () => {
         editingOrderId={editingOrderId}
         billing={billing}
       />
+
+      <CloseCashSummaryModal dailyCash={closedCash} onClose={() => router.push('/home')} />
 
       <Dialog open={closeDailyCashModalOpen} maxWidth='sm' fullWidth>
         <DialogTitle>Cerrar Caja</DialogTitle>

@@ -72,7 +72,7 @@ const TransferStockModal = ({ open, onClose, variants, showMessage }: Props) => 
         })
       }
 
-      showMessage(isToFloor ? 'Stock enviado a tienda exitosamente' : 'Stock devuelto a bodega exitosamente', 'success')
+      showMessage(isToFloor ? 'Stock enviado a tienda exitosamente' : 'Stock devuelto al depósito exitosamente', 'success')
       setQuantities({})
       await new Promise(resolve => setTimeout(resolve, 300))
       onClose()
@@ -92,7 +92,7 @@ const TransferStockModal = ({ open, onClose, variants, showMessage }: Props) => 
 
       <DialogContent>
         <Typography variant='body2' color='text.secondary' sx={{ mb: 2 }}>
-          Mueve stock entre bodega y tienda, por talla
+          Mueve stock entre el depósito de la sucursal y la tienda, por talla
         </Typography>
 
         <ToggleButtonGroup
@@ -116,13 +116,13 @@ const TransferStockModal = ({ open, onClose, variants, showMessage }: Props) => 
             }
           }}
         >
-          <ToggleButton value='warehouse_to_floor'>Bodega → Tienda</ToggleButton>
-          <ToggleButton value='floor_to_warehouse'>Tienda → Bodega</ToggleButton>
+          <ToggleButton value='warehouse_to_floor'>Bodega sucursal → Tienda</ToggleButton>
+          <ToggleButton value='floor_to_warehouse'>Tienda → Bodega sucursal</ToggleButton>
         </ToggleButtonGroup>
 
         {transferableSizes.length === 0 ? (
           <Typography color='text.secondary'>
-            No hay stock en {isToFloor ? 'bodega' : 'tienda'} para trasladar
+            No hay stock en {isToFloor ? 'el depósito' : 'la tienda'} para trasladar
           </Typography>
         ) : (
           <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
@@ -142,7 +142,7 @@ const TransferStockModal = ({ open, onClose, variants, showMessage }: Props) => 
                 <Box sx={{ flex: 1 }}>
                   <Typography variant='subtitle2'>Talla {variant.size.name}</Typography>
                   <Typography variant='caption' color='text.secondary'>
-                    Bodega: {variant.warehouseStock} · Tienda: {variant.availableStock}
+                    Bodega sucursal: {variant.warehouseStock} · Tienda: {variant.availableStock}
                   </Typography>
                 </Box>
 

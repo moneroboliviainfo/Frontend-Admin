@@ -57,6 +57,13 @@ El front pide el `id` una vez (por ejemplo al entrar al panel) y lo usa como
 En la bodega, `availableStock` (vendible) es **siempre 0**: su stock es
 `warehouseStock`.
 
+Todas las vistas de stock por variante (`/variants`, `/products/:id`,
+`/outfits/:id`) traen el stock de la bodega en `centralWarehouseStock`,
+filtren o no por sucursal. En la vista general sin sucursal
+(`/products/:id`, `/outfits/:id`), `warehouseStock` es solo el de los
+depósitos de las tiendas (ver [06](06-inventory-and-warehouse.md) "Vista
+general").
+
 ### Cómo entra el stock ahora
 
 **Todo ingreso va al depósito de la bodega principal**, sin excepción:

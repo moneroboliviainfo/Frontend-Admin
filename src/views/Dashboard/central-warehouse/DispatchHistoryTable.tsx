@@ -49,6 +49,7 @@ const DispatchHistoryTable = () => {
   const [pageSize, setPageSize] = useState(10)
   const [status, setStatus] = useState<BranchTransferStatus | 'all'>('all')
   const [showAll, setShowAll] = useState(false)
+  const [type, setType] = useState<'central_dispatch' | 'branch_request' | 'all'>('central_dispatch')
   const [details, setDetails] = useState<BranchTransfer | null>(null)
   const [action, setAction] = useState<{ kind: ActionKind; transfer: BranchTransfer } | null>(null)
   const [snackbar, setSnackbar] = useState<{ message: string; severity: 'success' | 'error' } | null>(null)
@@ -72,7 +73,7 @@ const DispatchHistoryTable = () => {
       page,
       limit: pageSize,
       ...perspective,
-      type: 'central_dispatch',
+      ...(type !== 'all' && { type }),
       ...(status !== 'all' && { status })
     },
     !!warehouse?.id
@@ -91,7 +92,7 @@ const DispatchHistoryTable = () => {
       <Card>
         <Box sx={{ p: 4 }}>
           <Alert severity='error'>
-            No se pudo acceder a la bodega central. Verificá que tu usuario tenga permiso (ADMIN o SUPERVISOR).
+            No se pudo acceder a la bodega central. Verifique que su usuario tenga permiso (ADMIN o SUPERVISOR).
           </Alert>
         </Box>
       </Card>
@@ -103,7 +104,7 @@ const DispatchHistoryTable = () => {
       <Card>
         <CardHeader
           title={isFilteredByBranch ? `Envíos de la bodega a ${selectedBranch.name}` : 'Envíos de la bodega'}
-          subheader='Un envío en camino se puede anular o marcar perdido. Una vez recibido, ya no.'
+          subheader='Un envío en camino puede anularse o marcarse como perdido. Una vez recibido, ya no.'
         />
 
         <Box className='flex flex-wrap items-center justify-end gap-4 px-6 pb-4'>
@@ -119,6 +120,21 @@ const DispatchHistoryTable = () => {
             }
             label='Ver todas las sucursales'
           />
+
+          <CustomTextField
+            select
+            label='Tipo'
+            value={type}
+            onChange={e => {
+              setType(e.target.value as typeof type)
+              setPage(1)
+            }}
+            className='max-sm:is-full sm:is-[220px]'
+          >
+            <MenuItem value='central_dispatch'>Envíos de la bodega</MenuItem>
+            <MenuItem value='branch_request'>Pedidos entre tiendas</MenuItem>
+            <MenuItem value='all'>Todos</MenuItem>
+          </CustomTextField>
 
           <CustomTextField
             select

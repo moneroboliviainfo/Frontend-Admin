@@ -7,6 +7,9 @@ import type {
   BranchTransferListParams,
   CancelTransferRequest,
   CentralDispatchRequest,
+  CreateBranchRequest,
+  DispatchRequest,
+  PickupRequest,
   MarkLostTransferRequest,
   ReceiveTransferRequest,
   ReviewTransferRequest
@@ -119,5 +122,64 @@ export const useRenameCentralWarehouse = () => {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['central-warehouse'] })
     }
+  })
+}
+
+export const useBranchStock = (variantId: number | null) => {
+  return useQuery({
+    queryKey: ['branch-stock', variantId],
+    queryFn: () => branchTransferService.getBranchStock(variantId!),
+    enabled: !!variantId
+  })
+}
+
+export const useCreateBranchRequest = () => {
+  const queryClient = useQueryClient()
+
+  return useMutation({
+    mutationFn: (data: CreateBranchRequest) => branchTransferService.createRequest(data),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['branch-transfers'] })
+      queryClient.invalidateQueries({ queryKey: ['variants'] })
+    }
+  })
+}
+
+export const useDispatchTransfer = () => {
+  const queryClient = useQueryClient()
+
+  return useMutation({
+    mutationFn: ({ transferId, data }: { transferId: number; data?: DispatchRequest }) =>
+      branchTransferService.dispatch(transferId, data),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['branch-transfers'] })
+      queryClient.invalidateQueries({ queryKey: ['variants'] })
+    }
+  })
+}
+
+export const useMarkPickup = () => {
+  const queryClient = useQueryClient()
+
+  return useMutation({
+    mutationFn: ({ transferId, data }: { transferId: number; data: PickupRequest }) =>
+      branchTransferService.markPickup(transferId, data),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['branch-transfers'] })
+      queryClient.invalidateQueries({ queryKey: ['variants'] })
+    }
+  })
+}
+
+// Pedidos recibidos que esperan a su cliente y contienen alguna de estas tallas.
+// Solo lectura: sirve para avisarle al cajero que la prenda del carrito ya esta apartada.
+export const useAwaitingPickupFor = (variantIds: number[]) => {
+  const ids = [...new Set(variantIds)].sort((a, b) => a - b).join(',')
+
+  return useQuery({
+    queryKey: ['branch-transfers', 'awaiting-pickup', ids],
+    queryFn: () => branchTransferService.getTransfers({ awaitingPickup: true, variantIds: ids }),
+    enabled: ids.length > 0,
+    staleTime: 30000
   })
 }

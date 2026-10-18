@@ -1,10 +1,14 @@
 import { apiClient } from '@/libs/axios'
 import type {
+  BranchStockItem,
   BranchTransfer,
   BranchTransferListParams,
   BranchTransferListResponse,
   CancelTransferRequest,
   CentralDispatchRequest,
+  CreateBranchRequest,
+  DispatchRequest,
+  PickupRequest,
   CentralWarehouse,
   MarkLostTransferRequest,
   PendingCount,
@@ -55,6 +59,32 @@ class BranchTransferServiceClass {
   // Se revisa recien con el traslado cerrado (received, not_found o lost)
   async review(transferId: number, data: ReviewTransferRequest): Promise<BranchTransfer> {
     const response = await apiClient.post<BranchTransfer>(`/api/branch-transfers/review/${transferId}`, data)
+
+    return response.data
+  }
+
+  // Disponibilidad de una talla en cada tienda, para pedirle a otra sucursal
+  async getBranchStock(variantId: number): Promise<BranchStockItem[]> {
+    const response = await apiClient.get<BranchStockItem[]>(`/api/variants/branch-stock/${variantId}`)
+
+    return response.data
+  }
+
+  async createRequest(data: CreateBranchRequest): Promise<BranchTransfer> {
+    const response = await apiClient.post<BranchTransfer>('/api/branch-transfers/requests', data)
+
+    return response.data
+  }
+
+  // Sin items sale todo lo pedido; con items, la cantidad por linea (0 = no estaba)
+  async dispatch(transferId: number, data: DispatchRequest = {}): Promise<BranchTransfer> {
+    const response = await apiClient.post<BranchTransfer>(`/api/branch-transfers/dispatch/${transferId}`, data)
+
+    return response.data
+  }
+
+  async markPickup(transferId: number, data: PickupRequest): Promise<BranchTransfer> {
+    const response = await apiClient.post<BranchTransfer>(`/api/branch-transfers/pickup/${transferId}`, data)
 
     return response.data
   }

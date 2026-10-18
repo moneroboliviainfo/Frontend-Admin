@@ -143,8 +143,8 @@ const TransferActionsModal = ({ action, onClose, showMessage }: Props) => {
         {kind === 'review' && (
           <>
             <Alert severity='warning' sx={{ mb: 4 }}>
-              {transfer.destinationBranch?.name || 'La sucursal'} recibió menos de lo despachado. Decidí qué pasó con
-              cada faltante. Podés revisar algunos ahora y el resto después.
+              {transfer.destinationBranch?.name || 'La sucursal'} recibió menos de lo despachado. Indique qué
+              ocurrió con cada faltante. Puede revisar algunos ahora y el resto más adelante.
             </Alert>
 
             {reviewableItems.length === 0 ? (

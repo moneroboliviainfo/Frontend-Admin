@@ -8,9 +8,11 @@ export const filterMenuByRole = (
 ): VerticalMenuDataType[] => {
   const role = userRole || 'ADMIN'
 
-  // SUPERVISOR = ADMIN salvo Usuarios
+  // SUPERVISOR = ADMIN salvo Usuarios. 'Inventario' (stock de la sucursal y
+  // recepciones) es de MANAGER/CASHIER; el admin tiene su propia Bodega Central.
   if (role === 'ADMIN' || role === 'SUPERVISOR') {
     return menuItems
+      .filter((item: any) => item.label !== 'Inventario')
       .filter((item: any) => role === 'ADMIN' || item.label !== 'Usuarios')
       .map((item: any) => {
         if (item.label === 'Ventas' && item.children) {
@@ -31,7 +33,6 @@ export const filterMenuByRole = (
       'ADMINISTRACIÓN',
       'Usuarios',
       'Sucursales',
-      'INVENTARIO',
       'Bodega Central',
       'CLIENTES',
       'Clientes',
@@ -51,7 +52,7 @@ export const filterMenuByRole = (
   }
 
   if (role === 'CASHIER') {
-    const allowedMenus = ['VENTAS', 'Ventas']
+    const allowedMenus = ['VENTAS', 'Ventas', 'INVENTARIO', 'Inventario']
 
     return menuItems.filter((item: any) => allowedMenus.includes(item.label))
   }
@@ -72,11 +73,13 @@ export const canAccessRoute = (role: Role | null, route: string): boolean => {
   if (!role) return false
 
   if (role === 'ADMIN') {
-    return !route.startsWith('/sales/instore')
+    return !route.startsWith('/sales/instore') && !route.startsWith('/receptions')
   }
 
   if (role === 'SUPERVISOR') {
-    return !route.startsWith('/sales/instore') && !route.startsWith('/users')
+    return (
+      !route.startsWith('/sales/instore') && !route.startsWith('/users') && !route.startsWith('/receptions')
+    )
   }
 
   if (role === 'MANAGER') {
@@ -99,7 +102,7 @@ export const canAccessRoute = (role: Role | null, route: string): boolean => {
   }
 
   if (role === 'CASHIER') {
-    const cashierAllowedRoutes = ['/sales']
+    const cashierAllowedRoutes = ['/sales', '/receptions']
 
     return cashierAllowedRoutes.some(r => route.startsWith(r))
   }

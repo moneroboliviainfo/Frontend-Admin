@@ -46,7 +46,7 @@ import { variantFormSchema, newColorSchema } from '@/schemas/variant.schema'
 import type { VariantFormData, MediaFile, NewColorForm, VariantSizeForm } from '@/schemas/variant.schema'
 import VariantsList from './components/VariantsList'
 import VariantMediaUploader from './components/VariantMediaUploader'
-import AddStockModal from './components/AddStockModal'
+import PositiveAdjustmentModal from './components/PositiveAdjustmentModal'
 import SubtractStockModal from './components/SubtractStockModal'
 import TransferStockModal from './components/TransferStockModal'
 
@@ -93,8 +93,8 @@ const StepVariantDetails = ({ activeStep, handlePrev, steps, mode, productId, pr
   const [colorError, setColorError] = useState<string | null>(null)
   const [filesError, setFilesError] = useState<string | null>(null)
   const [sizesError, setSizesError] = useState<string | null>(null)
-  const [addStockModalOpen, setAddStockModalOpen] = useState(false)
   const [subtractStockModalOpen, setSubtractStockModalOpen] = useState(false)
+  const [adjustmentModalOpen, setAdjustmentModalOpen] = useState(false)
   const [transferStockModalOpen, setTransferStockModalOpen] = useState(false)
   const [isMediaUploading, setIsMediaUploading] = useState(false)
   const [isSavingVariant, setIsSavingVariant] = useState(false)
@@ -123,6 +123,8 @@ const StepVariantDetails = ({ activeStep, handlePrev, steps, mode, productId, pr
   const { data: existingVariants, isLoading: variantsLoading } = useVariantsByProduct(productId)
   const uploadMultimedia = useUploadMultimedia()
   const { data: variantToLoad, isLoading: variantLoading } = useVariantById(variantToLoadId, branchId)
+
+
   const { data: colorToLoad } = useColorById(colorToLoadId)
   const [originalColorId, setOriginalColorId] = useState<number | null>(null)
 
@@ -200,7 +202,7 @@ const StepVariantDetails = ({ activeStep, handlePrev, steps, mode, productId, pr
 
       if (isEditing) {
         handleClearForm()
-        showMessage('Cambiaste de sucursal — seleccioná la variante de nuevo para ver su stock', 'info')
+        showMessage('Cambió la sucursal seleccionada. Seleccione la variante nuevamente para ver su stock', 'info')
       }
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -364,8 +366,7 @@ const StepVariantDetails = ({ activeStep, handlePrev, steps, mode, productId, pr
           pdfs: finalPdfUrls,
           variants: normalizedVariants,
           colorName: selectedColor.name,
-          colorCode: selectedColor.code,
-          branchId
+          colorCode: selectedColor.code
         }
 
         await updateVariant.mutateAsync({
@@ -386,8 +387,7 @@ const StepVariantDetails = ({ activeStep, handlePrev, steps, mode, productId, pr
           variants: normalizedVariants,
           colorName: selectedColor.name,
           colorCode: selectedColor.code,
-          productId: parseInt(productId!),
-          branchId
+          productId: parseInt(productId!)
         }
 
         await createVariant.mutateAsync(createData)
@@ -542,7 +542,9 @@ const StepVariantDetails = ({ activeStep, handlePrev, steps, mode, productId, pr
           id: v.id,
           size: sizeValue,
           quantity: v.availableStock || v.quantity || 0,
-          warehouseStock: v.warehouseStock || 0
+          warehouseStock: v.warehouseStock || 0,
+          inTransitStock: v.inTransitStock || 0,
+          centralWarehouseStock: v.centralWarehouseStock || 0
         }
       })
 
@@ -810,15 +812,6 @@ const StepVariantDetails = ({ activeStep, handlePrev, steps, mode, productId, pr
                         <Button
                           variant='contained'
                           size='small'
-                          color='success'
-                          startIcon={<i className='tabler-plus' />}
-                          onClick={() => setAddStockModalOpen(true)}
-                        >
-                          Agregar Stock
-                        </Button>
-                        <Button
-                          variant='contained'
-                          size='small'
                           color='error'
                           startIcon={<i className='tabler-minus' />}
                           onClick={() => setSubtractStockModalOpen(true)}
@@ -834,6 +827,15 @@ const StepVariantDetails = ({ activeStep, handlePrev, steps, mode, productId, pr
                         >
                           Mover Variante
                         </Button>
+                        <Button
+                          variant='contained'
+                          size='small'
+                          color='success'
+                          startIcon={<i className='tabler-adjustments' />}
+                          onClick={() => setAdjustmentModalOpen(true)}
+                        >
+                          Registrar Sobrante
+                        </Button>
                       </>
                     )}
                     <Button
@@ -847,28 +849,46 @@ const StepVariantDetails = ({ activeStep, handlePrev, steps, mode, productId, pr
                   </Box>
                 </Box>
 
-                <Alert severity='info' sx={{ mb: 2 }}>
-                  El stock que crees o agregues aqui entra a la <strong>bodega</strong> de la sucursal — no queda
-                  disponible para vender hasta que lo &quot;Envies a Tienda&quot;.
+                <Alert severity='info' sx={{ mb: 3 }}>
+                  El stock registrado aquí ingresa a la <strong>Bodega Central</strong>, tanto al crear la variante
+                  como al añadir tallas nuevas. Para que una sucursal disponga de él debe enviarse desde allí.
                 </Alert>
 
                 {variantForm.sizes.map((size, index) =>
                   size.id ? (
                     <Grid container spacing={1} key={index} sx={{ mb: 1, alignItems: 'center' }}>
-                      <Grid size={{ xs: 4 }}>
+                      <Grid size={{ xs: 12, sm: 2 }}>
                         <CustomTextField fullWidth size='small' value={size.size} label='Talla' disabled />
                       </Grid>
-                      <Grid size={{ xs: 4 }}>
+                      <Grid size={{ xs: 6, sm: 2.5 }}>
+                        <CustomTextField fullWidth size='small' value={size.quantity || 0} label='Tienda' disabled />
+                      </Grid>
+                      <Grid size={{ xs: 6, sm: 2.5 }}>
                         <CustomTextField
                           fullWidth
                           size='small'
                           value={size.warehouseStock || 0}
-                          label='Bodega'
+                          label='Bodega sucursal'
                           disabled
                         />
                       </Grid>
-                      <Grid size={{ xs: 4 }}>
-                        <CustomTextField fullWidth size='small' value={size.quantity || 0} label='Tienda' disabled />
+                      <Grid size={{ xs: 6, sm: 2.5 }}>
+                        <CustomTextField
+                          fullWidth
+                          size='small'
+                          value={size.inTransitStock || 0}
+                          label='En camino'
+                          disabled
+                        />
+                      </Grid>
+                      <Grid size={{ xs: 6, sm: 2.5 }}>
+                        <CustomTextField
+                          fullWidth
+                          size='small'
+                          value={size.centralWarehouseStock || 0}
+                          label='Bodega central'
+                          disabled
+                        />
                       </Grid>
                     </Grid>
                   ) : (
@@ -1087,10 +1107,10 @@ const StepVariantDetails = ({ activeStep, handlePrev, steps, mode, productId, pr
           </DialogActions>
         </Dialog>
         {isEditing && variantForm.sizes.length > 0 && (
-          <AddStockModal
-            open={addStockModalOpen}
+          <PositiveAdjustmentModal
+            open={adjustmentModalOpen}
             onClose={() => {
-              setAddStockModalOpen(false)
+              setAdjustmentModalOpen(false)
 
               if (editingVariantId) {
                 isSilentRefreshRef.current = true
@@ -1102,9 +1122,9 @@ const StepVariantDetails = ({ activeStep, handlePrev, steps, mode, productId, pr
               .map(s => ({
                 id: s.id!,
                 size: { name: s.size },
+                availableStock: s.quantity || 0,
                 warehouseStock: s.warehouseStock || 0
               }))}
-            variantId={editingVariantId!}
             showMessage={showMessage}
           />
         )}

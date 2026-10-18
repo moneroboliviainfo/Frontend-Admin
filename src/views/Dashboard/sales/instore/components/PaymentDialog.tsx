@@ -242,9 +242,14 @@ const PaymentDialog: React.FC<PaymentDialogProps> = ({
     setSearchCi('')
   }
 
+  // TEMPORAL: en false no se exigen los datos de facturación para elegir método de
+  // pago, para poder probar ventas en efectivo. Volver a true cuando SIAT esté listo.
+  const REQUIRE_BILLING = false
+
   // Validación completa del billing
   const isBillingValid =
-    billing.ci.trim().length > 0 && isCiFormatValid && (isNitSelected ? nitValidationStatus === 'valid' : true)
+    !REQUIRE_BILLING ||
+    (billing.ci.trim().length > 0 && isCiFormatValid && (isNitSelected ? nitValidationStatus === 'valid' : true))
 
   const totalToPay = useMemo(() => {
     if (orderData) {

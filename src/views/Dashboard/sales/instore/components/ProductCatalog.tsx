@@ -25,6 +25,8 @@ import {
 import { toast } from 'react-toastify'
 
 import { useTransferStock } from '@/hooks/useVariants'
+import RequestFromBranchModal from './RequestFromBranchModal'
+import type { RequestTarget } from './RequestFromBranchModal'
 import { useBranchContext } from '@/contexts/BranchContext'
 
 interface ProductCatalogProps {
@@ -40,6 +42,9 @@ interface ProductCatalogProps {
   totalVariants: number
   onPageChange: (event: unknown, newPage: number) => void
   onProductClick: (item: any) => void
+  pickupByVariant?: Record<number, { id: number; customerName: string | null }>
+  linkedTransferId?: number | null
+  onToggleLink?: (transferId: number) => void
 }
 
 const ProductCatalog: React.FC<ProductCatalogProps> = ({
@@ -54,9 +59,13 @@ const ProductCatalog: React.FC<ProductCatalogProps> = ({
   variantsLimit,
   totalVariants,
   onPageChange,
-  onProductClick
+  onProductClick,
+  pickupByVariant = {},
+  linkedTransferId = null,
+  onToggleLink
 }) => {
   const [transferTarget, setTransferTarget] = useState<any | null>(null)
+  const [requestTarget, setRequestTarget] = useState<RequestTarget | null>(null)
   const [transferQty, setTransferQty] = useState<string>('')
   const transferStock = useTransferStock()
 
@@ -250,6 +259,14 @@ const ProductCatalog: React.FC<ProductCatalogProps> = ({
                         size='small'
                         color={item.stock > 10 ? 'success' : item.stock > 0 ? 'warning' : 'error'}
                       />
+                      {item.inTransitStock > 0 && (
+                        <Chip
+                          label={`${item.inTransitStock} en camino`}
+                          size='small'
+                          variant='tonal'
+                          color='primary'
+                        />
+                      )}
                       {item.warehouseStock > 0 && (
                         <>
                           <Typography
@@ -257,7 +274,7 @@ const ProductCatalog: React.FC<ProductCatalogProps> = ({
                             color='text.secondary'
                             sx={{ fontSize: '0.68rem', lineHeight: 1.2 }}
                           >
-                            Bodega: {item.warehouseStock} disp.
+                            Depósito: {item.warehouseStock} disp.
                           </Typography>
                           <Button
                             size='small'
@@ -270,6 +287,66 @@ const ProductCatalog: React.FC<ProductCatalogProps> = ({
                             Traer a tienda
                           </Button>
                         </>
+                      )}
+                      {pickupByVariant[item.variantSizeId] && (
+                        <>
+                          <Typography
+                            variant='caption'
+                            color='warning.main'
+                            sx={{ fontSize: '0.68rem', lineHeight: 1.2, textAlign: 'center' }}
+                          >
+                            Pedido #{pickupByVariant[item.variantSizeId].id}
+                            {pickupByVariant[item.variantSizeId].customerName
+                              ? ` · ${pickupByVariant[item.variantSizeId].customerName}`
+                              : ''}
+                          </Typography>
+                          <Button
+                            size='small'
+                            variant={
+                              linkedTransferId === pickupByVariant[item.variantSizeId].id ? 'contained' : 'outlined'
+                            }
+                            color={
+                              linkedTransferId === pickupByVariant[item.variantSizeId].id ? 'success' : 'warning'
+                            }
+                            onClick={e => {
+                              e.stopPropagation()
+                              onToggleLink?.(pickupByVariant[item.variantSizeId].id)
+                            }}
+                            startIcon={
+                              <i
+                                className={
+                                  linkedTransferId === pickupByVariant[item.variantSizeId].id
+                                    ? 'tabler-check'
+                                    : 'tabler-link'
+                                }
+                                style={{ fontSize: '12px' }}
+                              />
+                            }
+                            sx={{ fontSize: '0.68rem', lineHeight: 1.2, py: 0.25, px: 1, minWidth: 0 }}
+                          >
+                            {linkedTransferId === pickupByVariant[item.variantSizeId].id
+                              ? 'Entrega este pedido'
+                              : 'Entregar este pedido'}
+                          </Button>
+                        </>
+                      )}
+                      {item.stock === 0 && item.warehouseStock === 0 && !pickupByVariant[item.variantSizeId] && (
+                        <Button
+                          size='small'
+                          variant='outlined'
+                          color='warning'
+                          onClick={e => {
+                            e.stopPropagation()
+                            setRequestTarget({
+                              variantSizeId: item.variantSizeId,
+                              label: `${item.displayName} · ${item.color?.name || ''} · Talla ${item.size}`
+                            })
+                          }}
+                          startIcon={<i className='tabler-building-store' style={{ fontSize: '12px' }} />}
+                          sx={{ fontSize: '0.68rem', lineHeight: 1.2, py: 0.25, px: 1, minWidth: 0 }}
+                        >
+                          Pedir a otra sucursal
+                        </Button>
                       )}
                     </Box>
                   </CardContent>
@@ -304,7 +381,7 @@ const ProductCatalog: React.FC<ProductCatalogProps> = ({
             {transferTarget?.displayName} · {transferTarget?.color?.name} · Talla {transferTarget?.size}
           </Typography>
           <Typography variant='body2' sx={{ mb: 2 }}>
-            Disponible en bodega: {transferTarget?.warehouseStock}
+            Disponible en el depósito: {transferTarget?.warehouseStock}
           </Typography>
           <TextField
             fullWidth
@@ -331,6 +408,12 @@ const ProductCatalog: React.FC<ProductCatalogProps> = ({
           </Button>
         </DialogActions>
       </Dialog>
+
+      <RequestFromBranchModal
+        target={requestTarget}
+        onClose={() => setRequestTarget(null)}
+        showMessage={(message, severity) => (severity === 'error' ? toast.error(message) : toast.success(message))}
+      />
     </>
   )
 }

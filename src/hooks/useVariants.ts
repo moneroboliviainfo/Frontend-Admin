@@ -11,7 +11,8 @@ import type {
   CreateBrandDto,
   AddStockRequest,
   SubtractStockRequest,
-  TransferStockRequest
+  TransferStockRequest,
+  PositiveAdjustmentRequest
 } from '@/types/api/variants'
 
 export const useVariantsByProduct = (productId: string | number | undefined) => {
@@ -248,5 +249,17 @@ export const useVariantMovements = (
     queryKey: ['variant-movements', variantId, branchId, page, limit],
     queryFn: () => variantService.getMovements(variantId!, branchId, page, limit),
     enabled: !!variantId
+  })
+}
+
+export const usePositiveAdjustment = () => {
+  const queryClient = useQueryClient()
+
+  return useMutation({
+    mutationFn: (data: PositiveAdjustmentRequest) => variantService.positiveAdjustment(data),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['variants'], refetchType: 'active' })
+      queryClient.invalidateQueries({ queryKey: ['variant'], refetchType: 'active' })
+    }
   })
 }

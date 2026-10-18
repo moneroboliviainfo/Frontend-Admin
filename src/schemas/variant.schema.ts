@@ -14,8 +14,10 @@ export const variantSizeFormSchema = z.object({
   size: z.string().min(1, 'La talla es requerida'),
   quantity: z.number().int().min(0, 'El stock no puede ser negativo'),
 
-  // Stock en bodega de esta talla (solo lo trae el backend al editar, no se manda de vuelta)
-  warehouseStock: z.number().int().min(0).optional()
+  // Stock de esta talla (solo lo trae el backend al editar, no se manda de vuelta)
+  warehouseStock: z.number().int().min(0).optional(),
+  inTransitStock: z.number().int().min(0).optional(),
+  centralWarehouseStock: z.number().int().min(0).optional()
 }).refine(
   data => {
     // Si tiene id (modo editar), permitir stock 0

@@ -143,7 +143,7 @@ const SubtractStockModal = ({ open, onClose, variants, showMessage }: Props) => 
             }
 
             newErrors[Number(variantId)].quantity =
-              `No puede ser mayor al stock en ${location === 'warehouse' ? 'bodega' : 'tienda'} (${maxStock})`
+              `No puede ser mayor al stock en ${location === 'warehouse' ? 'el depósito' : 'la tienda'} (${maxStock})`
           }
         }
       }
@@ -214,7 +214,7 @@ const SubtractStockModal = ({ open, onClose, variants, showMessage }: Props) => 
             }
           }}
         >
-          <ToggleButton value='warehouse'>Bodega</ToggleButton>
+          <ToggleButton value='warehouse'>Bodega sucursal</ToggleButton>
           <ToggleButton value='sales_floor'>Tienda</ToggleButton>
         </ToggleButtonGroup>
 
@@ -240,7 +240,7 @@ const SubtractStockModal = ({ open, onClose, variants, showMessage }: Props) => 
                 <Box sx={{ flex: 1 }}>
                   <Typography variant='subtitle2'>Talla {variant.size.name}</Typography>
                   <Typography variant='caption' color='text.secondary'>
-                    {location === 'warehouse' ? 'En bodega' : 'En tienda'}: {getMaxStock(variant)}
+                    {location === 'warehouse' ? 'En depósito' : 'En tienda'}: {getMaxStock(variant)}
                   </Typography>
                 </Box>
 

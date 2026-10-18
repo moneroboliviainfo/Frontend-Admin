@@ -239,6 +239,10 @@ export interface Order {
   type: 'in_store' | 'online'
   status: 'pending' | 'confirmed' | 'cancelled' | 'completed' | 'paid' | 'sent' | 'expired' | 'cancelled_for_edit'
   payment_type: 'cash' | 'card' | 'qr' | 'card_online'
+
+  // Pedido entre sucursales que el cliente retira con esta venta: el back lo
+  // marca retirado y usa su unidad reservada. No lleva branchId (lo resuelve del cajero).
+  branchTransferId?: number | 'card_online'
   codigoMetodoPago: number | null
   enabled: boolean
   shipment_price: number

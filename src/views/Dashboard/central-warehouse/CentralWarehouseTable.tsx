@@ -151,7 +151,7 @@ const CentralWarehouseTable = () => {
 
     if (Object.keys(outgoing).length > 0) {
       setOutgoing({})
-      setSnackbar({ message: 'Cambiaste de sucursal: se vaciaron las cantidades a enviar', severity: 'warning' })
+      setSnackbar({ message: 'Cambió la sucursal seleccionada: se vaciaron las cantidades a enviar', severity: 'warning' })
     }
   }, [selectedBranch?.id, outgoing])
 
@@ -291,7 +291,7 @@ const CentralWarehouseTable = () => {
       <Card>
         <Box sx={{ p: 4 }}>
           <Alert severity='error'>
-            No se pudo acceder a la bodega central. Verificá que tu usuario tenga permiso (ADMIN o SUPERVISOR).
+            No se pudo acceder a la bodega central. Verifique que su usuario tenga permiso (ADMIN o SUPERVISOR).
           </Alert>
         </Box>
       </Card>
@@ -314,8 +314,8 @@ const CentralWarehouseTable = () => {
           }
           subheader={
             selectedBranch
-              ? `Ingresá lo que entra a la bodega y lo que sale hacia ${selectedBranch.name} (la sucursal de la barra superior).`
-              : 'Ingresá lo que entra a la bodega. Para enviar, elegí una sucursal en la barra superior.'
+              ? `Registre lo que entra a la bodega y lo que sale hacia ${selectedBranch.name} (la sucursal de la barra superior).`
+              : 'Registre lo que entra a la bodega. Para enviar, seleccione una sucursal en la barra superior.'
           }
         />
 
@@ -377,7 +377,7 @@ const CentralWarehouseTable = () => {
 
         {outgoingEntries.length > 0 && !selectedBranch && (
           <Box sx={{ px: 6, pb: 4 }}>
-            <Alert severity='warning'>Elegí una sucursal en la barra superior para poder enviar.</Alert>
+            <Alert severity='warning'>Seleccione una sucursal en la barra superior para poder enviar.</Alert>
           </Box>
         )}
 
@@ -507,7 +507,7 @@ const CentralWarehouseTable = () => {
                                     <Tooltip
                                       title={
                                         !selectedBranch
-                                          ? 'Elegí una sucursal en la barra superior'
+                                          ? 'Seleccione una sucursal en la barra superior'
                                           : max === 0
                                             ? 'Sin stock en la bodega'
                                             : `Hasta ${max}`

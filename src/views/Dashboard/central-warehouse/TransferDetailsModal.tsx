@@ -113,6 +113,14 @@ const TransferDetailsModal = ({ transfer, onClose, onAction }: Props) => {
           {prendas(units)} en {variantes(transfer.items.length)} · hacia{' '}
           {transfer.destinationBranch?.name || 'la sucursal'}
         </Typography>
+        {/* Solo los pedidos entre sucursales tienen cliente */}
+        {transfer.customerName && (
+          <Typography variant='body2' color='text.secondary'>
+            Para {transfer.customerName}
+            {transfer.customerPhone ? ` · ${transfer.customerPhone}` : ''}
+            {transfer.customerCi ? ` · CI ${transfer.customerCi}` : ''}
+          </Typography>
+        )}
       </DialogTitle>
 
       <DialogContent>

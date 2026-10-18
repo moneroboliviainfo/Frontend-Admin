@@ -53,8 +53,15 @@ class CartServiceClass {
 
   //  Verificar disponibilidad y obtener precios actualizados
 
-  async repriceCart(token: string): Promise<RepriceResponse> {
-    const response = await apiClient.post<RepriceResponse>('/api/orders/reprice', { items: token, type: 'in_store' })
+  // branchTransferId enlaza la venta con un pedido recibido, para que su unidad
+  // reservada cuente como disponible. El back lo IGNORA si no va branchId.
+  async repriceCart(token: string, branchTransferId?: number, branchId?: number): Promise<RepriceResponse> {
+    const response = await apiClient.post<RepriceResponse>('/api/orders/reprice', {
+      items: token,
+      type: 'in_store',
+      ...(branchId && { branchId }),
+      ...(branchTransferId && { branchTransferId })
+    })
 
     return response.data
   }

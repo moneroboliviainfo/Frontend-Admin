@@ -73,6 +73,11 @@ const getFullMenuData = (): VerticalMenuDataType[] => [
     icon: 'tabler-building-warehouse',
     href: '/central-warehouse'
   },
+  {
+    label: 'Inventario',
+    icon: 'tabler-package-import',
+    href: '/receptions'
+  },
 
   // CATÁLOGO
   {

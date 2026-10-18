@@ -65,7 +65,61 @@ export interface BranchTransfer {
   lostBy: TransferActor | null
   lostAt: string | null
   lostNote: string | null
+  notFoundBy: TransferActor | null
+  notFoundAt: string | null
+  notFoundNote: string | null
+
+  // Solo en pedidos entre sucursales (branch_request)
+  customerName: string | null
+  customerPhone: string | null
+  customerCi: string | null
+  pickupStatus: PickupStatus
+  pickupOrderId: number | null
+  pickupNote: string | null
+
+  // Fechas fijadas al recibir: no recalcularlas desde receivedAt
+  holdUntil: string | null
+  pickupDeadline: string | null
   items: BranchTransferItem[]
+}
+
+export type PickupStatus = 'picked_up' | 'not_picked_up' | null
+
+export interface CreateBranchRequest {
+  sourceBranchId: number
+  items: { variantId: number; quantity: number }[]
+  customerName?: string
+  customerPhone?: string
+  customerCi?: string
+  note?: string
+}
+
+export interface DispatchRequest {
+
+  // Vacio = sale todo lo pedido. Con items: cantidad por linea (0 = no se encontro)
+  items?: { transferItemId: number; quantity: number }[]
+  note?: string
+}
+
+export interface PickupRequest {
+  status: 'picked_up' | 'not_picked_up'
+
+  // Obligatorio con picked_up: la venta de esta tienda que se lo lleva
+  orderId?: number
+  note?: string
+}
+
+// Disponibilidad de una talla en cada tienda (no incluye la bodega principal)
+export interface BranchStockItem {
+  branch: TransferBranch
+  salesFloor: number
+  warehouse: number
+  reserved: number
+  heldForRequests: number
+
+  // Lo unico que se puede pedir: piso - reserved - heldForRequests
+  availableToRequest: number
+  inTransit: number
 }
 
 export type ReviewOutcome = 'lost' | 'found_at_destination' | 'found_at_origin'
@@ -105,6 +159,8 @@ export interface BranchTransferListParams {
   status?: BranchTransferStatus
   type?: BranchTransferType
   discrepancyStatus?: 'pending_review' | 'reviewed'
+  awaitingPickup?: boolean
+  variantIds?: string
 
   // Solo ADMIN/SUPERVISOR; acepta la bodega central
   branchId?: number

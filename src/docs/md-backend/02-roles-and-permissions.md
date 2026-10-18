@@ -18,7 +18,9 @@ tabla, no asumir jerarquía.
 **SUPERVISOR = ADMIN, salvo usuarios.** Está listado junto a ADMIN en
 **todos** los endpoints del admin, excepto crear y editar usuarios
 (`POST /users/admin`, `POST /users/staff`, `PATCH /users/:id`), que siguen
-siendo solo ADMIN. Puede ver usuarios. En las tablas de estos docs, donde dice
+siendo solo ADMIN. Puede ver usuarios, pero por lo mismo **no resetea
+passwords, no deshabilita a nadie ni cambia de sucursal a un empleado**
+(todo eso es `PATCH /users/:id`). En las tablas de estos docs, donde dice
 **A** o ADMIN, entra también SUPERVISOR salvo en esos tres endpoints.
 
 ## La política de fondo

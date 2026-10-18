@@ -18,6 +18,7 @@ import themeConfig from '@configs/themeConfig'
 
 // Hook Imports
 import useVerticalNav from '@menu/hooks/useVerticalNav'
+import { useAuthContext } from '@/contexts/AuthContext'
 import { useSettings } from '@core/hooks/useSettings'
 
 type LogoTextProps = {
@@ -50,6 +51,10 @@ const Logo = ({ color }: { color?: CSSProperties['color'] }) => {
   // Hooks
   const { isHovered, transitionDuration, isBreakpointReached } = useVerticalNav()
   const { settings } = useSettings()
+  const { user } = useAuthContext()
+
+  // ADMIN y SUPERVISOR no tienen sucursal fija (la eligen en el selector): les queda el nombre de la app
+  const title = user?.branch?.name || themeConfig.templateName
 
   // Vars
   const { layout } = settings
@@ -80,7 +85,7 @@ const Logo = ({ color }: { color?: CSSProperties['color'] }) => {
         transitionDuration={transitionDuration}
         isBreakpointReached={isBreakpointReached}
       >
-        {themeConfig.templateName}
+        {title}
       </LogoText>
     </div>
   )

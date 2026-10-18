@@ -1,4 +1,4 @@
-import { useMutation, useQuery } from '@tanstack/react-query'
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 
 import { cartService } from '@/services/salesService'
 import type {
@@ -29,7 +29,15 @@ export const useAddToCart = () => {
 
 export const useRepriceCart = () => {
   return useMutation({
-    mutationFn: (token: string) => cartService.repriceCart(token),
+    mutationFn: ({
+      token,
+      branchTransferId,
+      branchId
+    }: {
+      token: string
+      branchTransferId?: number
+      branchId?: number
+    }) => cartService.repriceCart(token, branchTransferId, branchId),
     onError: (error: any) => {
       console.error('Error repricing cart:', error)
       throw error
@@ -38,8 +46,15 @@ export const useRepriceCart = () => {
 }
 
 export const useCreateOrder = () => {
+  const queryClient = useQueryClient()
+
   return useMutation({
     mutationFn: (data: CreateOrderRequest) => cartService.createOrder(data),
+
+    // La orden reserva stock: sin esto el catalogo sigue mostrando el numero viejo
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['variants'] })
+    },
     onError: (error: any) => {
       console.error('Error creating order:', error)
       throw error
@@ -48,9 +63,15 @@ export const useCreateOrder = () => {
 }
 
 export const useConfirmOrder = () => {
+  const queryClient = useQueryClient()
+
   return useMutation({
     mutationFn: ({ orderId, data }: { orderId: number; data?: ConfirmOrderRequest }) =>
       cartService.confirmOrder(orderId, data),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['variants'] })
+      queryClient.invalidateQueries({ queryKey: ['branch-transfers'] })
+    },
     onError: (error: any) => {
       console.error('Error confirming order:', error)
       throw error
@@ -59,8 +80,15 @@ export const useConfirmOrder = () => {
 }
 
 export const useCancelOrder = () => {
+  const queryClient = useQueryClient()
+
   return useMutation({
     mutationFn: (orderId: number) => cartService.cancelOrder(orderId),
+
+    // Cancelar libera la reserva: el stock vuelve a estar disponible
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['variants'] })
+    },
     onError: (error: any) => {
       console.error('Error cancelling order:', error)
       throw error
