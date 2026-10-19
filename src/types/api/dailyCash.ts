@@ -45,3 +45,24 @@ export interface CloseDailyCashRequest {
   closingAmount: string
   closingNote?: string
 }
+
+export interface DailyCashListParams {
+  page?: number
+  limit?: number
+
+  // Solo ADMIN/SUPERVISOR: el MANAGER siempre ve la de su sucursal
+  branchId?: number
+}
+
+export interface DailyCashListResponse {
+  data: DailyCash[]
+  meta: {
+    total: number
+    page: number
+    lastPage: number
+    limit: number
+    offset: number
+    hasNextPage: boolean
+    hasPreviousPage: boolean
+  }
+}

@@ -12,6 +12,7 @@ import TabPanel from '@mui/lab/TabPanel'
 import { useCentralWarehouse, usePendingCount } from '@/hooks/useBranchTransfers'
 import CentralWarehouseTable from './CentralWarehouseTable'
 import DispatchHistoryTable from './DispatchHistoryTable'
+import PickupStatsTable from './PickupStatsTable'
 
 const CentralWarehouseView = () => {
   const [tab, setTab] = useState('stock')
@@ -37,6 +38,7 @@ const CentralWarehouseView = () => {
             </Box>
           }
         />
+        <Tab value='pickup-stats' label='Retiros' />
       </TabList>
 
       <TabPanel value='stock' sx={{ p: 0 }}>
@@ -45,6 +47,10 @@ const CentralWarehouseView = () => {
 
       <TabPanel value='dispatches' sx={{ p: 0 }}>
         <DispatchHistoryTable />
+      </TabPanel>
+
+      <TabPanel value='pickup-stats' sx={{ p: 0 }}>
+        <PickupStatsTable />
       </TabPanel>
     </TabContext>
   )

@@ -68,7 +68,7 @@ const AwaitingPickupTable = () => {
     <>
       <Card>
         <CardHeader
-          title='Pedidos recibidos'
+          title='Para entregar'
           subheader='Pedidos recibidos y apartados a la espera de su cliente. Verifique el documento antes de entregar.'
         />
 

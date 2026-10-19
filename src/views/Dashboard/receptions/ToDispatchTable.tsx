@@ -100,7 +100,7 @@ const ToDispatchTable = () => {
     <>
       <Card>
         <CardHeader
-          title='Por despachar'
+          title='Por enviar'
           subheader='Pedidos de otras sucursales. La prenda salió de la tienda al momento del pedido.'
         />
 

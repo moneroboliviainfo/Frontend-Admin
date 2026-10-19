@@ -40,7 +40,8 @@ const RequestFromBranchModal = ({ target, onClose, onAwaitingQr, showMessage }: 
   const [customerName, setCustomerName] = useState('')
   const [customerPhone, setCustomerPhone] = useState('')
   const [customerCi, setCustomerCi] = useState('')
-  const [paymentType, setPaymentType] = useState<'none' | 'cash' | 'card' | 'qr'>('none')
+  const [purpose, setPurpose] = useState<'restock' | 'customer'>('customer')
+  const [paymentType, setPaymentType] = useState<'cash' | 'card' | 'qr'>('cash')
   const [quotedTotal, setQuotedTotal] = useState<string | null>(null)
 
   const { userBranch } = useUserRole()
@@ -55,7 +56,8 @@ const RequestFromBranchModal = ({ target, onClose, onAwaitingQr, showMessage }: 
     setCustomerName('')
     setCustomerPhone('')
     setCustomerCi('')
-    setPaymentType('none')
+    setPurpose('customer')
+    setPaymentType('cash')
     setQuotedTotal(null)
   }, [target])
 
@@ -67,13 +69,15 @@ const RequestFromBranchModal = ({ target, onClose, onAwaitingQr, showMessage }: 
   const selected = branches.find(item => item.branch.id === sourceBranchId)
   const parsed = parseInt(quantity, 10) || 0
   const overStock = !!selected && parsed > selected.availableToRequest
-  const charges = paymentType !== 'none'
+
+  // Decision del negocio: un pedido para un cliente se cobra siempre al encargarlo.
+  // El back cobra el total completo de la cotizacion, no admite pagos parciales.
+  const charges = purpose === 'customer'
 
   // Con cobro, el back exige los tres datos del cliente y el total cotizado
   const customerComplete = !!customerName.trim() && !!customerPhone.trim() && !!customerCi.trim()
 
-  const isValid =
-    !!sourceBranchId && parsed > 0 && !overStock && (!charges || (!!quotedTotal && customerComplete))
+  const isValid = !!sourceBranchId && parsed > 0 && !overStock && (!charges || (!!quotedTotal && customerComplete))
 
   const handleQuote = async () => {
     if (!sourceBranchId) return
@@ -113,7 +117,7 @@ const RequestFromBranchModal = ({ target, onClose, onAwaitingQr, showMessage }: 
       showMessage(
         charges
           ? `Pedido #${created.id} creado y cobrado. Informe al cliente cuando llegue.`
-          : `Pedido #${created.id} creado. Informe al cliente cuando llegue a la sucursal.`,
+          : `Pedido #${created.id} creado. Llega a su sucursal para vender.`,
         'success'
       )
       onClose()
@@ -206,8 +210,8 @@ const RequestFromBranchModal = ({ target, onClose, onAwaitingQr, showMessage }: 
             </div>
 
             <Alert severity='info' sx={{ mt: 3 }}>
-              Solo se puede solicitar lo que está <strong>en la tienda</strong> de la otra sucursal. Al solicitarlo
-              deja de estar a la venta allí.
+              Solo se puede solicitar lo que está <strong>en la tienda</strong> de la otra sucursal. Al solicitarlo deja
+              de estar a la venta allí.
             </Alert>
 
             <Divider sx={{ my: 4 }} />
@@ -229,25 +233,51 @@ const RequestFromBranchModal = ({ target, onClose, onAwaitingQr, showMessage }: 
 
               <Box>
                 <Typography variant='body2' sx={{ mb: 2 }}>
-                  ¿Cobra ahora el pedido?
+                  ¿Para qué es este pedido?
                 </Typography>
                 <ToggleButtonGroup
                   exclusive
                   fullWidth
                   size='small'
-                  value={paymentType}
+                  value={purpose}
                   onChange={(_, value) => {
                     if (!value) return
-                    setPaymentType(value)
+                    setPurpose(value)
                     setQuotedTotal(null)
                   }}
                 >
-                  <ToggleButton value='none'>Paga al retirar</ToggleButton>
-                  <ToggleButton value='cash'>Efectivo</ToggleButton>
-                  <ToggleButton value='card'>Tarjeta</ToggleButton>
-                  <ToggleButton value='qr'>QR</ToggleButton>
+                  <ToggleButton value='restock'>Para sucursal</ToggleButton>
+                  <ToggleButton value='customer'>Para un cliente</ToggleButton>
                 </ToggleButtonGroup>
+                <Typography variant='caption' color='text.secondary'>
+                  {purpose === 'customer'
+                    ? 'El cliente paga la prenda completa ahora. Al retirarla solo abona lo que lleve de más.'
+                    : 'Mercadería para vender en su sucursal. No se cobra nada.'}
+                </Typography>
               </Box>
+
+              {charges && (
+                <Box>
+                  <Typography variant='body2' sx={{ mb: 2 }}>
+                    ¿Cómo paga?
+                  </Typography>
+                  <ToggleButtonGroup
+                    exclusive
+                    fullWidth
+                    size='small'
+                    value={paymentType}
+                    onChange={(_, value) => {
+                      if (!value) return
+                      setPaymentType(value)
+                      setQuotedTotal(null)
+                    }}
+                  >
+                    <ToggleButton value='cash'>Efectivo</ToggleButton>
+                    <ToggleButton value='card'>Tarjeta</ToggleButton>
+                    <ToggleButton value='qr'>QR</ToggleButton>
+                  </ToggleButtonGroup>
+                </Box>
+              )}
 
               {charges && !quotedTotal && (
                 <Box>
@@ -260,7 +290,7 @@ const RequestFromBranchModal = ({ target, onClose, onAwaitingQr, showMessage }: 
                       quoteRequest.isPending ? <CircularProgress size={16} /> : <i className='tabler-calculator' />
                     }
                   >
-                    {quoteRequest.isPending ? 'Calculando...' : 'Calcular total a cobrar'}
+                    {quoteRequest.isPending ? 'Calculando...' : 'Calcular el precio'}
                   </Button>
                   <Typography variant='caption' color='text.secondary'>
                     El precio se calcula al momento. Dígaselo al cliente antes de cobrarle.
@@ -271,7 +301,7 @@ const RequestFromBranchModal = ({ target, onClose, onAwaitingQr, showMessage }: 
               {charges && quotedTotal && (
                 <Alert severity='success'>
                   <Typography variant='body2' className='font-medium'>
-                    A cobrar ahora: Bs {parseFloat(quotedTotal).toFixed(2)}
+                    A cobrar: Bs {parseFloat(quotedTotal).toFixed(2)}
                   </Typography>
                   <Typography variant='caption'>
                     {paymentType === 'qr'
@@ -281,36 +311,42 @@ const RequestFromBranchModal = ({ target, onClose, onAwaitingQr, showMessage }: 
                 </Alert>
               )}
 
-              <Typography variant='body2' color='text.secondary'>
-                {charges
-                  ? 'Datos del cliente (obligatorios para un pedido cobrado)'
-                  : 'Datos del cliente (opcionales, permiten informarle cuando la prenda llegue)'}
-              </Typography>
+              {charges && (
+                <Typography variant='body2' color='text.secondary'>
+                  Datos del cliente (necesarios para avisarle y para cotejar su documento al entregar)
+                </Typography>
+              )}
 
-              <CustomTextField
-                fullWidth
-                label='Nombre'
-                placeholder='María Pérez'
-                value={customerName}
-                onChange={e => setCustomerName(e.target.value)}
-                error={charges && !customerName.trim()}
-              />
-              <CustomTextField
-                fullWidth
-                label='Teléfono'
-                placeholder='70012345'
-                value={customerPhone}
-                onChange={e => setCustomerPhone(e.target.value)}
-                error={charges && !customerPhone.trim()}
-              />
-              <CustomTextField
-                fullWidth
-                label='CI'
-                placeholder='1234567'
-                value={customerCi}
-                onChange={e => setCustomerCi(e.target.value)}
-                error={charges && !customerCi.trim()}
-              />
+              {charges && (
+                <CustomTextField
+                  fullWidth
+                  label='Nombre'
+                  placeholder='María Pérez'
+                  value={customerName}
+                  onChange={e => setCustomerName(e.target.value)}
+                  error={!customerName.trim()}
+                />
+              )}
+              {charges && (
+                <CustomTextField
+                  fullWidth
+                  label='Teléfono'
+                  placeholder='70012345'
+                  value={customerPhone}
+                  onChange={e => setCustomerPhone(e.target.value)}
+                  error={!customerPhone.trim()}
+                />
+              )}
+              {charges && (
+                <CustomTextField
+                  fullWidth
+                  label='CI'
+                  placeholder='1234567'
+                  value={customerCi}
+                  onChange={e => setCustomerCi(e.target.value)}
+                  error={!customerCi.trim()}
+                />
+              )}
             </Box>
           </>
         )}
@@ -330,11 +366,11 @@ const RequestFromBranchModal = ({ target, onClose, onAwaitingQr, showMessage }: 
         >
           {createRequest.isPending
             ? 'Pidiendo...'
-            : paymentType === 'qr'
-              ? 'Generar QR y hacer el pedido'
-              : charges
-                ? 'Cobrar y hacer el pedido'
-                : 'Hacer el pedido'}
+            : !charges
+              ? 'Hacer el pedido'
+              : paymentType === 'qr'
+                ? 'Generar QR y hacer el pedido'
+                : 'Cobrar y hacer el pedido'}
         </Button>
       </DialogActions>
     </Dialog>

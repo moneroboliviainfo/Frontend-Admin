@@ -221,3 +221,12 @@ export const useRefundRequest = () => {
     }
   })
 }
+
+export const usePickupStats = (from: string, to: string, enabled: boolean = true) => {
+  return useQuery({
+    queryKey: ['pickup-stats', from, to],
+    queryFn: () => branchTransferService.getPickupStats(from, to),
+    enabled: enabled && !!from && !!to,
+    staleTime: 1000 * 60 * 5
+  })
+}

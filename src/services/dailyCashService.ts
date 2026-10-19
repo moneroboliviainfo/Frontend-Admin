@@ -1,7 +1,20 @@
 import { apiClient } from '@/libs/axios'
-import type { DailyCash, OpenDailyCashRequest, CloseDailyCashRequest } from '@/types/api/dailyCash'
+import type {
+  DailyCash,
+  DailyCashListParams,
+  DailyCashListResponse,
+  OpenDailyCashRequest,
+  CloseDailyCashRequest
+} from '@/types/api/dailyCash'
 
 class DailyCashServiceClass {
+  // Historial de cajas: el MANAGER ve la suya, ADMIN/SUPERVISOR filtran por sucursal
+  async getHistory(params: DailyCashListParams = {}): Promise<DailyCashListResponse> {
+    const response = await apiClient.get<DailyCashListResponse>('/api/dailyCash', { params })
+
+    return response.data
+  }
+
   async getCurrentDailyCash(): Promise<DailyCash> {
     const response = await apiClient.get<DailyCash>('/api/dailyCash/current')
 

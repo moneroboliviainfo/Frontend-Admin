@@ -30,6 +30,10 @@ interface ShoppingCartProps {
   onProceedToPayment: () => void
   isEditingOrder?: boolean
   editingOrderId?: number | null
+
+  // variantId -> unidades ya pagadas al encargar el pedido. La venta de retiro
+  // tiene que llevarlas todas: no se pueden sacar ni reducir.
+  paidQuantities?: Record<number, number>
 }
 
 const ShoppingCart: React.FC<ShoppingCartProps> = ({
@@ -41,6 +45,7 @@ const ShoppingCart: React.FC<ShoppingCartProps> = ({
   onClearCart,
   onRemoveItem,
   onUpdateQuantity,
+  paidQuantities = {},
   onProceedToPayment,
   isEditingOrder = false,
   editingOrderId = null
@@ -119,8 +124,13 @@ const ShoppingCart: React.FC<ShoppingCartProps> = ({
                         <Typography variant='caption' color='text.secondary' fontSize='0.7rem'>
                           {variantInfo?.size} | {variantInfo?.color?.name}
                         </Typography>
+                        {!!paidQuantities[item.variantId] && (
+                          <Typography variant='caption' color='success.main' fontSize='0.7rem' display='block'>
+                            {paidQuantities[item.variantId]} ya pagada(s) en el pedido
+                          </Typography>
+                        )}
                       </Box>
-                      {currentStep === 'BUILDING_CART' && (
+                      {currentStep === 'BUILDING_CART' && !paidQuantities[item.variantId] && (
                         <IconButton
                           size='small'
                           color='error'
@@ -138,7 +148,7 @@ const ShoppingCart: React.FC<ShoppingCartProps> = ({
                           <IconButton
                             size='small'
                             onClick={() => onUpdateQuantity(item.variantId, item.quantity - 1)}
-                            disabled={isLoading}
+                            disabled={isLoading || item.quantity <= (paidQuantities[item.variantId] || 0)}
                             sx={{ p: 0.5 }}
                           >
                             <span style={{ fontSize: '0.8rem' }}>➖</span>

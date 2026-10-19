@@ -10,6 +10,7 @@ import type {
   DispatchRequest,
   PickupRequest,
   QuoteRequest,
+  PickupStatsItem,
   RefundRequest,
   RequestQrResponse,
   QuoteResponse,
@@ -130,6 +131,14 @@ class BranchTransferServiceClass {
 
   async getTransfer(transferId: number): Promise<BranchTransfer> {
     const response = await apiClient.get<BranchTransfer>(`/api/branch-transfers/${transferId}`)
+
+    return response.data
+  }
+
+  async getPickupStats(from: string, to: string): Promise<PickupStatsItem[]> {
+    const response = await apiClient.get<PickupStatsItem[]>('/api/branch-transfers/pickup-stats', {
+      params: { from, to }
+    })
 
     return response.data
   }

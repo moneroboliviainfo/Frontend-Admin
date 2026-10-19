@@ -55,7 +55,14 @@ export const filterMenuByRole = (
   if (role === 'CASHIER') {
     const allowedMenus = ['VENTAS', 'Ventas', 'INVENTARIO', 'Inventario']
 
-    return menuItems.filter((item: any) => allowedMenus.includes(item.label))
+    // El historial de caja es A/S/M: el cajero ve el submenu pero no esa opcion
+    return menuItems
+      .filter((item: any) => allowedMenus.includes(item.label))
+      .map((item: any) =>
+        item.label === 'Ventas' && item.children
+          ? { ...item, children: item.children.filter((child: any) => child.label !== 'Caja') }
+          : item
+      )
   }
 
   return []

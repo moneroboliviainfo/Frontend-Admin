@@ -247,3 +247,15 @@ export interface RequestQrResponse {
 export interface RefundRequest {
   note?: string
 }
+
+// Estadistica de retiro por par de sucursales, en un rango de fechas de recepcion
+export interface PickupStatsItem {
+  sourceBranch: TransferBranch
+  destinationBranch: TransferBranch
+  received: number
+  pickedUp: number
+  notPickedUp: number
+  notPickedUpMarked: number
+  notPickedUpExpired: number
+  waiting: number
+}

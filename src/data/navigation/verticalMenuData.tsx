@@ -15,6 +15,22 @@ const getFullMenuData = (): VerticalMenuDataType[] => [
     href: '/home'
   },
 
+  // ADMINISTRACIÓN
+  {
+    isSection: true,
+    label: 'ADMINISTRACIÓN'
+  },
+  {
+    label: 'Usuarios',
+    icon: 'tabler-users-group',
+    href: '/users/list'
+  },
+  {
+    label: 'Sucursales',
+    icon: 'tabler-building-store',
+    href: '/branches/list'
+  },
+
   // VENTAS
   {
     isSection: true,
@@ -33,6 +49,11 @@ const getFullMenuData = (): VerticalMenuDataType[] => [
         label: 'Venta en Tienda',
         icon: 'tabler-list',
         href: '/sales/instore/'
+      },
+      {
+        label: 'Caja',
+        icon: 'tabler-cash-register',
+        href: '/cash'
       }
     ]
   },
@@ -181,22 +202,6 @@ const getFullMenuData = (): VerticalMenuDataType[] => [
         href: '/customers/list'
       }
     ]
-  },
-
-  // ADMINISTRACIÓN
-  {
-    isSection: true,
-    label: 'ADMINISTRACIÓN'
-  },
-  {
-    label: 'Usuarios',
-    icon: 'tabler-users-group',
-    href: '/users/list'
-  },
-  {
-    label: 'Sucursales',
-    icon: 'tabler-building-store',
-    href: '/branches/list'
   }
 ]
 

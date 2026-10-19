@@ -2139,6 +2139,15 @@ const OrderDetailsModal = ({ open, onClose, order: orderProp }: OrderDetailsModa
             ¿Estás seguro que deseas cancelar la orden #{order.inherited_id || order.id}? Esta acción no se puede
             deshacer.
           </Typography>
+
+          {/* Cancelar devuelve el pedido a "esperando"; editar lo mantiene entregado */}
+          {order.branchTransferId && (
+            <Alert severity='warning' sx={{ mt: 3 }}>
+              Esta venta entregó el <strong>pedido #{order.branchTransferId}</strong>. Al cancelarla, el pedido
+              vuelve a figurar como pendiente de retiro y habrá que volver a enlazarlo en la venta nueva. Si solo
+              necesita corregir datos, use <strong>Editar</strong> en lugar de cancelar.
+            </Alert>
+          )}
         </DialogContent>
         <DialogActions sx={{ p: 2, gap: 1 }}>
           <Button

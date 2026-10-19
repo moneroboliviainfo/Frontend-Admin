@@ -1,7 +1,7 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 
 import { dailyCashService } from '@/services/dailyCashService'
-import type { OpenDailyCashRequest, CloseDailyCashRequest } from '@/types/api/dailyCash'
+import type { DailyCashListParams, OpenDailyCashRequest, CloseDailyCashRequest } from '@/types/api/dailyCash'
 
 export const useDailyCash = () => {
   return useQuery({
@@ -40,5 +40,13 @@ export const useCloseDailyCash = () => {
       console.error('Error closing daily cash:', error)
       throw error
     }
+  })
+}
+
+export const useDailyCashHistory = (params: DailyCashListParams = {}) => {
+  return useQuery({
+    queryKey: ['dailyCash', 'history', params],
+    queryFn: () => dailyCashService.getHistory(params),
+    staleTime: 30000
   })
 }

@@ -321,6 +321,19 @@ const PointOfSale: React.FC = () => {
 
   const linkedTransfer = (awaitingPickupData?.data || []).find(transfer => transfer.id === linkedTransferId)
 
+  // Solo un pedido ya pagado obliga a llevar sus prendas; uno sin cobro no
+  const paidQuantities = useMemo(() => {
+    const map: Record<number, number> = {}
+
+    if (!linkedTransfer?.advancePaidAt) return map
+
+    linkedTransfer.items.forEach(item => {
+      map[item.variantId] = item.receivedQuantity ?? item.quantity
+    })
+
+    return map
+  }, [linkedTransfer])
+
   const getVariantInfo = (variantId: number) => {
     return allFlattenedVariants.find(v => v.variantSizeId === variantId)
   }
@@ -349,6 +362,9 @@ const PointOfSale: React.FC = () => {
   }
 
   const updateQuantity = (variantId: number, newQuantity: number) => {
+    // La venta de retiro tiene que llevar todas las prendas pagadas
+    if (newQuantity < (paidQuantities[variantId] || 0)) return
+
     if (newQuantity <= 0) {
       removeFromCart(variantId)
 
@@ -363,6 +379,8 @@ const PointOfSale: React.FC = () => {
   }
 
   const removeFromCart = (variantId: number) => {
+    if (paidQuantities[variantId]) return
+
     setCartItems(cartItems.filter(item => item.variantId !== variantId))
   }
 
@@ -968,6 +986,7 @@ const PointOfSale: React.FC = () => {
               onClearCart={clearCart}
               onRemoveItem={removeFromCart}
               onUpdateQuantity={updateQuantity}
+              paidQuantities={paidQuantities}
               onProceedToPayment={verifyStockAndPrices}
               isEditingOrder={isEditingOrder}
               editingOrderId={editingOrderId}

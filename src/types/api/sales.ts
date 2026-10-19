@@ -245,9 +245,7 @@ export interface Order {
   status: 'pending' | 'confirmed' | 'cancelled' | 'completed' | 'paid' | 'sent' | 'expired' | 'cancelled_for_edit'
   payment_type: 'cash' | 'card' | 'qr' | 'card_online'
 
-  // Pedido entre sucursales que el cliente retira con esta venta: el back lo
-  // marca retirado y usa su unidad reservada. No lleva branchId (lo resuelve del cajero).
-  branchTransferId?: number | 'card_online'
+  branchTransferId?: number
   codigoMetodoPago: number | null
   enabled: boolean
   shipment_price: number
@@ -408,8 +406,12 @@ export interface VerificarNitResponse {
 
 export interface CreateOrderRequest {
   items: string
-  payment_type: 'cash' | 'card' | 'qr'
+  payment_type: 'cash' | 'card' | 'qr' | 'card_online'
   billing: BillingInfo
+
+  // Pedido entre sucursales que el cliente retira con esta venta: el back lo
+  // marca retirado y usa su unidad reservada. No lleva branchId (lo resuelve del cajero).
+  branchTransferId?: number
 }
 
 export interface ConfirmOrderRequest {

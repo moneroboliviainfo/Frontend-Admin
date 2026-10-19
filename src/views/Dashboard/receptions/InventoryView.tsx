@@ -44,8 +44,17 @@ const InventoryView = () => {
           value='dispatch'
           label={
             <Box className='flex items-center gap-2'>
-              <span>Por despachar</span>
+              <span>Por enviar</span>
               {toDispatch > 0 && <Chip label={toDispatch} size='small' variant='tonal' color='warning' />}
+            </Box>
+          }
+        />
+        <Tab
+          value='pickup'
+          label={
+            <Box className='flex items-center gap-2'>
+              <span>Para entregar</span>
+              {awaitingPickup > 0 && <Chip label={awaitingPickup} size='small' variant='tonal' color='success' />}
             </Box>
           }
         />
@@ -55,15 +64,6 @@ const InventoryView = () => {
             <Box className='flex items-center gap-2'>
               <span>Devoluciones</span>
               {pendingRefunds > 0 && <Chip label={pendingRefunds} size='small' variant='tonal' color='error' />}
-            </Box>
-          }
-        />
-        <Tab
-          value='pickup'
-          label={
-            <Box className='flex items-center gap-2'>
-              <span>Pedidos recibidos</span>
-              {awaitingPickup > 0 && <Chip label={awaitingPickup} size='small' variant='tonal' color='success' />}
             </Box>
           }
         />
@@ -88,6 +88,7 @@ const InventoryView = () => {
       <TabPanel value='refunds' sx={{ p: 0 }}>
         <RefundsTable />
       </TabPanel>
+
     </TabContext>
   )
 }

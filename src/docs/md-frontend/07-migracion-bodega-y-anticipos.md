@@ -313,13 +313,46 @@ Del [14-changelog-2026-10.md](../md-backend/14-changelog-2026-10.md):
 
 ---
 
+## Historial de caja (18/10/2026)
+
+`GET /dailyCash` no se usaba: se podía abrir y cerrar caja, pero no ver los
+turnos anteriores. Pantalla **VENTAS → Caja** (`/cash`) para ADMIN, SUPERVISOR
+y MANAGER; el CASHIER no la ve (el doc da el historial a A/S/M).
+
+Lista cada turno con apertura, esperado, contado y la **diferencia** en un
+chip (Cuadra / Sobra / Falta), y un detalle con el desglose completo —ventas,
+anticipos, devoluciones— y quién abrió y cerró. ADMIN/SUPERVISOR filtran por la
+sucursal de la navbar; el MANAGER siempre ve la suya.
+
+## Decisión de negocio: no hay pedidos fiados (18/10/2026)
+
+Un pedido para un cliente **se cobra siempre al encargarlo**. Se eliminó la
+opción "paga al retirar".
+
+El modal del POS pasó de una pregunta con cuatro botones a dos preguntas:
+
+1. **¿Para qué es?** — *Para un cliente* (se cobra) o *Para reponer stock*
+   (no se cobra ni pide datos; es la sucursal abasteciéndose de otra).
+2. **¿Cómo paga?** — Efectivo, Tarjeta o QR. Solo aparece con cliente.
+
+Los datos del cliente solo se muestran cuando hay cliente, y ahí son
+obligatorios.
+
+> El backend **no admite pagos parciales**: `expectedTotal` es el total de la
+> cotización y el QR se genera por *"el anticipo completo"*. O sea que el
+> cliente paga la prenda entera al encargarla; al retirarla solo abona lo que
+> lleve de más (`amountDue`).
+
 ## Pendientes de esta tanda
 
-- [ ] **Pedidos cobrados en el POS**: las prendas ya pagadas no se deberían
-      poder quitar del carrito en la venta de retiro (doc 13 §10).
-- [ ] **Corregir una venta de retiro**: ofrecer editar en vez de cancelar y
-      crear otra (editar no libera el pedido; cancelar sí lo devuelve a
-      "esperando").
+- [x] **Prendas pagadas protegidas en el carrito** (18/10/2026): con un pedido
+      **pagado** enlazado, sus líneas no se pueden borrar ni bajar de la
+      cantidad pagada (botón oculto, menos deshabilitado), y se marcan con
+      "N ya pagada(s) en el pedido". Un pedido sin cobro no restringe nada.
+- [x] **Corregir una venta de retiro**: al cancelar una venta con
+      `branchTransferId`, un aviso explica que el pedido vuelve a figurar
+      pendiente de retiro y que para corregir datos conviene **Editar**.
+      Editar ya estaba disponible; lo que faltaba era advertir la diferencia.
 
 - [x] **Anular un pedido antes del despacho** y **ver los propios pedidos**:
       *Por recibir* tiene filtro de estado (En camino · Esperando despacho ·
@@ -332,9 +365,21 @@ Del [14-changelog-2026-10.md](../md-backend/14-changelog-2026-10.md):
 - [x] **Errores del enlace**: el POS reescribía el error de stock y **perdía el
       número de pedido**. Ahora, si la unidad está reservada, el mensaje nombra
       el pedido e indica marcar "Entregar este pedido".
-- [ ] `pickup-stats` (ADMIN/SUPERVISOR).
+- [x] **`pickup-stats`**: pestaña *Retiros* en Bodega Central, con rango de
+      fechas (por defecto, el mes en curso) y el **porcentaje de retiro** por
+      par de sucursales, en verde/naranja/rojo. Es el dato con el que se
+      decide dónde exigir anticipo.
 - [ ] **Volver `REQUIRE_BILLING` a `true`** en `PaymentDialog.tsx` cuando SIAT
       esté configurado. Hoy está en `false` para poder probar ventas en efectivo.
+
+## Bugs propios corregidos
+
+- **`sales.ts`**: dos parches de tipos cayeron en la interfaz `Order` en vez de
+  `CreateOrderRequest`, porque el texto buscado aparecía antes ahí. Quedó un
+  `branchTransferId?: number | 'card_online'` sin sentido en `Order` y
+  `CreateOrderRequest` sin `card_online` ni `branchTransferId`. El POS mandaba
+  el campo igual (el spread condicional esquiva el chequeo de propiedades), así
+  que compilaba y funcionaba, pero sin tipado. Corregido el 18/10/2026.
 
 ## Bugs viejos corregidos el 18/10/2026
 
