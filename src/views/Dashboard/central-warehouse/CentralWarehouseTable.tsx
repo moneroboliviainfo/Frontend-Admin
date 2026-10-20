@@ -33,6 +33,7 @@ import { prendas, variantes } from './units'
 import ConfirmWarehouseChangesModal from './ConfirmWarehouseChangesModal'
 import ExportMenu from './ExportMenu'
 import LowStockPanel from './LowStockPanel'
+import PositiveAdjustmentModal from '@/views/Dashboard/products/add/components/PositiveAdjustmentModal'
 import MovementsModal from './MovementsModal'
 import type { MovementsTarget } from './MovementsModal'
 import RenameWarehouseModal from './RenameWarehouseModal'
@@ -112,6 +113,16 @@ const CentralWarehouseTable = () => {
   const [renameOpen, setRenameOpen] = useState(false)
   const [subtractTarget, setSubtractTarget] = useState<SubtractTarget | null>(null)
   const [movementsTarget, setMovementsTarget] = useState<MovementsTarget | null>(null)
+
+  // Sobrante contado por el cajero en SU tienda: el admin lo registra desde acá
+  // con la sucursal del selector. La tabla muestra el stock de la bodega, no el
+  // de la tienda, asi que el modal no muestra numeros de referencia.
+  const [adjustTarget, setAdjustTarget] = useState<{
+    variantSizeId: number
+    label: string
+    sizeName: string
+  } | null>(null)
+
   const [isSaving, setIsSaving] = useState(false)
 
   const [snackbar, setSnackbar] = useState<{ message: string; severity: 'success' | 'error' | 'warning' } | null>(null)
@@ -540,6 +551,30 @@ const CentralWarehouseTable = () => {
                                         <i className='tabler-history' />
                                       </IconButton>
                                     </Tooltip>
+                                    <Tooltip
+                                      title={
+                                        selectedBranch
+                                          ? `Registrar sobrante en ${selectedBranch.name}`
+                                          : 'Seleccione una sucursal en la barra superior'
+                                      }
+                                    >
+                                      <span>
+                                        <IconButton
+                                          size='small'
+                                          color='success'
+                                          disabled={!selectedBranch}
+                                          onClick={() =>
+                                            setAdjustTarget({
+                                              variantSizeId: size.variantSizeId,
+                                              label,
+                                              sizeName: size.sizeName
+                                            })
+                                          }
+                                        >
+                                          <i className='tabler-plus' />
+                                        </IconButton>
+                                      </span>
+                                    </Tooltip>
                                     <Tooltip title='Dar de baja'>
                                       <span>
                                         <IconButton
@@ -590,6 +625,15 @@ const CentralWarehouseTable = () => {
         />
       </Card>
 
+      <PositiveAdjustmentModal
+        open={!!adjustTarget}
+        onClose={() => setAdjustTarget(null)}
+        contextLabel={adjustTarget?.label}
+        variants={adjustTarget ? [{ id: adjustTarget.variantSizeId, size: { name: adjustTarget.sizeName } }] : []}
+        showMessage={(message, severity) =>
+          setSnackbar({ message, severity: severity === 'info' ? 'warning' : severity })
+        }
+      />
       <MovementsModal target={movementsTarget} warehouseId={warehouse?.id} onClose={() => setMovementsTarget(null)} />
 
       <RenameWarehouseModal

@@ -10,6 +10,7 @@ import Button from '@mui/material/Button'
 import Box from '@mui/material/Box'
 import Alert from '@mui/material/Alert'
 import Typography from '@mui/material/Typography'
+import Chip from '@mui/material/Chip'
 import ToggleButton from '@mui/material/ToggleButton'
 import ToggleButtonGroup from '@mui/material/ToggleButtonGroup'
 import CircularProgress from '@mui/material/CircularProgress'
@@ -25,13 +26,20 @@ type Props = {
   variants: Array<{
     id: number
     size: { name: string }
-    availableStock: number
-    warehouseStock: number
+
+    // Stock actual de la TIENDA, como referencia. Opcional: desde Bodega
+    // Central no se conoce (la tabla muestra el stock de la bodega), y poner
+    // esos numeros ahi seria mentir sobre lo que se esta ajustando.
+    availableStock?: number
+    warehouseStock?: number
   }>
+
+  // Que prenda se esta ajustando, cuando el modal se abre desde una lista
+  contextLabel?: string
   showMessage: (message: string, severity: 'success' | 'error' | 'info' | 'warning') => void
 }
 
-const PositiveAdjustmentModal = ({ open, onClose, variants, showMessage }: Props) => {
+const PositiveAdjustmentModal = ({ open, onClose, variants, contextLabel, showMessage }: Props) => {
   const [location, setLocation] = useState<StockLocation>('sales_floor')
   const [quantities, setQuantities] = useState<Record<number, number>>({})
   const [note, setNote] = useState('')
@@ -84,13 +92,33 @@ const PositiveAdjustmentModal = ({ open, onClose, variants, showMessage }: Props
 
   return (
     <Dialog open={open} onClose={onClose} maxWidth='sm' fullWidth>
-      <DialogTitle>Registrar sobrante</DialogTitle>
+      <DialogTitle>
+        Registrar sobrante
+        {contextLabel && (
+          <Typography variant='body2' color='text.secondary' sx={{ mt: 1 }}>
+            {contextLabel}
+          </Typography>
+        )}
+      </DialogTitle>
 
       <DialogContent>
+        {/* El ajuste es a ciegas: la tabla de atrás muestra el stock de la
+            bodega, no el de la tienda. Por eso la sucursal va destacada y no
+            perdida dentro del texto del aviso. */}
+        <Box className='flex items-center gap-3' sx={{ mb: 3 }}>
+          <Typography variant='body2' color='text.secondary'>
+            Se suma a la sucursal
+          </Typography>
+          <Chip
+            label={selectedBranch?.name || 'Ninguna seleccionada'}
+            color={selectedBranch ? 'primary' : 'default'}
+            sx={{ blockSize: 34, fontSize: '1rem', fontWeight: 700 }}
+          />
+        </Box>
+
         <Alert severity='info' sx={{ mb: 4 }}>
-          El conteo indica <strong>más unidades de las que figuran</strong> en{' '}
-          {selectedBranch?.name || 'la sucursal'}. Esta acción suma la diferencia. La mercadería nueva no se
-          registra aquí: ingresa por la Bodega Central.
+          El conteo indica <strong>más unidades de las que figuran</strong>. Esta acción suma la diferencia. La
+          mercadería nueva no se registra aquí: ingresa por la Bodega Central.
         </Alert>
 
         <ToggleButtonGroup
@@ -99,10 +127,25 @@ const PositiveAdjustmentModal = ({ open, onClose, variants, showMessage }: Props
           size='small'
           value={location}
           onChange={(_, value) => value && setLocation(value)}
-          sx={{ mb: 4 }}
+          sx={{
+            mb: 4,
+
+            // Color entero en el elegido: con el tintado por defecto costaba
+            // ver cuál de los dos estaba activo.
+            '& .MuiToggleButton-root': {
+              textTransform: 'none',
+              fontWeight: 600,
+              paddingBlock: '10px',
+              '&.Mui-selected': {
+                backgroundColor: 'success.main',
+                color: 'success.contrastText',
+                '&:hover': { backgroundColor: 'success.dark' }
+              }
+            }
+          }}
         >
-          <ToggleButton value='sales_floor'>Estaban en la tienda</ToggleButton>
-          <ToggleButton value='warehouse'>Estaban en el depósito</ToggleButton>
+          <ToggleButton value='sales_floor'>Ingresar en tienda</ToggleButton>
+          <ToggleButton value='warehouse'>Ingresar en depósito</ToggleButton>
         </ToggleButtonGroup>
 
         <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
@@ -123,9 +166,11 @@ const PositiveAdjustmentModal = ({ open, onClose, variants, showMessage }: Props
                 <Typography variant='body2' className='font-medium'>
                   Talla {variant.size.name}
                 </Typography>
-                <Typography variant='caption' color='text.secondary'>
-                  Tienda: {variant.availableStock} · Depósito: {variant.warehouseStock}
-                </Typography>
+                {variant.availableStock !== undefined && (
+                  <Typography variant='caption' color='text.secondary'>
+                    Tienda: {variant.availableStock} · Depósito: {variant.warehouseStock}
+                  </Typography>
+                )}
               </Box>
               <CustomTextField
                 type='number'

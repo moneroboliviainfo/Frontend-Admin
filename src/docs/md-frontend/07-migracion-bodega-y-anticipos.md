@@ -520,6 +520,34 @@ tres mandaban `?branchId=<sucursal>` y con el id de la bodega no funcionan
 Una nota anterior listaba "Ver movimientos" entre las acciones de Variantes.
 Era falso: `MovementsModal` se abre solo desde Bodega Central.
 
+## Sobrante de una tienda, desde Bodega Central (20/10/2026)
+
+Al sacar las acciones de la pestana Variantes, el ADMIN se quedo sin pantalla
+para registrar un sobrante: Inventario es del encargado (el menu se lo esconde
+al admin a proposito) y `positive-adjustment` es ADMIN/SUPERVISOR.
+
+Se resolvio en **Bodega Central → Stock**, con un boton por fila (icono `+`)
+que abre el modal que ya existia (`PositiveAdjustmentModal`, reutilizado desde
+`products/add/components`).
+
+Flujo real: el cajero cuenta y encuentra prendas de mas, llama al admin, y el
+admin elige esa sucursal en el selector de la navbar y registra el sobrante.
+Es el mismo selector que ya dice "Enviar a X", asi que significa lo mismo: la
+tienda con la que se esta operando. Sin sucursal elegida el boton se deshabilita.
+
+**La limitacion asumida**: la tabla muestra el stock de la **bodega**, no el de
+la tienda, asi que el ajuste se hace a ciegas. Para no agravarlo, el modal
+**no muestra los numeros de referencia** cuando se abre desde aca (son
+opcionales en sus props): poner el stock de la bodega al lado de un ajuste a
+una tienda seria mentir. El modal si nombra la sucursal en su aviso y la prenda
+en el titulo.
+
+Recordatorio del back: `positive-adjustment` exige una **tienda**; con la
+bodega principal da **403**. Un sobrante en la bodega misma no necesita este
+endpoint: es la columna "Ingresar" (`addstock` entra siempre a la bodega).
+
+Sigue pendiente **dar de baja stock de una tienda** desde el panel del admin.
+
 ## Pendientes de esta tanda
 
 - [x] **Prendas pagadas protegidas en el carrito** (18/10/2026): con un pedido
