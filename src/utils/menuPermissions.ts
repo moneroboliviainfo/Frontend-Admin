@@ -53,7 +53,15 @@ export const filterMenuByRole = (
   }
 
   if (role === 'CASHIER') {
-    const allowedMenus = ['VENTAS', 'Ventas', 'INVENTARIO', 'Inventario']
+    const allowedMenus = [
+      'VENTAS',
+      'Ventas',
+      'INVENTARIO',
+      'Inventario',
+      'Reposiciones',
+      'PEDIDOS ENTRE SUCURSALES',
+      'Pedidos'
+    ]
 
     // El historial de caja es A/S/M: el cajero ve el submenu pero no esa opcion
     return menuItems
@@ -111,7 +119,7 @@ export const canAccessRoute = (role: Role | null, route: string): boolean => {
   }
 
   if (role === 'CASHIER') {
-    const cashierAllowedRoutes = ['/sales', '/receptions']
+    const cashierAllowedRoutes = ['/sales', '/receptions', '/replenishments', '/branch-requests']
 
     return cashierAllowedRoutes.some(r => route.startsWith(r))
   }

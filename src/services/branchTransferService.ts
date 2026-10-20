@@ -18,6 +18,8 @@ import type {
   MarkLostTransferRequest,
   PendingCount,
   ReceiveTransferRequest,
+  ReplenishmentRequest,
+  AttendReplenishmentRequest,
   ReviewTransferRequest
 } from '@/types/api/branchTransfer'
 
@@ -115,8 +117,31 @@ class BranchTransferServiceClass {
   // Devuelve TODO lo pendiente de una vez y siempre en efectivo, desde la caja
   // de la tienda que pidio (tiene que estar abierta)
   async refundRequest(transferId: number, data: RefundRequest = {}): Promise<BranchTransfer> {
+    const response = await apiClient.post<BranchTransfer>(`/api/branch-transfers/requests/${transferId}/refund`, data)
+
+    return response.data
+  }
+
+  // La tienda pide variantes a la central. Si ya tiene una reposicion abierta, se suman ahi
+  async requestReplenishment(data: ReplenishmentRequest): Promise<BranchTransfer> {
+    const response = await apiClient.post<BranchTransfer>('/api/branch-transfers/replenishments', data)
+
+    return response.data
+  }
+
+  // itemId es el id de la linea, no el variantId. Quitar la ultima anula la reposicion
+  async removeReplenishmentItem(transferId: number, itemId: number): Promise<BranchTransfer> {
+    const response = await apiClient.delete<BranchTransfer>(
+      `/api/branch-transfers/replenishments/${transferId}/items/${itemId}`
+    )
+
+    return response.data
+  }
+
+  // La central atiende (algo > 0, sale de la bodega ahora) o rechaza (todo en 0, nota obligatoria)
+  async attendReplenishment(transferId: number, data: AttendReplenishmentRequest): Promise<BranchTransfer> {
     const response = await apiClient.post<BranchTransfer>(
-      `/api/branch-transfers/requests/${transferId}/refund`,
+      `/api/branch-transfers/replenishments/${transferId}/dispatch`,
       data
     )
 

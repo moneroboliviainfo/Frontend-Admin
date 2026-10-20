@@ -450,6 +450,44 @@ Quedan sin invalidar a proposito: catalogos SIAT que no cambian desde el panel
 cuyo plural si se invalida, `dashboard` (es una foto) y `verify-payment` (se
 pollea solo).
 
+## Menus por proposito y reposiciones (20/10/2026)
+
+Doc: [15-replenishments-and-transfer-stages.md](../md-backend/15-replenishments-and-transfer-stages.md) §5.
+
+Regla: **cada pantalla es un solo tema y sus pestañas son partes o etapas de
+ese tema**. Se separan tres cosas: stock (lo que hay), movimientos (mercaderia
+que se mueve) y solicitudes (alguien le pide algo a otro).
+
+| Menu | Admin / Supervisor | Encargado / Cajero |
+| --- | --- | --- |
+| INVENTARIO → Bodega Central | Stock · Envios | — |
+| INVENTARIO → Inventario | — | Stock · Envios de la central |
+| INVENTARIO → Reposiciones (`/replenishments`) | Por atender · Historial | Mi reposicion · Historial |
+| PEDIDOS ENTRE SUCURSALES → Pedidos (`/branch-requests`) | listado de todos los pedidos | Mis pedidos · Por despachar · Para entregar · Devoluciones |
+| PEDIDOS ENTRE SUCURSALES → Plazos de Pedidos | (se movio desde INVENTARIO) | — |
+
+- **Bodega → Envios**: se saco el filtro *Tipo* (los pedidos entre tiendas no
+  pasan por la bodega; con "ver todas" ademas salia siempre vacio). Se saco
+  *Todos* del estado: traeria las reposiciones sin atender y las rechazadas,
+  que son solicitudes. Badge nuevo de faltantes por revisar.
+- **La recepcion de la central vive en un solo lugar** (Inventario → Envios de
+  la central), venga de un envio directo o de una reposicion atendida. Ahi se
+  elige si entra al deposito o directo a la tienda (`location`).
+- La pestaña de recepciones de la tienda mezclaba envios de la central con el
+  seguimiento de pedidos (filtros "Todavía no lo envían", "Esperando el pago",
+  QR, anular). Se partio: `ReceptionsTable kind='central' | 'requests'`.
+- **Excepcion aceptada**: el envio inline de Bodega → Stock se queda como esta.
+- **Atajo**: ícono "Pedir reposición" por talla en Inventario → Stock. Solo
+  agrega la talla; ver, quitar y anular es en Reposiciones.
+- Badges por menu: `pending-count.toReceive` suma envios y pedidos, asi que
+  cada menu cuenta su tipo con `useTransferCount` (listado con `limit=1`,
+  lee `meta.total`, cada 30 s). Si el back separa ese campo, se reemplaza.
+- Etiquetas y botones: se usan `stageLabel` y `allowedActions` del back
+  (`stageOf` / `canDo` en `central-warehouse/transfers.ts`), con la regla
+  vieja como respaldo si no vienen.
+- `BranchTransferItem.quantity` ahora es `number | null` (null en
+  reposiciones): usar `itemUnits` / `transferUnits` para sumar.
+
 ## Variantes: pantalla global (19/10/2026)
 
 Hecho. La pestana Variantes ya no depende del selector de sucursal.

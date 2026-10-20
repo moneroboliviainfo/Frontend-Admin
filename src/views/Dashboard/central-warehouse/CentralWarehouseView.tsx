@@ -5,23 +5,20 @@ import { useState } from 'react'
 import Box from '@mui/material/Box'
 import Chip from '@mui/material/Chip'
 import Tab from '@mui/material/Tab'
+import Tooltip from '@mui/material/Tooltip'
 import TabContext from '@mui/lab/TabContext'
 import TabList from '@mui/lab/TabList'
 import TabPanel from '@mui/lab/TabPanel'
 
-import { useCentralWarehouse, usePendingCount } from '@/hooks/useBranchTransfers'
+import { pendingReviewHint, useCentralWarehouseAlerts } from '@/hooks/useCentralWarehouseAlerts'
 import CentralWarehouseTable from './CentralWarehouseTable'
 import DispatchHistoryTable from './DispatchHistoryTable'
 
 const CentralWarehouseView = () => {
   const [tab, setTab] = useState('stock')
 
-  const { data: warehouse } = useCentralWarehouse()
-  const { data: pending } = usePendingCount(warehouse?.id, !!warehouse?.id)
-
-  // inTransit = salio de la bodega y nadie lo recibio todavia
-  const inTransit = pending?.inTransit || 0
-  const pendingReview = pending?.pendingReview || 0
+  // Solo los faltantes por revisar: es lo unico de Envios que espera al admin
+  const { pendingReview } = useCentralWarehouseAlerts()
 
   return (
     <TabContext value={tab}>
@@ -31,8 +28,12 @@ const CentralWarehouseView = () => {
           value='dispatches'
           label={
             <Box className='flex items-center gap-2'>
-              <span>Historial de Envíos</span>
-              {inTransit > 0 && <Chip label={inTransit} size='small' variant='tonal' color='primary' />}
+              <span>Envíos</span>
+              {pendingReview > 0 && (
+                <Tooltip title={pendingReviewHint(pendingReview)} arrow>
+                  <Chip label={pendingReview} size='small' variant='tonal' color='warning' />
+                </Tooltip>
+              )}
             </Box>
           }
         />

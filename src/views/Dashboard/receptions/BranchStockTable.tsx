@@ -24,6 +24,7 @@ import CircularProgress from '@mui/material/CircularProgress'
 
 import CustomTextField from '@core/components/mui/TextField'
 import tableStyles from '@core/styles/table.module.css'
+import { useRequestReplenishment } from '@/hooks/useBranchTransfers'
 import { useUserRole } from '@/hooks/useUserRole'
 import { useVariants } from '@/hooks/useVariants'
 import { variantService } from '@/services/variantService'
@@ -40,6 +41,7 @@ type SizeRow = {
   warehouseStock: number
   inTransitStock: number
   centralWarehouseStock: number
+  pendingReplenishment: boolean
 }
 
 type ColorGroup = {
@@ -70,7 +72,8 @@ const groupByProduct = (variants: Variant[]): ProductGroup[] => {
       availableStock: size.availableStock || 0,
       warehouseStock: size.warehouseStock || 0,
       inTransitStock: size.inTransitStock || 0,
-      centralWarehouseStock: size.centralWarehouseStock || 0
+      centralWarehouseStock: size.centralWarehouseStock || 0,
+      pendingReplenishment: !!size.pendingReplenishment
     }))
 
     const color: ColorGroup = {
@@ -110,6 +113,26 @@ const BranchStockTable = () => {
 
   // Dar de baja es ADMIN/SUPERVISOR/MANAGER: el cajero no la tiene
   const { isCashier } = useUserRole()
+
+  // Atajo: solo suma la talla a la reposicion abierta. Verla, quitar o anular es en Reposiciones
+  const requestReplenishment = useRequestReplenishment()
+  const [requestingId, setRequestingId] = useState<number | null>(null)
+
+  const handleRequestReplenishment = async (variantSizeId: number) => {
+    setRequestingId(variantSizeId)
+
+    try {
+      await requestReplenishment.mutateAsync({ variantIds: [variantSizeId] })
+      setSnackbar({
+        message: 'Agregada a su reposición. Puede revisarla en el menú Reposiciones.',
+        severity: 'success'
+      })
+    } catch (error: any) {
+      setSnackbar({ message: error?.response?.data?.message || 'No se pudo pedir la reposición', severity: 'error' })
+    } finally {
+      setRequestingId(null)
+    }
+  }
 
   // Sin branchId: el back resuelve la sucursal del usuario
   const { data, isLoading, isError, isPlaceholderData } = useVariants(page, pageSize, search, undefined, true, true)
@@ -432,27 +455,57 @@ const BranchStockTable = () => {
                                     </Tooltip>
                                   </td>
                                   <td>
-                                    {!isCashier && (
-                                      <Tooltip title='Dar de baja'>
+                                    <Box className='flex items-center'>
+                                      <Tooltip
+                                        title={
+                                          size.pendingReplenishment
+                                            ? 'Reposición pedida: la central todavía no la atiende'
+                                            : 'Pedir reposición a la central'
+                                        }
+                                      >
                                         <span>
                                           <IconButton
                                             size='small'
-                                            color='error'
-                                            disabled={size.availableStock === 0 && size.warehouseStock === 0}
-                                            onClick={() =>
-                                              setSubtractTarget({
-                                                variantSizeId: size.variantSizeId,
-                                                label,
-                                                availableStock: size.availableStock,
-                                                warehouseStock: size.warehouseStock
-                                              })
-                                            }
+                                            color='primary'
+                                            disabled={size.pendingReplenishment || requestingId !== null}
+                                            onClick={() => handleRequestReplenishment(size.variantSizeId)}
                                           >
-                                            <i className='tabler-trash' />
+                                            {requestingId === size.variantSizeId ? (
+                                              <CircularProgress size={16} />
+                                            ) : (
+                                              <i
+                                                className={
+                                                  size.pendingReplenishment
+                                                    ? 'tabler-clipboard-check'
+                                                    : 'tabler-clipboard-plus'
+                                                }
+                                              />
+                                            )}
                                           </IconButton>
                                         </span>
                                       </Tooltip>
-                                    )}
+                                      {!isCashier && (
+                                        <Tooltip title='Dar de baja'>
+                                          <span>
+                                            <IconButton
+                                              size='small'
+                                              color='error'
+                                              disabled={size.availableStock === 0 && size.warehouseStock === 0}
+                                              onClick={() =>
+                                                setSubtractTarget({
+                                                  variantSizeId: size.variantSizeId,
+                                                  label,
+                                                  availableStock: size.availableStock,
+                                                  warehouseStock: size.warehouseStock
+                                                })
+                                              }
+                                            >
+                                              <i className='tabler-trash' />
+                                            </IconButton>
+                                          </span>
+                                        </Tooltip>
+                                      )}
+                                    </Box>
                                   </td>
                                 </tr>
                               )

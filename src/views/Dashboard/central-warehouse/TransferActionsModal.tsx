@@ -15,8 +15,8 @@ import CircularProgress from '@mui/material/CircularProgress'
 
 import CustomTextField from '@core/components/mui/TextField'
 import { useCancelTransfer, useMarkLostTransfer, useReviewTransfer } from '@/hooks/useBranchTransfers'
-import type { BranchTransfer, BranchTransferItem, ReviewOutcome } from '@/types/api/branchTransfer'
-import { missingUnits } from './transfers'
+import type { BranchTransfer, ReviewOutcome } from '@/types/api/branchTransfer'
+import { itemLabel, missingUnits, transferUnits } from './transfers'
 import { prendas } from './units'
 
 type ActionKind = 'cancel' | 'mark-lost' | 'review'
@@ -27,23 +27,21 @@ type Props = {
   showMessage: (message: string, severity: 'success' | 'error') => void
 }
 
-const itemLabel = (item: BranchTransferItem) => {
-  const productColor = item.variant?.productColor
+// El mismo modal sirve para envios, reposiciones y pedidos: cambia el sustantivo
+const nounOf = (transfer: BranchTransfer) =>
+  transfer.type === 'branch_request' ? 'pedido' : transfer.replenishment ? 'reposición' : 'envío'
 
-  return `${productColor?.product?.name || 'Producto'} · ${productColor?.color?.name || ''} · Talla ${
-    item.variant?.size?.name || ''
-  }`
-}
-
-const copy: Record<ActionKind, { title: string; confirm: string; noteLabel: string; noteRequired: boolean }> = {
+const copy = (
+  noun: string
+): Record<ActionKind, { title: string; confirm: string; noteLabel: string; noteRequired: boolean }> => ({
   cancel: {
-    title: 'Anular envío',
-    confirm: 'Anular envío',
+    title: `Anular ${noun}`,
+    confirm: `Anular ${noun}`,
     noteLabel: 'Motivo (opcional)',
     noteRequired: false
   },
   'mark-lost': {
-    title: 'Marcar envío como perdido',
+    title: `Marcar ${noun} como perdido`,
     confirm: 'Marcar perdido',
     noteLabel: 'Motivo',
     noteRequired: true
@@ -54,7 +52,7 @@ const copy: Record<ActionKind, { title: string; confirm: string; noteLabel: stri
     noteLabel: 'Nota',
     noteRequired: true
   }
-}
+})
 
 const TransferActionsModal = ({ action, onClose, showMessage }: Props) => {
   const [note, setNote] = useState('')
@@ -74,7 +72,21 @@ const TransferActionsModal = ({ action, onClose, showMessage }: Props) => {
   if (!action) return null
 
   const { kind, transfer } = action
-  const texts = copy[kind]
+  const noun = nounOf(transfer)
+  const texts = copy(noun)[kind]
+  const isRequest = transfer.type === 'branch_request'
+  const origin = transfer.sourceBranch?.name || 'la otra sucursal'
+
+  // Anular antes del despacho no mueve nada (reposicion) o devuelve al piso del origen (pedido)
+  const wasDispatched = !!transfer.dispatchedAt
+
+  const cancelMessage = !wasDispatched
+    ? isRequest
+      ? `La prenda vuelve a estar a la venta en ${origin}. Solo se puede anular antes del despacho.`
+      : 'Todavía no salió nada de la bodega: no se mueve stock.'
+    : `Las ${prendas(transferUnits(transfer))} vuelven al depósito de la bodega. Solo se puede anular mientras está en camino.`
+
+  const capitalized = noun.charAt(0).toUpperCase() + noun.slice(1)
 
   // Una linea ya revisada no se vuelve a revisar
   const reviewableItems = transfer.items.filter(item => missingUnits(item, transfer.status) > 0 && !item.reviewOutcome)
@@ -95,10 +107,10 @@ const TransferActionsModal = ({ action, onClose, showMessage }: Props) => {
           transferId: transfer.id,
           data: note.trim() ? { note: note.trim() } : {}
         })
-        showMessage(`Envío #${transfer.id} anulado: todo volvió a la bodega`, 'success')
+        showMessage(`${capitalized} #${transfer.id} anulado`, 'success')
       } else if (kind === 'mark-lost') {
         await markLost.mutateAsync({ transferId: transfer.id, data: { note: note.trim() } })
-        showMessage(`Envío #${transfer.id} marcado como perdido`, 'success')
+        showMessage(`${capitalized} #${transfer.id} marcado como perdido`, 'success')
       } else {
         await review.mutateAsync({
           transferId: transfer.id,
@@ -110,7 +122,7 @@ const TransferActionsModal = ({ action, onClose, showMessage }: Props) => {
             note: note.trim()
           }
         })
-        showMessage(`Faltantes del envío #${transfer.id} revisados`, 'success')
+        showMessage(`Faltantes del ${noun} #${transfer.id} revisados`, 'success')
       }
 
       onClose()
@@ -128,14 +140,13 @@ const TransferActionsModal = ({ action, onClose, showMessage }: Props) => {
       <DialogContent>
         {kind === 'cancel' && (
           <Alert severity='info' sx={{ mb: 4 }}>
-            Las {prendas(transfer.items.reduce((sum, item) => sum + item.quantity, 0))} vuelven al depósito de la
-            bodega. Solo se puede anular mientras está en camino.
+            {cancelMessage}
           </Alert>
         )}
 
         {kind === 'mark-lost' && (
           <Alert severity='error' sx={{ mb: 4 }}>
-            Lo despachado queda como <strong>pérdida</strong>: no vuelve a la bodega ni entra a{' '}
+            Lo despachado queda como <strong>pérdida</strong>: no vuelve a {isRequest ? origin : 'la bodega'} ni entra a{' '}
             {transfer.destinationBranch?.name || 'la sucursal'}. Si después aparece, se registra con un ingreso.
           </Alert>
         )}
@@ -143,8 +154,10 @@ const TransferActionsModal = ({ action, onClose, showMessage }: Props) => {
         {kind === 'review' && (
           <>
             <Alert severity='warning' sx={{ mb: 4 }}>
-              {transfer.destinationBranch?.name || 'La sucursal'} recibió menos de lo despachado. Indique qué
-              ocurrió con cada faltante. Puede revisar algunos ahora y el resto más adelante.
+              {isRequest
+                ? 'No llegó todo lo pedido (no se encontró en el origen o faltó al recibir).'
+                : `${transfer.destinationBranch?.name || 'La sucursal'} recibió menos de lo despachado.`}{' '}
+              Indique qué ocurrió con cada faltante. Puede revisar algunos ahora y el resto más adelante.
             </Alert>
 
             {reviewableItems.length === 0 ? (
@@ -159,7 +172,7 @@ const TransferActionsModal = ({ action, onClose, showMessage }: Props) => {
                       {itemLabel(item)}
                     </Typography>
                     <Typography variant='caption' color='text.secondary'>
-                      Faltan {missingUnits(item, transfer.status)} de {item.quantity}
+                      Faltan {missingUnits(item, transfer.status)} de {item.quantity ?? item.dispatchedQuantity ?? 0}
                     </Typography>
                     <CustomTextField
                       select
@@ -174,7 +187,7 @@ const TransferActionsModal = ({ action, onClose, showMessage }: Props) => {
                       <MenuItem value='found_at_destination'>
                         Apareció en {transfer.destinationBranch?.name || 'el destino'}
                       </MenuItem>
-                      <MenuItem value='found_at_origin'>Apareció en la bodega</MenuItem>
+                      <MenuItem value='found_at_origin'>Apareció en {isRequest ? origin : 'la bodega'}</MenuItem>
                     </CustomTextField>
                   </Box>
                 ))}

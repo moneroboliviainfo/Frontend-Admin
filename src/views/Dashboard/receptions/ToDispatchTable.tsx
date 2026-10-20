@@ -54,17 +54,18 @@ const ToDispatchTable = () => {
   useEffect(() => {
     setPartial(false)
     setNote('')
-    setQuantities(Object.fromEntries((target?.items || []).map(item => [item.id, item.quantity])))
+    setQuantities(Object.fromEntries((target?.items || []).map(item => [item.id, item.quantity ?? 0])))
   }, [target])
 
   const transfers = data?.data || []
 
+  // Un pedido entre sucursales siempre trae cantidad (solo la reposicion la deja en null)
   const requested = target?.items || []
-  const totalRequested = requested.reduce((sum, item) => sum + item.quantity, 0)
+  const totalRequested = requested.reduce((sum, item) => sum + (item.quantity ?? 0), 0)
   const totalToSend = requested.reduce((sum, item) => sum + (quantities[item.id] ?? 0), 0)
 
   const isShort = totalToSend < totalRequested
-  const overRequested = requested.some(item => (quantities[item.id] ?? 0) > item.quantity)
+  const overRequested = requested.some(item => (quantities[item.id] ?? 0) > (item.quantity ?? 0))
 
   // Si no sale todo, la nota es obligatoria
   const isValid = !overRequested && (!isShort || !!note.trim())
@@ -189,8 +190,8 @@ const ToDispatchTable = () => {
 
         <DialogContent>
           <Alert severity='info' sx={{ mb: 4 }}>
-            Registre el despacho <strong>antes</strong> de entregar el paquete al transporte. Si el pedido fue
-            anulado mientras tanto, el sistema lo informa en este momento y se evita un envío innecesario.
+            Registre el despacho <strong>antes</strong> de entregar el paquete al transporte. Si el pedido fue anulado
+            mientras tanto, el sistema lo informa en este momento y se evita un envío innecesario.
           </Alert>
 
           <FormControlLabel
@@ -224,7 +225,7 @@ const ToDispatchTable = () => {
                           size='small'
                           placeholder='0'
                           value={quantities[item.id] || ''}
-                          error={(quantities[item.id] ?? 0) > item.quantity}
+                          error={(quantities[item.id] ?? 0) > (item.quantity ?? 0)}
                           onChange={e =>
                             setQuantities(prev => ({ ...prev, [item.id]: parseInt(e.target.value, 10) || 0 }))
                           }

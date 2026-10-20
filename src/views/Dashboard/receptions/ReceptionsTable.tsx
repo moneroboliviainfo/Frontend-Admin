@@ -22,18 +22,57 @@ import CircularProgress from '@mui/material/CircularProgress'
 
 import CustomTextField from '@core/components/mui/TextField'
 import tableStyles from '@core/styles/table.module.css'
-import { useBranchTransfers, useCancelTransfer, usePendingCount } from '@/hooks/useBranchTransfers'
+import { useBranchTransfers, useCancelTransfer, useTransferCount } from '@/hooks/useBranchTransfers'
 import type { BranchTransfer } from '@/types/api/branchTransfer'
+import { transferUnits } from '@/views/Dashboard/central-warehouse/transfers'
 import { prendas, variantes } from '@/views/Dashboard/central-warehouse/units'
 import RequestQrDialog from '@/views/Dashboard/sales/instore/components/RequestQrDialog'
 import ReceiveTransferModal from './ReceiveTransferModal'
 
 // El listado acepta un solo status por consulta: el filtro cambia la vista, no acumula
-type IncomingStatus = 'in_transit' | 'pending_dispatch' | 'pending_payment' | 'not_found'
+type IncomingStatus = 'in_transit' | 'received' | 'pending_dispatch' | 'pending_payment' | 'not_found'
+
+// La misma tabla sirve a dos menus: lo que manda la central (Inventario) y lo que la
+// tienda pidio a otra (Pedidos entre sucursales). Cada uno ve solo su tipo y sus estados
+type Kind = 'central' | 'requests'
+
+const config: Record<
+  Kind,
+  {
+    type: 'central_dispatch' | 'branch_request'
+    title: string
+    subheader: string
+    statuses: [IncomingStatus, string][]
+  }
+> = {
+  central: {
+    type: 'central_dispatch',
+    title: 'Envíos de la central',
+    subheader:
+      'Lo que manda la bodega central, incluidas las reposiciones atendidas. Hasta que se reciba no figura en el stock.',
+    statuses: [
+      ['in_transit', 'En camino'],
+      ['received', 'Recibidos']
+    ]
+  },
+  requests: {
+    type: 'branch_request',
+    title: 'Mis pedidos',
+    subheader: 'Lo que esta sucursal le pidió a otras para un cliente.',
+    statuses: [
+      ['in_transit', 'En camino'],
+      ['pending_dispatch', 'Todavía no lo envían'],
+      ['pending_payment', 'Esperando el pago'],
+      ['not_found', 'No lo tenían']
+    ]
+  }
+}
 
 const formatDate = (value: string | null) => (value ? new Date(value).toLocaleString('es-BO') : '—')
 
-const ReceptionsTable = () => {
+const ReceptionsTable = ({ kind }: { kind: Kind }) => {
+  const settings = config[kind]
+
   const [page, setPage] = useState(1)
   const [pageSize, setPageSize] = useState(10)
   const [status, setStatus] = useState<IncomingStatus>('in_transit')
@@ -50,10 +89,12 @@ const ReceptionsTable = () => {
     page,
     limit: pageSize,
     direction: 'incoming',
+    type: settings.type,
     status
   })
 
-  const { data: pending } = usePendingCount()
+  // pending-count suma envios y pedidos en toReceive: se cuenta solo el tipo de esta tabla
+  const inTransitCount = useTransferCount({ direction: 'incoming', type: settings.type, status: 'in_transit' })
 
   const transfers = data?.data || []
   const total = data?.meta?.total || 0
@@ -77,20 +118,23 @@ const ReceptionsTable = () => {
 
   const emptyMessage = {
     in_transit: 'No hay mercadería en camino',
+    received: 'Todavía no se recibió nada de la central',
     pending_dispatch: 'No hay pedidos esperando que los envíen',
     pending_payment: 'No hay pedidos esperando el pago',
     not_found: 'Ningún pedido quedó sin conseguir'
   }[status]
 
+  const isRequested = status === 'pending_dispatch' || status === 'pending_payment'
+
   return (
     <>
       <Card>
         <CardHeader
-          title='Por recibir'
-          subheader='Mercadería en camino hacia la sucursal. Hasta que se reciba no figura en el stock.'
+          title={settings.title}
+          subheader={settings.subheader}
           action={
-            pending?.toReceive ? (
-              <Chip label={`${pending.toReceive} en camino`} color='primary' variant='tonal' />
+            inTransitCount > 0 ? (
+              <Chip label={`${inTransitCount} en camino`} color='primary' variant='tonal' />
             ) : undefined
           }
         />
@@ -106,10 +150,11 @@ const ReceptionsTable = () => {
             }}
             className='max-sm:is-full sm:is-[240px]'
           >
-            <MenuItem value='in_transit'>En camino</MenuItem>
-            <MenuItem value='pending_dispatch'>Todavía no lo envían</MenuItem>
-            <MenuItem value='pending_payment'>Esperando el pago</MenuItem>
-            <MenuItem value='not_found'>No lo tenían</MenuItem>
+            {settings.statuses.map(([value, label]) => (
+              <MenuItem key={value} value={value}>
+                {label}
+              </MenuItem>
+            ))}
           </CustomTextField>
         </Box>
 
@@ -150,25 +195,34 @@ const ReceptionsTable = () => {
             <table className={tableStyles.table}>
               <thead>
                 <tr>
-                  <th>Traslado</th>
+                  <th>{kind === 'central' ? 'Envío' : 'Pedido'}</th>
                   <th>Viene de</th>
-                  <th>{status === 'in_transit' || status === 'not_found' ? 'Lo envió' : 'Lo pidió'}</th>
+                  <th>{status === 'received' ? 'Lo recibió' : isRequested ? 'Lo pidió' : 'Lo envió'}</th>
                   <th>Acciones</th>
                 </tr>
               </thead>
               <tbody>
                 {transfers.map(transfer => {
-                  const units = transfer.items.reduce(
-                    (sum, item) => sum + (item.dispatchedQuantity ?? item.quantity),
-                    0
-                  )
+                  const units = transferUnits(transfer)
+
+                  const actor =
+                    status === 'received'
+                      ? { at: transfer.receivedAt, by: transfer.receivedBy }
+                      : isRequested
+                        ? { at: transfer.requestedAt, by: transfer.requestedBy }
+                        : { at: transfer.dispatchedAt, by: transfer.dispatchedBy }
 
                   return (
                     <tr key={transfer.id}>
                       <td>
-                        <Typography variant='body2' className='font-medium'>
-                          #{transfer.id}
-                        </Typography>
+                        <Box className='flex items-center gap-2'>
+                          <Typography variant='body2' className='font-medium'>
+                            #{transfer.id}
+                          </Typography>
+                          {transfer.replenishment && (
+                            <Chip label='Reposición' size='small' variant='outlined' color='secondary' />
+                          )}
+                        </Box>
                         <Typography variant='caption' color='text.secondary'>
                           {prendas(units)} en {variantes(transfer.items.length)}
                         </Typography>
@@ -177,18 +231,9 @@ const ReceptionsTable = () => {
                         <Typography variant='body2'>{transfer.sourceBranch?.name || 'Bodega central'}</Typography>
                       </td>
                       <td>
-                        <Typography variant='body2'>
-                          {formatDate(
-                            status === 'pending_dispatch' || status === 'pending_payment'
-                              ? transfer.requestedAt
-                              : transfer.dispatchedAt
-                          )}
-                        </Typography>
+                        <Typography variant='body2'>{formatDate(actor.at)}</Typography>
                         <Typography variant='caption' color='text.secondary'>
-                          {(status === 'pending_dispatch' || status === 'pending_payment'
-                            ? transfer.requestedBy
-                            : transfer.dispatchedBy
-                          )?.name || '—'}
+                          {actor.by?.name || '—'}
                         </Typography>
                       </td>
                       <td>
@@ -220,6 +265,11 @@ const ReceptionsTable = () => {
                         {status === 'not_found' && (
                           <Typography variant='body2' color='text.secondary'>
                             {transfer.notFoundNote || 'Sin detalle'}
+                          </Typography>
+                        )}
+                        {status === 'received' && (
+                          <Typography variant='body2' color='text.secondary'>
+                            {transfer.receiveNote || '—'}
                           </Typography>
                         )}
                       </td>
@@ -265,8 +315,8 @@ const ReceptionsTable = () => {
 
         <DialogContent>
           <Alert severity='info' sx={{ mb: 4 }}>
-            La prenda vuelve a estar a la venta en {toCancel?.sourceBranch?.name || 'la otra sucursal'}. Solo se
-            puede anular mientras no la hayan enviado.
+            La prenda vuelve a estar a la venta en {toCancel?.sourceBranch?.name || 'la otra sucursal'}. Solo se puede
+            anular mientras no la hayan enviado.
           </Alert>
 
           <CustomTextField

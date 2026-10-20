@@ -2,6 +2,7 @@
 
 // MUI Imports
 import { useTheme } from '@mui/material/styles'
+import Tooltip from '@mui/material/Tooltip'
 
 // Third-party Imports
 import PerfectScrollbar from 'react-perfect-scrollbar'
@@ -15,6 +16,10 @@ import { Menu } from '@menu/vertical-menu'
 // Hook Imports
 import useVerticalNav from '@menu/hooks/useVerticalNav'
 import { useUserRole } from '@/hooks/useUserRole'
+import { pendingReviewHint, useCentralWarehouseAlerts } from '@/hooks/useCentralWarehouseAlerts'
+
+// Component Imports
+import CustomChip from '@core/components/mui/Chip'
 
 // Styled Component Imports
 import StyledVerticalNavExpandIcon from '@menu/styles/vertical/StyledVerticalNavExpandIcon'
@@ -50,6 +55,22 @@ const VerticalMenu = ({ scrollMenu }: Props) => {
   const { isBreakpointReached, transitionDuration } = verticalNavOptions
 
   const ScrollWrapper = isBreakpointReached ? 'div' : PerfectScrollbar
+
+  // Avisos al lado del nombre del menu: solo lo que espera una accion de quien mira
+  const { pendingReview } = useCentralWarehouseAlerts()
+
+  const menuData = verticalMenuData(role).map(item =>
+    'href' in item && item.href === '/central-warehouse' && pendingReview > 0
+      ? {
+          ...item,
+          suffix: (
+            <Tooltip title={pendingReviewHint(pendingReview)} placement='right' arrow>
+              <CustomChip label={pendingReview} size='small' round='true' variant='tonal' color='warning' />
+            </Tooltip>
+          )
+        }
+      : item
+  )
 
   return (
     // eslint-disable-next-line lines-around-comment
@@ -88,7 +109,7 @@ const VerticalMenu = ({ scrollMenu }: Props) => {
         renderExpandedMenuItemIcon={{ icon: <i className='tabler-circle text-xs' /> }}
         menuSectionStyles={menuSectionStyles(verticalNavOptions, theme)}
       >
-        <GenerateVerticalMenu menuData={verticalMenuData(role)} />
+        <GenerateVerticalMenu menuData={menuData} />
       </Menu>
     </ScrollWrapper>
   )

@@ -89,20 +89,40 @@ const getFullMenuData = (): VerticalMenuDataType[] => [
     isSection: true,
     label: 'INVENTARIO'
   },
+
+  // Stock y movimientos de mercaderia: sin cliente ni plata
   {
     label: 'Bodega Central',
     icon: 'tabler-building-warehouse',
     href: '/central-warehouse'
   },
   {
-    label: 'Plazos de Pedidos',
-    icon: 'tabler-calendar-clock',
-    href: '/settings'
-  },
-  {
     label: 'Inventario',
     icon: 'tabler-package-import',
     href: '/receptions'
+  },
+
+  // La tienda pide a la central y la central atiende. Lo que llega se recibe en Inventario
+  {
+    label: 'Reposiciones',
+    icon: 'tabler-clipboard-list',
+    href: '/replenishments'
+  },
+
+  // PEDIDOS ENTRE SUCURSALES: de tienda a tienda, con cliente (y a veces anticipo)
+  {
+    isSection: true,
+    label: 'PEDIDOS ENTRE SUCURSALES'
+  },
+  {
+    label: 'Pedidos',
+    icon: 'tabler-arrows-exchange',
+    href: '/branch-requests'
+  },
+  {
+    label: 'Plazos de Pedidos',
+    icon: 'tabler-calendar-clock',
+    href: '/settings'
   },
 
   // CATÁLOGO

@@ -33,6 +33,8 @@ const GENERALES = [
   '/settings',
   '/category',
   '/receptions',
+  '/replenishments', // la central ve todas las tiendas; filtra por tienda adentro
+  '/branch-requests', // un pedido es entre dos tiendas: el filtro de sucursal va adentro
   '/discounts',
   '/outfits',
   '/banners',

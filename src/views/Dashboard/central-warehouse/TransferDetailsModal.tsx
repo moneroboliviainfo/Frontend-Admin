@@ -12,31 +12,26 @@ import Typography from '@mui/material/Typography'
 
 import tableStyles from '@core/styles/table.module.css'
 import type { BranchTransfer, ReviewOutcome } from '@/types/api/branchTransfer'
-import { missingUnits } from './transfers'
+import StageChip, { PendingReviewChip } from './StageChip'
+import { canDo, hasPendingReview, missingUnits, transferUnits } from './transfers'
 import { prendas, variantes } from './units'
 
 type Props = {
   transfer: BranchTransfer | null
   onClose: () => void
-  onAction: (kind: 'cancel' | 'mark-lost' | 'review') => void
+
+  // Sin onAction el detalle es solo de consulta: las acciones viven en otra pantalla
+  onAction?: (kind: 'cancel' | 'mark-lost' | 'review') => void
 }
 
-const statusLabels: Record<string, { label: string; color: 'primary' | 'success' | 'error' | 'warning' | 'secondary' }> =
-  {
-    pending_payment: { label: 'Esperando pago', color: 'warning' },
-    pending_dispatch: { label: 'Por despachar', color: 'warning' },
-    in_transit: { label: 'En camino', color: 'primary' },
-    not_found: { label: 'No encontrado', color: 'error' },
-    received: { label: 'Recibido', color: 'success' },
-    lost: { label: 'Perdido', color: 'error' },
-    cancelled: { label: 'Anulado', color: 'secondary' }
-  }
-
-const reviewLabels: Record<ReviewOutcome, string> = {
+const reviewLabels = (transfer: BranchTransfer): Record<ReviewOutcome, string> => ({
   lost: 'Se perdió',
   found_at_destination: 'Apareció en el destino',
-  found_at_origin: 'Apareció en la bodega'
-}
+  found_at_origin: transfer.type === 'branch_request' ? 'Apareció en el origen' : 'Apareció en la bodega'
+})
+
+const titleOf = (transfer: BranchTransfer) =>
+  transfer.type === 'branch_request' ? 'Pedido' : transfer.replenishment ? 'Reposición' : 'Envío'
 
 const formatDate = (value: string | null) => (value ? new Date(value).toLocaleString('es-BO') : '—')
 
@@ -51,17 +46,44 @@ type TimelineEvent = {
 }
 
 // Cada accion deja su nota en un campo propio del traslado
-const timeline = (transfer: BranchTransfer): TimelineEvent[] =>
-  (
+const timeline = (transfer: BranchTransfer): TimelineEvent[] => {
+  const isRequest = transfer.type === 'branch_request'
+  const origin = transfer.sourceBranch?.name || 'la bodega'
+
+  // Un envio de la central nace despachado: la nota es la del envio. Pedidos y
+  // reposiciones nacen pedidos y la nota es la de quien pidio
+  const startsRequested = isRequest || !!transfer.replenishment
+
+  return (
     [
       {
+        key: 'requested',
+        title: transfer.replenishment ? 'Pedido a la central' : `Pedido a ${origin}`,
+        icon: 'tabler-clipboard-list',
+        color: 'secondary',
+        who: transfer.requestedBy?.name || '—',
+        when: startsRequested ? transfer.requestedAt : null,
+        note: transfer.note
+      },
+      {
         key: 'dispatched',
-        title: 'Despachado desde la bodega',
+        title: isRequest ? `Despachado desde ${origin}` : 'Despachado desde la bodega',
         icon: 'tabler-truck-delivery',
         color: 'primary',
         who: transfer.dispatchedBy?.name || '—',
         when: transfer.dispatchedAt,
-        note: transfer.note
+
+        // En una reposicion la nota de la central al atender queda en notFoundNote
+        note: startsRequested ? (transfer.replenishment ? transfer.notFoundNote : null) : transfer.note
+      },
+      {
+        key: 'not-found',
+        title: transfer.replenishment ? 'Rechazada por la central' : `${origin} no lo encontró`,
+        icon: 'tabler-circle-x',
+        color: 'error',
+        who: transfer.notFoundBy?.name || '—',
+        when: transfer.notFoundAt,
+        note: transfer.notFoundNote
       },
       {
         key: 'received',
@@ -74,7 +96,9 @@ const timeline = (transfer: BranchTransfer): TimelineEvent[] =>
       },
       {
         key: 'cancelled',
-        title: 'Anulado · todo volvió a la bodega',
+        title: transfer.dispatchedAt
+          ? `Anulado · lo enviado volvió a ${isRequest ? origin : 'la bodega'}`
+          : 'Anulado antes de enviarse',
         icon: 'tabler-arrow-back-up',
         color: 'secondary',
         who: transfer.cancelledBy?.name || '—',
@@ -92,26 +116,39 @@ const timeline = (transfer: BranchTransfer): TimelineEvent[] =>
       }
     ] as TimelineEvent[]
   ).filter(event => event.when)
+}
 
 const TransferDetailsModal = ({ transfer, onClose, onAction }: Props) => {
   if (!transfer) return null
 
-  const status = statusLabels[transfer.status] || { label: transfer.status, color: 'secondary' as const }
-  const units = transfer.items.reduce((sum, item) => sum + item.quantity, 0)
-  const pendingReview = transfer.discrepancyStatus === 'pending_review'
+  const units = transferUnits(transfer)
+  const pendingReview = hasPendingReview(transfer)
   const events = timeline(transfer)
+  const labels = reviewLabels(transfer)
+
+  // Reposicion sin atender: todavia no hay cantidades, solo las variantes pedidas
+  const awaitingQuantities = !!transfer.replenishment && transfer.items.every(item => item.dispatchedQuantity === null)
+
+  const canCancel = !!onAction && canDo(transfer, 'cancel', transfer.status === 'in_transit')
+  const canMarkLost = !!onAction && canDo(transfer, 'markLost', transfer.status === 'in_transit')
+  const canReview = !!onAction && canDo(transfer, 'review', pendingReview)
 
   return (
     <Dialog open onClose={onClose} maxWidth='md' fullWidth>
       <DialogTitle>
         <Box className='flex flex-wrap items-center gap-3'>
-          <span>Envío #{transfer.id}</span>
-          <Chip label={status.label} size='small' variant='tonal' color={status.color} />
-          {pendingReview && <Chip label='Faltantes por revisar' size='small' variant='tonal' color='warning' />}
+          <span>
+            {titleOf(transfer)} #{transfer.id}
+          </span>
+          <StageChip transfer={transfer} />
+          {pendingReview && <PendingReviewChip />}
         </Box>
         <Typography variant='body2' color='text.secondary' sx={{ mt: 1 }}>
-          {prendas(units)} en {variantes(transfer.items.length)} · hacia{' '}
-          {transfer.destinationBranch?.name || 'la sucursal'}
+          {awaitingQuantities
+            ? variantes(transfer.items.length)
+            : `${prendas(units)} en ${variantes(transfer.items.length)}`}
+          {' · '}
+          {transfer.sourceBranch?.name || 'Bodega'} → {transfer.destinationBranch?.name || 'la sucursal'}
         </Typography>
         {/* Solo los pedidos entre sucursales tienen cliente */}
         {transfer.customerName && (
@@ -129,6 +166,7 @@ const TransferDetailsModal = ({ transfer, onClose, onAction }: Props) => {
             <thead>
               <tr>
                 <th>Prenda</th>
+                {transfer.type === 'branch_request' && <th>Pedido</th>}
                 <th>Enviado</th>
                 <th>Recibido</th>
                 <th>Faltante</th>
@@ -164,8 +202,20 @@ const TransferDetailsModal = ({ transfer, onClose, onAction }: Props) => {
                         </Box>
                       </Box>
                     </td>
+                    {transfer.type === 'branch_request' && (
+                      <td>
+                        <Typography variant='body2'>{item.quantity ?? '—'}</Typography>
+                      </td>
+                    )}
                     <td>
-                      <Typography variant='body2'>{item.quantity}</Typography>
+                      {/* Envio de la central: lo enviado es la cantidad; reposicion sin atender: todavia nada */}
+                      <Typography
+                        variant='body2'
+                        color={item.dispatchedQuantity === null ? 'text.secondary' : 'inherit'}
+                      >
+                        {item.dispatchedQuantity ??
+                          (transfer.type === 'central_dispatch' && !transfer.replenishment ? item.quantity : '—')}
+                      </Typography>
                     </td>
                     <td>
                       <Typography variant='body2' color={item.receivedQuantity === null ? 'text.secondary' : 'inherit'}>
@@ -176,7 +226,7 @@ const TransferDetailsModal = ({ transfer, onClose, onAction }: Props) => {
                       {missing > 0 ? (
                         <Box>
                           <Chip
-                            label={item.reviewOutcome ? reviewLabels[item.reviewOutcome] : `Faltan ${missing}`}
+                            label={item.reviewOutcome ? labels[item.reviewOutcome] : `Faltan ${missing}`}
                             size='small'
                             variant='tonal'
                             color={item.reviewOutcome ? 'secondary' : 'warning'}
@@ -247,26 +297,26 @@ const TransferDetailsModal = ({ transfer, onClose, onAction }: Props) => {
       </DialogContent>
 
       <DialogActions>
-        {transfer.status === 'in_transit' && (
-          <>
-            <Button color='secondary' startIcon={<i className='tabler-ban' />} onClick={() => onAction('cancel')}>
-              Anular
-            </Button>
-            <Button
-              color='error'
-              startIcon={<i className='tabler-alert-triangle' />}
-              onClick={() => onAction('mark-lost')}
-            >
-              Perdido
-            </Button>
-          </>
+        {canCancel && (
+          <Button color='secondary' startIcon={<i className='tabler-ban' />} onClick={() => onAction?.('cancel')}>
+            Anular
+          </Button>
         )}
-        {pendingReview && (
+        {canMarkLost && (
+          <Button
+            color='error'
+            startIcon={<i className='tabler-alert-triangle' />}
+            onClick={() => onAction?.('mark-lost')}
+          >
+            Perdido
+          </Button>
+        )}
+        {canReview && (
           <Button
             variant='tonal'
             color='warning'
             startIcon={<i className='tabler-checkup-list' />}
-            onClick={() => onAction('review')}
+            onClick={() => onAction?.('review')}
           >
             Revisar faltantes
           </Button>

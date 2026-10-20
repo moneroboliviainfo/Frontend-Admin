@@ -15,6 +15,8 @@ import type {
   RefundRequest,
   MarkLostTransferRequest,
   ReceiveTransferRequest,
+  ReplenishmentRequest,
+  AttendReplenishmentRequest,
   ReviewTransferRequest
 } from '@/types/api/branchTransfer'
 
@@ -55,6 +57,19 @@ export const useBranchTransfers = (params: BranchTransferListParams = {}, enable
     staleTime: 30000,
     enabled
   })
+}
+
+// pending-count no separa envios de pedidos (toReceive los suma): para el badge de cada
+// menu se cuenta con el listado filtrado, pidiendo una sola fila y leyendo meta.total
+export const useTransferCount = (params: BranchTransferListParams, enabled: boolean = true) => {
+  const query = useQuery({
+    queryKey: ['branch-transfers', 'count', params],
+    queryFn: () => branchTransferService.getTransfers({ ...params, page: 1, limit: 1 }),
+    refetchInterval: 30000,
+    enabled
+  })
+
+  return query.data?.meta?.total || 0
 }
 
 export const useBranchTransfer = (transferId: number | null) => {
@@ -233,6 +248,41 @@ export const useRefundRequest = () => {
       branchTransferService.refundRequest(transferId, data),
     onSuccess: () => {
       invalidarTraslados(queryClient, true)
+    }
+  })
+}
+
+export const useRequestReplenishment = () => {
+  const queryClient = useQueryClient()
+
+  return useMutation({
+    mutationFn: (data: ReplenishmentRequest) => branchTransferService.requestReplenishment(data),
+    onSuccess: () => {
+      invalidarTraslados(queryClient)
+    }
+  })
+}
+
+export const useRemoveReplenishmentItem = () => {
+  const queryClient = useQueryClient()
+
+  return useMutation({
+    mutationFn: ({ transferId, itemId }: { transferId: number; itemId: number }) =>
+      branchTransferService.removeReplenishmentItem(transferId, itemId),
+    onSuccess: () => {
+      invalidarTraslados(queryClient)
+    }
+  })
+}
+
+export const useAttendReplenishment = () => {
+  const queryClient = useQueryClient()
+
+  return useMutation({
+    mutationFn: ({ transferId, data }: { transferId: number; data: AttendReplenishmentRequest }) =>
+      branchTransferService.attendReplenishment(transferId, data),
+    onSuccess: () => {
+      invalidarTraslados(queryClient)
     }
   })
 }

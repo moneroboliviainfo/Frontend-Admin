@@ -11,12 +11,14 @@ import Alert from '@mui/material/Alert'
 import Typography from '@mui/material/Typography'
 import FormControlLabel from '@mui/material/FormControlLabel'
 import Switch from '@mui/material/Switch'
+import MenuItem from '@mui/material/MenuItem'
 import CircularProgress from '@mui/material/CircularProgress'
 
 import CustomTextField from '@core/components/mui/TextField'
 import tableStyles from '@core/styles/table.module.css'
 import { useReceiveTransfer } from '@/hooks/useBranchTransfers'
-import type { BranchTransfer, BranchTransferItem } from '@/types/api/branchTransfer'
+import type { BranchTransfer } from '@/types/api/branchTransfer'
+import { itemLabel } from '@/views/Dashboard/central-warehouse/transfers'
 import { prendas } from '@/views/Dashboard/central-warehouse/units'
 
 type Props = {
@@ -25,18 +27,13 @@ type Props = {
   showMessage: (message: string, severity: 'success' | 'error') => void
 }
 
-const itemLabel = (item: BranchTransferItem) => {
-  const productColor = item.variant?.productColor
-
-  return `${productColor?.product?.name || 'Producto'} · ${productColor?.color?.name || ''} · Talla ${
-    item.variant?.size?.name || ''
-  }`
-}
+type Location = 'warehouse' | 'sales_floor'
 
 const ReceiveTransferModal = ({ transfer, onClose, showMessage }: Props) => {
   const [partial, setPartial] = useState(false)
   const [received, setReceived] = useState<Record<number, number>>({})
   const [note, setNote] = useState('')
+  const [location, setLocation] = useState<Location>('warehouse')
 
   const receive = useReceiveTransfer()
 
@@ -46,6 +43,9 @@ const ReceiveTransferModal = ({ transfer, onClose, showMessage }: Props) => {
   useEffect(() => {
     setPartial(false)
     setNote('')
+
+    // Una reposicion se pide porque falta en la tienda: por defecto entra directo ahi (doc 15 §1.6)
+    setLocation(transfer?.replenishment ? 'sales_floor' : 'warehouse')
     setReceived(
       Object.fromEntries(
         (transfer?.items || [])
@@ -74,7 +74,10 @@ const ReceiveTransferModal = ({ transfer, onClose, showMessage }: Props) => {
         transferId: transfer.id,
         data: {
           items: dispatched.map(item => ({ transferItemId: item.id, quantity: received[item.id] ?? 0 })),
-          ...(note.trim() && { note: note.trim() })
+          ...(note.trim() && { note: note.trim() }),
+
+          // Un pedido entre sucursales entra siempre a la tienda: mandar location da 400
+          ...(isFromWarehouse && { location })
         }
       })
 
@@ -100,11 +103,30 @@ const ReceiveTransferModal = ({ transfer, onClose, showMessage }: Props) => {
       </DialogTitle>
 
       <DialogContent>
-        <Alert severity='info' sx={{ mb: 4 }}>
-          {isFromWarehouse
-            ? 'Ingresa al depósito de la sucursal. Para venderlo debe pasarse a la tienda.'
-            : 'Es un pedido: ingresa directamente a la tienda, reservado para su cliente.'}
-        </Alert>
+        {isFromWarehouse ? (
+          <>
+            <CustomTextField
+              select
+              fullWidth
+              label='Ingresa a'
+              value={location}
+              onChange={e => setLocation(e.target.value as Location)}
+              sx={{ mb: 3 }}
+            >
+              <MenuItem value='warehouse'>Bodega de la sucursal (depósito)</MenuItem>
+              <MenuItem value='sales_floor'>Tienda (a la venta en el acto)</MenuItem>
+            </CustomTextField>
+            <Alert severity='info' sx={{ mb: 4 }}>
+              {location === 'warehouse'
+                ? 'Todo entra al depósito. Para venderlo hay que pasarlo a la tienda desde Inventario → Stock.'
+                : 'Todo entra a la tienda y queda a la venta. Si quiere repartir, recíbalo aquí y devuelva el resto a la bodega desde Stock.'}
+            </Alert>
+          </>
+        ) : (
+          <Alert severity='info' sx={{ mb: 4 }}>
+            Es un pedido: ingresa directamente a la tienda, reservado para su cliente.
+          </Alert>
+        )}
 
         <FormControlLabel
           control={<Switch checked={partial} onChange={e => setPartial(e.target.checked)} />}
@@ -169,8 +191,8 @@ const ReceiveTransferModal = ({ transfer, onClose, showMessage }: Props) => {
 
         {isShort && !overDispatched && (
           <Alert severity='warning' sx={{ mt: 3 }}>
-            Faltan {totalDispatched - totalReceived} de {totalDispatched}. El motivo es obligatorio y un
-            administrador deberá revisar la diferencia.
+            Faltan {totalDispatched - totalReceived} de {totalDispatched}. El motivo es obligatorio y un administrador
+            deberá revisar la diferencia.
           </Alert>
         )}
 

@@ -328,7 +328,7 @@ const PointOfSale: React.FC = () => {
     if (!linkedTransfer?.advancePaidAt) return map
 
     linkedTransfer.items.forEach(item => {
-      map[item.variantId] = item.receivedQuantity ?? item.quantity
+      map[item.variantId] = item.receivedQuantity ?? item.quantity ?? 0
     })
 
     return map

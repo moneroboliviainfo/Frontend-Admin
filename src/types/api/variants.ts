@@ -15,6 +15,9 @@ export interface VariantSize {
   // Stock en la bodega principal. Viene siempre y NO depende del branchId
   // consultado: no hay que sumarlo al stock de la sucursal.
   centralWarehouseStock?: number
+
+  // La talla ya esta en la reposicion pendiente de la sucursal consultada
+  pendingReplenishment?: boolean
   quantity?: number
 }
 

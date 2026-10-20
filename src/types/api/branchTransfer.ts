@@ -35,7 +35,9 @@ export interface BranchTransferItem {
       color: { id: number; name: string; code: string }
     }
   }
-  quantity: number
+
+  // null en una reposicion: la tienda pide la variante sin cantidad, la decide la central
+  quantity: number | null
   dispatchedQuantity: number | null
   receivedQuantity: number | null
   reviewOutcome: ReviewOutcome | null
@@ -45,8 +47,17 @@ export interface BranchTransferItem {
 export interface BranchTransfer {
   id: number
   type: BranchTransferType
+
+  // true = envio de la central que pidio la tienda (reposicion)
+  replenishment?: boolean
   status: BranchTransferStatus
   discrepancyStatus: DiscrepancyStatus
+
+  // Calculados por el back segun quien mira: usarlos para la etiqueta y los botones
+  stage?: string
+  stageLabel?: string
+  allowedActions?: TransferAction[]
+  pendingReview?: boolean
   note: string | null
   sourceBranchId: number | null
   sourceBranch: TransferBranch | null
@@ -98,6 +109,34 @@ export interface BranchTransfer {
 }
 
 export type PickupStatus = 'picked_up' | 'not_picked_up' | null
+
+export type TransferAction =
+  | 'dispatch'
+  | 'attend'
+  | 'receive'
+  | 'cancel'
+  | 'markLost'
+  | 'review'
+  | 'refund'
+  | 'generateQr'
+  | 'pickupInPos'
+  | 'markNotPickedUp'
+  | 'linkPickupSale'
+  | 'addVariants'
+  | 'removeVariant'
+
+// Reposicion: la tienda pide variantes sin cantidad. Si ya tiene una abierta, se agregan ahi
+export interface ReplenishmentRequest {
+  variantIds: number[]
+  note?: string
+}
+
+// La central atiende: todas las lineas, cada una con su cantidad (0 = no se manda).
+// Todo en 0 = rechazada, y ahi la nota es obligatoria
+export interface AttendReplenishmentRequest {
+  items: { transferItemId: number; quantity: number }[]
+  note?: string
+}
 
 export interface CreateBranchRequest {
   sourceBranchId: number
@@ -174,6 +213,9 @@ export interface ReceiveTransferRequest {
   // Hay que mandar TODAS las lineas despachadas, una vez cada una
   items: { transferItemId: number; quantity: number }[]
   note?: string
+
+  // Solo envios de la central: todo entra al deposito (por defecto) o directo a la tienda
+  location?: 'warehouse' | 'sales_floor'
 }
 
 export interface CancelTransferRequest {
@@ -200,6 +242,9 @@ export interface BranchTransferListParams {
   discrepancyStatus?: 'pending_review' | 'reviewed'
   awaitingPickup?: boolean
   pendingRefund?: boolean
+
+  // true = solo reposiciones, false = sin reposiciones, omitido = todo
+  replenishment?: boolean
   variantIds?: string
 
   // Solo ADMIN/SUPERVISOR; acepta la bodega central
@@ -221,6 +266,9 @@ export interface BranchTransferListResponse {
 
 export interface PendingCount {
   toDispatch: number
+
+  // Tienda: 1 si tiene su reposicion abierta. Central: cuantas tiendas esperan ser atendidas
+  replenishmentsPending?: number
   toReceive: number
   inTransit: number
   pendingReview: number

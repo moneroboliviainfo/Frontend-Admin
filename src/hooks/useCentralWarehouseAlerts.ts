@@ -1,0 +1,22 @@
+'use client'
+
+import { useCentralWarehouse, usePendingCount } from '@/hooks/useBranchTransfers'
+import { useUserRole } from '@/hooks/useUserRole'
+
+// Lo que dentro de Bodega Central necesita al admin: envios de la bodega cerrados con
+// faltantes que nadie reviso. Solo ADMIN/SUPERVISOR los resuelven.
+// "En camino" no cuenta: espera a la tienda, no al admin.
+// Lo usan el menu lateral y la pestaña Envios: comparten la misma consulta (cada 30 s)
+export const useCentralWarehouseAlerts = () => {
+  const { isAdminLike } = useUserRole()
+
+  const { data: warehouse } = useCentralWarehouse(isAdminLike)
+  const { data: pending } = usePendingCount(warehouse?.id, isAdminLike && !!warehouse?.id)
+
+  return { pendingReview: pending?.pendingReview || 0 }
+}
+
+// Un envio de la central solo puede tener faltantes una vez recibido (lo que no salio de la
+// bodega no es faltante, doc 11 §6), por eso la indicacion apunta a "Recibidos"
+export const pendingReviewHint = (count: number) =>
+  `${count === 1 ? '1 envío llegó' : `${count} envíos llegaron`} con faltantes. Revíselos en Envíos.`
