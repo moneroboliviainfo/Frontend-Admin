@@ -18,8 +18,6 @@ const NavbarContent = () => {
       <div className='flex items-center gap-4'>
         <NavToggle />
         <ModeDropdown />
-      </div>
-      <div className='flex items-center'>
         <BranchSwitcher />
       </div>
       <div className='flex items-center'>

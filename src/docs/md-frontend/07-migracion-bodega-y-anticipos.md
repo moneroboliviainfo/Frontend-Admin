@@ -343,6 +343,46 @@ obligatorios.
 > cliente paga la prenda entera al encargarla; al retirarla solo abona lo que
 > lleve de más (`amountDue`).
 
+## Vistas generales vs. vistas de sucursal (19/10/2026)
+
+El color del tema seguia a la sucursal elegida en **todas** las pantallas, y el
+selector de la navbar se mostraba siempre. En Usuarios o Clientes eso miente:
+mover el selector no cambia nada de lo que se ve.
+
+`src/utils/branchScope.ts` clasifica cada ruta y es la unica fuente de verdad:
+la leen el color (`BranchThemeSync`) y el selector (`BranchSwitcher`), para que
+no puedan quedar en desacuerdo.
+
+- **Con sucursal** (5): `/products`, `/sales`, `/cash`, `/central-warehouse`,
+  `/siat`.
+- **Generales** (12): el resto. Color azul fijo y sin selector.
+
+Criterio: entra en la primera lista solo si lo que se **muestra** cambia al
+mover el selector. Usar `useBranchContext` no alcanza — Usuarios lee la lista
+de sucursales para un desplegable del formulario.
+
+El color general es **verde medio oscuro** (`#15803D`).
+
+La paleta de sucursales se rehizo entera: el color de sucursal es el `primary`
+del tema y tine todos los botones, asi que **ningun color puede parecerse a los
+semanticos de la plantilla** (error `#FF4C51`, warning `#FF9F43`, info
+`#00BAD1`, success `#28C76F`). La paleta vieja tenia naranja, ambar, rojo, lima
+y cian: una sucursal en rojo hacia que cada boton primario pareciera de peligro.
+
+Quedaron solo azules, purpuras, magentas y tierras, ordenados para que las
+primeras sucursales sean las mas distintas entre si. La regla esta escrita en
+`branchColor.ts` para que no se repita el error al sumar colores.
+
+Una ruta sin clasificar cae en general (azul, sin selector): nunca miente, solo
+queda sosa. En desarrollo avisa por consola una vez por ruta.
+
+### Selector de sucursal
+
+Paso de botones (`ToggleButtonGroup`) a un **select** de 150px, movido al grupo
+izquierdo de la navbar, con el nombre de la sucursal repetido al lado en `h5` y
+en el color del tema. La repeticion es a proposito: el select es para cambiar,
+el nombre grande es para saber sobre que sucursal se esta actuando sin buscarlo.
+
 ## Pendientes de esta tanda
 
 - [x] **Prendas pagadas protegidas en el carrito** (18/10/2026): con un pedido

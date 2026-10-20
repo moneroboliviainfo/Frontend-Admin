@@ -1,17 +1,25 @@
 'use client'
 
+import { usePathname } from 'next/navigation'
+
 import Box from '@mui/material/Box'
 import Typography from '@mui/material/Typography'
-import ToggleButton from '@mui/material/ToggleButton'
-import ToggleButtonGroup from '@mui/material/ToggleButtonGroup'
+import MenuItem from '@mui/material/MenuItem'
 import Skeleton from '@mui/material/Skeleton'
 
+import CustomTextField from '@core/components/mui/TextField'
 import { useBranchContext } from '@/contexts/BranchContext'
+import { isBranchScoped } from '@/utils/branchScope'
 
 const BranchSwitcher = () => {
   const { branches, selectedBranch, setSelectedBranch, isLoading, isAdmin, branchesError } = useBranchContext()
+  const pathname = usePathname()
 
   if (!isAdmin) return null
+
+  // En una vista general el selector no cambia nada de lo que se ve: mostrarlo
+  // hace creer que sí. Misma lista que decide el color del tema.
+  if (!isBranchScoped(pathname)) return null
 
   if (isLoading) {
     return <Skeleton variant='rounded' width={220} height={34} />
@@ -25,48 +33,34 @@ const BranchSwitcher = () => {
     )
   }
 
-  const handleChange = (_: React.MouseEvent<HTMLElement>, newValue: number | null) => {
-    if (newValue === null) return
-
-    const branch = branches.find(b => b.id === newValue)
+  const handleChange = (value: string) => {
+    const branch = branches.find(b => b.id === Number(value))
 
     if (branch) setSelectedBranch(branch)
   }
 
   return (
-    <Box className='flex items-center gap-2'>
-      <Typography variant='body2' color='text.secondary' className='max-sm:hidden'>
-        Sucursal:
-      </Typography>
-      <ToggleButtonGroup
-        value={selectedBranch?.id ?? branches[0]?.id}
-        exclusive
+    <Box className='flex items-center gap-3'>
+      <CustomTextField
+        select
         size='small'
-        onChange={handleChange}
+        value={selectedBranch?.id ?? branches[0]?.id ?? ''}
+        onChange={e => handleChange(e.target.value)}
         aria-label='Selector de sucursal'
-        sx={{
-          '& .MuiToggleButton-root': {
-            paddingBlock: '4px',
-            paddingInline: '10px',
-            textTransform: 'none',
-            fontWeight: 500,
-            lineHeight: 1.3,
-            '&.Mui-selected': {
-              bgcolor: 'primary.main',
-              color: 'primary.contrastText',
-              '&:hover': {
-                bgcolor: 'primary.dark'
-              }
-            }
-          }
-        }}
+        sx={{ inlineSize: 150 }}
       >
         {branches.map(branch => (
-          <ToggleButton key={branch.id} value={branch.id}>
+          <MenuItem key={branch.id} value={branch.id}>
             {branch.name}
-          </ToggleButton>
+          </MenuItem>
         ))}
-      </ToggleButtonGroup>
+      </CustomTextField>
+
+      {/* El nombre repetido en grande: el color del tema ya cambió, pero el
+          cajero necesita leer sobre qué sucursal está actuando. */}
+      <Typography variant='h5' color='primary.main' className='font-medium max-sm:hidden'>
+        {selectedBranch?.name}
+      </Typography>
     </Box>
   )
 }

@@ -2,9 +2,12 @@
 
 import { useEffect } from 'react'
 
+import { usePathname } from 'next/navigation'
+
 import { useBranchContext } from '@/contexts/BranchContext'
 import { useSettings } from '@core/hooks/useSettings'
-import { getBranchColor } from '@/utils/branchColor'
+import { getBranchColor, GENERAL_COLOR } from '@/utils/branchColor'
+import { isBranchScoped } from '@/utils/branchScope'
 
 // Sincroniza el color primario del tema con la sucursal seleccionada (solo ADMIN).
 // Vive dentro de Providers, debajo de BranchProvider y SettingsProvider a la vez,
@@ -12,15 +15,28 @@ import { getBranchColor } from '@/utils/branchColor'
 const BranchThemeSync = () => {
   const { branches, selectedBranch, isAdmin } = useBranchContext()
   const { updateSettings } = useSettings()
+  const pathname = usePathname()
+
+  const branchScoped = isBranchScoped(pathname)
 
   useEffect(() => {
-    if (isAdmin && selectedBranch) {
-      const branchIndex = branches.findIndex(b => b.id === selectedBranch.id)
+    if (!isAdmin) return
 
-      updateSettings({ primaryColor: getBranchColor(branchIndex === -1 ? 0 : branchIndex) })
+    // Vista general: azul fijo. Sin tocar la cookie, para no perder cuál era la
+    // sucursal elegida al volver a una vista que sí depende de ella.
+    if (!branchScoped) {
+      updateSettings({ primaryColor: GENERAL_COLOR }, { updateCookie: false })
+
+      return
     }
+
+    if (!selectedBranch) return
+
+    const branchIndex = branches.findIndex(b => b.id === selectedBranch.id)
+
+    updateSettings({ primaryColor: getBranchColor(branchIndex === -1 ? 0 : branchIndex) })
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [selectedBranch, branches, isAdmin])
+  }, [selectedBranch, branches, isAdmin, branchScoped])
 
   return null
 }
