@@ -2,7 +2,7 @@
 
 import { useMemo } from 'react'
 
-import { useQuery, useMutation, useQueryClient, useInfiniteQuery } from '@tanstack/react-query'
+import { useQuery, useMutation, useQueryClient, useInfiniteQuery, keepPreviousData } from '@tanstack/react-query'
 import type { QueryClient } from '@tanstack/react-query'
 
 import { variantService } from '@/services/variantService'
@@ -189,13 +189,17 @@ export const useVariants = (
   limit: number = 10,
   search: string = '',
   branchId?: number,
-  enabled: boolean = true
+  enabled: boolean = true,
+  keepPrevious: boolean = false
 ) => {
   return useQuery({
     queryKey: ['variants', 'paginated', page, limit, search, branchId],
     queryFn: () => variantService.getAllVariants(page, limit, search, branchId),
     staleTime: 30000,
-    enabled
+    enabled,
+
+    // Mantiene la pagina anterior en pantalla mientras llega la nueva (sin volver al skeleton)
+    placeholderData: keepPrevious ? keepPreviousData : undefined
   })
 }
 

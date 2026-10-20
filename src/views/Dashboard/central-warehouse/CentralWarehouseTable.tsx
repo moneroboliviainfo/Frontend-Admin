@@ -36,6 +36,7 @@ import LowStockPanel from './LowStockPanel'
 import MovementsModal from './MovementsModal'
 import type { MovementsTarget } from './MovementsModal'
 import RenameWarehouseModal from './RenameWarehouseModal'
+import StockStatusCell from './StockStatusCell'
 import SubtractCentralStockModal from './SubtractCentralStockModal'
 import type { SubtractTarget } from './SubtractCentralStockModal'
 
@@ -125,8 +126,9 @@ const CentralWarehouseTable = () => {
   const {
     data,
     isLoading: isLoadingVariants,
-    isError: isVariantsError
-  } = useVariants(page, pageSize, search, warehouse?.id, !!warehouse?.id)
+    isError: isVariantsError,
+    isPlaceholderData
+  } = useVariants(page, pageSize, search, warehouse?.id, !!warehouse?.id, true)
 
   useEffect(() => {
     const timer = setTimeout(() => {
@@ -327,6 +329,7 @@ const CentralWarehouseTable = () => {
               warehouseId={warehouse?.id}
               showMessage={(message, severity) => setSnackbar({ message, severity })}
             />
+            <LowStockPanel warehouseId={warehouse?.id} onPick={setSearchInput} />
             {incomingEntries.length > 0 && (
               <Chip label={`+${prendas(incomingUnits)} a bodega`} color='success' variant='tonal' size='small' />
             )}
@@ -353,8 +356,6 @@ const CentralWarehouseTable = () => {
             </Button>
           </Box>
         </Box>
-
-        <LowStockPanel warehouseId={warehouse?.id} onPick={setSearchInput} />
 
         {overStock.length > 0 && (
           <Box sx={{ px: 6, pb: 4 }}>
@@ -390,7 +391,7 @@ const CentralWarehouseTable = () => {
             </Typography>
           </Box>
         ) : (
-          <Box>
+          <Box sx={{ opacity: isPlaceholderData ? 0.6 : 1, transition: 'opacity 0.2s' }}>
             {groups.map(group => {
               const groupPending = pendingInProduct(group)
               const isOpen = expanded[group.key] ?? groupPending > 0
@@ -399,6 +400,10 @@ const CentralWarehouseTable = () => {
                 <Accordion
                   key={group.key}
                   disableGutters
+
+                  // Las filas cerradas no se montan: con muchos productos eran cientos de inputs invisibles.
+                  // Las cantidades viven en incoming/outgoing, no en los inputs, asi que no se pierden.
+                  slotProps={{ transition: { unmountOnExit: true } }}
                   expanded={isOpen}
                   onChange={(_, isExpanded) => setExpanded(prev => ({ ...prev, [group.key]: isExpanded }))}
                   sx={{
@@ -497,12 +502,7 @@ const CentralWarehouseTable = () => {
                                     />
                                   </td>
                                   <td>
-                                    <Chip
-                                      label={size.warehouseStock}
-                                      size='small'
-                                      variant='tonal'
-                                      color={size.warehouseStock > 0 ? 'success' : 'default'}
-                                    />
+                                    <StockStatusCell stock={size.warehouseStock} />
                                   </td>
                                   <td>
                                     <Tooltip

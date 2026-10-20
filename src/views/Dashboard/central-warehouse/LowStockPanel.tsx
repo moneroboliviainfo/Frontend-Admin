@@ -3,7 +3,6 @@
 import { useState } from 'react'
 
 import Box from '@mui/material/Box'
-import Alert from '@mui/material/Alert'
 import Button from '@mui/material/Button'
 import Chip from '@mui/material/Chip'
 import Dialog from '@mui/material/Dialog'
@@ -38,18 +37,14 @@ const LowStockPanel = ({ warehouseId, onPick }: Props) => {
 
   return (
     <>
-      <Box sx={{ px: 6, pb: 4 }}>
-        <Alert
-          severity='error'
-          action={
-            <Button color='inherit' size='small' onClick={() => setOpen(true)}>
-              Ver listado
-            </Button>
-          }
-        >
-          {items.length === 1 ? '1 talla con stock crítico' : `${items.length} tallas con stock crítico`}
-        </Alert>
-      </Box>
+      <Button
+        color='error'
+        variant='tonal'
+        onClick={() => setOpen(true)}
+        startIcon={<i className='tabler-alert-triangle' />}
+      >
+        {items.length === 1 ? '1 talla crítica' : `${items.length} tallas críticas`}
+      </Button>
 
       <Dialog open={open} onClose={() => setOpen(false)} maxWidth='sm' fullWidth>
         <DialogTitle>

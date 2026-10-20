@@ -29,6 +29,7 @@ import { useVariants } from '@/hooks/useVariants'
 import { variantService } from '@/services/variantService'
 import type { Variant, VariantSize } from '@/types/api/variants'
 import { prendas } from '@/views/Dashboard/central-warehouse/units'
+import StockStatusCell from '@/views/Dashboard/central-warehouse/StockStatusCell'
 import SubtractBranchStockModal from './SubtractBranchStockModal'
 import type { SubtractTarget } from './SubtractBranchStockModal'
 
@@ -111,7 +112,7 @@ const BranchStockTable = () => {
   const { isCashier } = useUserRole()
 
   // Sin branchId: el back resuelve la sucursal del usuario
-  const { data, isLoading, isError } = useVariants(page, pageSize, search)
+  const { data, isLoading, isError, isPlaceholderData } = useVariants(page, pageSize, search, undefined, true, true)
 
   useEffect(() => {
     const timer = setTimeout(() => {
@@ -291,7 +292,7 @@ const BranchStockTable = () => {
             </Typography>
           </Box>
         ) : (
-          <Box>
+          <Box sx={{ opacity: isPlaceholderData ? 0.6 : 1, transition: 'opacity 0.2s' }}>
             {groups.map(group => {
               const groupPending = pendingInProduct(group)
               const isOpen = expanded[group.key] ?? groupPending > 0
@@ -300,6 +301,10 @@ const BranchStockTable = () => {
                 <Accordion
                   key={group.key}
                   disableGutters
+
+                  // Las filas cerradas no se montan: con muchos productos eran cientos de inputs invisibles.
+                  // Las cantidades viven en toFloor/toWarehouse, no en los inputs, asi que no se pierden.
+                  slotProps={{ transition: { unmountOnExit: true } }}
                   expanded={isOpen}
                   onChange={(_, open) => setExpanded(prev => ({ ...prev, [group.key]: open }))}
                   sx={{
@@ -373,7 +378,7 @@ const BranchStockTable = () => {
                                     <Typography variant='body2'>{size.sizeName}</Typography>
                                   </td>
                                   <td>
-                                    <Typography variant='body2'>{size.warehouseStock}</Typography>
+                                    <StockStatusCell stock={size.warehouseStock} />
                                   </td>
                                   <td>
                                     <Tooltip
@@ -399,12 +404,7 @@ const BranchStockTable = () => {
                                     </Tooltip>
                                   </td>
                                   <td>
-                                    <Chip
-                                      label={size.availableStock}
-                                      size='small'
-                                      variant='tonal'
-                                      color={size.availableStock > 0 ? 'success' : 'default'}
-                                    />
+                                    <StockStatusCell stock={size.availableStock} />
                                   </td>
                                   <td>
                                     <Tooltip
