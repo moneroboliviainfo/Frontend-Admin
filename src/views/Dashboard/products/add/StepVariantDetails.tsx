@@ -30,7 +30,7 @@ import { z } from 'zod'
 
 import DirectionalIcon from '@components/DirectionalIcon'
 import CustomTextField from '@core/components/mui/TextField'
-import { useBranchContext } from '@/contexts/BranchContext'
+import { useCentralWarehouse } from '@/hooks/useBranchTransfers'
 import {
   useColors,
   useUploadMultimedia,
@@ -46,9 +46,6 @@ import { variantFormSchema, newColorSchema } from '@/schemas/variant.schema'
 import type { VariantFormData, MediaFile, NewColorForm, VariantSizeForm } from '@/schemas/variant.schema'
 import VariantsList from './components/VariantsList'
 import VariantMediaUploader from './components/VariantMediaUploader'
-import PositiveAdjustmentModal from './components/PositiveAdjustmentModal'
-import SubtractStockModal from './components/SubtractStockModal'
-import TransferStockModal from './components/TransferStockModal'
 
 type SnackbarMessage = {
   key: number
@@ -93,9 +90,6 @@ const StepVariantDetails = ({ activeStep, handlePrev, steps, mode, productId, pr
   const [colorError, setColorError] = useState<string | null>(null)
   const [filesError, setFilesError] = useState<string | null>(null)
   const [sizesError, setSizesError] = useState<string | null>(null)
-  const [subtractStockModalOpen, setSubtractStockModalOpen] = useState(false)
-  const [adjustmentModalOpen, setAdjustmentModalOpen] = useState(false)
-  const [transferStockModalOpen, setTransferStockModalOpen] = useState(false)
   const [isMediaUploading, setIsMediaUploading] = useState(false)
   const [isSavingVariant, setIsSavingVariant] = useState(false)
   const [savingMessage, setSavingMessage] = useState('')
@@ -114,9 +108,12 @@ const StepVariantDetails = ({ activeStep, handlePrev, steps, mode, productId, pr
 
   const [isSubmitting, setIsSubmitting] = useState(false)
 
-  // Sucursal activa: solo el ADMIN la manda (MANAGER/CASHIER se resuelven solos en el backend)
-  const { selectedBranchId, isAdmin } = useBranchContext()
-  const branchId = isAdmin ? (selectedBranchId ?? undefined) : undefined
+  // Las variantes se dan de alta en la bodega principal y es lo unico que se
+  // muestra acá, asi que el selector de sucursal de la navbar no interviene:
+  // esta pantalla es global. Se manda el branchId de la bodega.
+  const { data: centralWarehouse } = useCentralWarehouse()
+
+  const branchId = centralWarehouse?.id
   const previousBranchIdRef = useRef(branchId)
 
   const { data: colors, isLoading: colorsLoading } = useColors()
@@ -193,17 +190,17 @@ const StepVariantDetails = ({ activeStep, handlePrev, steps, mode, productId, pr
     setUrlsToDelete([])
   }
 
-  // Si el ADMIN cambia de sucursal mientras edita una variante, el stock que se ve
-  // (bodega/tienda) queda de la sucursal vieja — se reinicia el form, como si fuera
-  // a crear una variante nueva, hasta que vuelva a clickear una variante puntual.
+  // El id de la bodega llega en una consulta aparte. La primera vez pasa de
+  // undefined al id: eso NO es un cambio real, y limpiar ahi le borraria el
+  // formulario al que abrio una variante antes de que llegara la respuesta.
+  // Solo se limpia si cambio de un id conocido a otro.
   useEffect(() => {
-    if (previousBranchIdRef.current !== branchId) {
+    const anterior = previousBranchIdRef.current
+
+    if (anterior !== branchId) {
       previousBranchIdRef.current = branchId
 
-      if (isEditing) {
-        handleClearForm()
-        showMessage('Cambió la sucursal seleccionada. Seleccione la variante nuevamente para ver su stock', 'info')
-      }
+      if (anterior !== undefined && isEditing) handleClearForm()
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [branchId])
@@ -807,37 +804,6 @@ const StepVariantDetails = ({ activeStep, handlePrev, steps, mode, productId, pr
                   </Typography>
 
                   <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap' }}>
-                    {isEditing && variantForm.sizes.some(s => s.id) && (
-                      <>
-                        <Button
-                          variant='contained'
-                          size='small'
-                          color='error'
-                          startIcon={<i className='tabler-minus' />}
-                          onClick={() => setSubtractStockModalOpen(true)}
-                        >
-                          Quitar Stock
-                        </Button>
-                        <Button
-                          variant='contained'
-                          size='small'
-                          color='info'
-                          startIcon={<i className='tabler-transfer' />}
-                          onClick={() => setTransferStockModalOpen(true)}
-                        >
-                          Mover Variante
-                        </Button>
-                        <Button
-                          variant='contained'
-                          size='small'
-                          color='success'
-                          startIcon={<i className='tabler-adjustments' />}
-                          onClick={() => setAdjustmentModalOpen(true)}
-                        >
-                          Registrar Sobrante
-                        </Button>
-                      </>
-                    )}
                     <Button
                       variant='outlined'
                       size='small'
@@ -857,36 +823,15 @@ const StepVariantDetails = ({ activeStep, handlePrev, steps, mode, productId, pr
                 {variantForm.sizes.map((size, index) =>
                   size.id ? (
                     <Grid container spacing={1} key={index} sx={{ mb: 1, alignItems: 'center' }}>
-                      <Grid size={{ xs: 12, sm: 2 }}>
+                      <Grid size={{ xs: 6, sm: 4 }}>
                         <CustomTextField fullWidth size='small' value={size.size} label='Talla' disabled />
                       </Grid>
-                      <Grid size={{ xs: 6, sm: 2.5 }}>
-                        <CustomTextField fullWidth size='small' value={size.quantity || 0} label='Tienda' disabled />
-                      </Grid>
-                      <Grid size={{ xs: 6, sm: 2.5 }}>
-                        <CustomTextField
-                          fullWidth
-                          size='small'
-                          value={size.warehouseStock || 0}
-                          label='Bodega sucursal'
-                          disabled
-                        />
-                      </Grid>
-                      <Grid size={{ xs: 6, sm: 2.5 }}>
-                        <CustomTextField
-                          fullWidth
-                          size='small'
-                          value={size.inTransitStock || 0}
-                          label='En camino'
-                          disabled
-                        />
-                      </Grid>
-                      <Grid size={{ xs: 6, sm: 2.5 }}>
+                      <Grid size={{ xs: 6, sm: 4 }}>
                         <CustomTextField
                           fullWidth
                           size='small'
                           value={size.centralWarehouseStock || 0}
-                          label='Bodega central'
+                          label='En bodega central'
                           disabled
                         />
                       </Grid>
@@ -1106,73 +1051,6 @@ const StepVariantDetails = ({ activeStep, handlePrev, steps, mode, productId, pr
             </Button>
           </DialogActions>
         </Dialog>
-        {isEditing && variantForm.sizes.length > 0 && (
-          <PositiveAdjustmentModal
-            open={adjustmentModalOpen}
-            onClose={() => {
-              setAdjustmentModalOpen(false)
-
-              if (editingVariantId) {
-                isSilentRefreshRef.current = true
-                setVariantToLoadId(editingVariantId)
-              }
-            }}
-            variants={variantForm.sizes
-              .filter(s => s.id)
-              .map(s => ({
-                id: s.id!,
-                size: { name: s.size },
-                availableStock: s.quantity || 0,
-                warehouseStock: s.warehouseStock || 0
-              }))}
-            showMessage={showMessage}
-          />
-        )}
-        {isEditing && variantForm.sizes.length > 0 && (
-          <SubtractStockModal
-            open={subtractStockModalOpen}
-            onClose={() => {
-              setSubtractStockModalOpen(false)
-
-              if (editingVariantId) {
-                isSilentRefreshRef.current = true
-                setVariantToLoadId(editingVariantId)
-              }
-            }}
-            variants={variantForm.sizes
-              .filter(s => s.id)
-              .map(s => ({
-                id: s.id!,
-                size: { name: s.size },
-                warehouseStock: s.warehouseStock || 0,
-                availableStock: s.quantity || 0
-              }))}
-            variantId={editingVariantId!}
-            showMessage={showMessage}
-          />
-        )}
-        {isEditing && variantForm.sizes.length > 0 && (
-          <TransferStockModal
-            open={transferStockModalOpen}
-            onClose={() => {
-              setTransferStockModalOpen(false)
-
-              if (editingVariantId) {
-                isSilentRefreshRef.current = true
-                setVariantToLoadId(editingVariantId)
-              }
-            }}
-            variants={variantForm.sizes
-              .filter(s => s.id)
-              .map(s => ({
-                id: s.id!,
-                size: { name: s.size },
-                availableStock: s.quantity,
-                warehouseStock: s.warehouseStock || 0
-              }))}
-            showMessage={showMessage}
-          />
-        )}
 
         <Snackbar
           open={snackbarOpen}

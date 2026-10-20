@@ -2,12 +2,10 @@
 
 import { useEffect } from 'react'
 
-import { usePathname } from 'next/navigation'
-
 import { useBranchContext } from '@/contexts/BranchContext'
 import { useSettings } from '@core/hooks/useSettings'
 import { getBranchColor, GENERAL_COLOR } from '@/utils/branchColor'
-import { isBranchScoped } from '@/utils/branchScope'
+import { useBranchScope } from '@/contexts/BranchScopeContext'
 
 // Sincroniza el color primario del tema con la sucursal seleccionada (solo ADMIN).
 // Vive dentro de Providers, debajo de BranchProvider y SettingsProvider a la vez,
@@ -15,9 +13,7 @@ import { isBranchScoped } from '@/utils/branchScope'
 const BranchThemeSync = () => {
   const { branches, selectedBranch, isAdmin } = useBranchContext()
   const { updateSettings } = useSettings()
-  const pathname = usePathname()
-
-  const branchScoped = isBranchScoped(pathname)
+  const branchScoped = useBranchScope()
 
   useEffect(() => {
     if (!isAdmin) return

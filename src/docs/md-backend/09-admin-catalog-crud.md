@@ -215,6 +215,10 @@ GET    /users/:id                (ADMIN, SUPERVISOR)
 PATCH  /users/:id                (solo ADMIN)   { name?, email?, password?, branchId?, enabled? }
 PATCH  /users/me/password        cualquier staff logueado — { currentPassword, newPassword }
 ```
+- `GET /users` trae por usuario `{ id, name, email, rol, enabled, createdAt,
+  branch }`, con `branch: { id, name }` (la misma forma que el login): la
+  sucursal fija de MANAGER/CASHIER, `null` para ADMIN/SUPERVISOR. Ordenado
+  por `id`.
 - El SUPERVISOR **ve** usuarios pero no los crea ni edita. Como todo eso
   pasa por `PATCH /users/:id`, tampoco puede **resetear la password** de
   otro, **deshabilitar** a nadie ni **cambiar de sucursal** a un

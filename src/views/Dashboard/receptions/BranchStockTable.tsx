@@ -127,9 +127,13 @@ const BranchStockTable = () => {
   const stockById = useMemo(() => {
     const map: Record<number, SizeRow> = {}
 
-    groups.forEach(group => group.colors.forEach(color => color.sizes.forEach(size => {
-      map[size.variantSizeId] = size
-    })))
+    groups.forEach(group =>
+      group.colors.forEach(color =>
+        color.sizes.forEach(size => {
+          map[size.variantSizeId] = size
+        })
+      )
+    )
 
     return map
   }, [groups])
@@ -220,8 +224,8 @@ const BranchStockTable = () => {
     <>
       <Card>
         <CardHeader
-          title='Mi stock'
-          subheader='Lo recibido ingresa al depósito. Para venderlo, debe pasarse a la tienda.'
+          title='Stock'
+          subheader='Lo recibido ingresa a la bodega. Para venderlo, debe pasarse a la tienda.'
         />
 
         <Box className='flex flex-wrap items-center justify-between gap-4 px-6 pb-4'>
@@ -237,7 +241,7 @@ const BranchStockTable = () => {
               <Chip label={`${toFloorUnits} a tienda`} color='success' variant='tonal' size='small' />
             )}
             {toWarehouseUnits > 0 && (
-              <Chip label={`${toWarehouseUnits} a depósito`} color='secondary' variant='tonal' size='small' />
+              <Chip label={`${toWarehouseUnits} a bodega`} color='secondary' variant='tonal' size='small' />
             )}
             {hasChanges && (
               <Button
@@ -333,12 +337,10 @@ const BranchStockTable = () => {
                           <tr>
                             <th>Color</th>
                             <th>Talla</th>
-                            <th>Tienda</th>
-                            <th>Depósito</th>
-                            <th>En camino</th>
-                            <th>Bodega central</th>
+                            <th>Bodega</th>
                             <th>Pasar a tienda</th>
-                            <th>Guardar al depósito</th>
+                            <th>Tienda</th>
+                            <th>Devolver a bodega</th>
                             <th />
                           </tr>
                         </thead>
@@ -371,32 +373,16 @@ const BranchStockTable = () => {
                                     <Typography variant='body2'>{size.sizeName}</Typography>
                                   </td>
                                   <td>
-                                    <Chip
-                                      label={size.availableStock}
-                                      size='small'
-                                      variant='tonal'
-                                      color={size.availableStock > 0 ? 'success' : 'default'}
-                                    />
-                                  </td>
-                                  <td>
                                     <Typography variant='body2'>{size.warehouseStock}</Typography>
                                   </td>
                                   <td>
-                                    {size.inTransitStock > 0 ? (
-                                      <Chip label={size.inTransitStock} size='small' variant='tonal' color='primary' />
-                                    ) : (
-                                      <Typography variant='body2' color='text.secondary'>
-                                        —
-                                      </Typography>
-                                    )}
-                                  </td>
-                                  <td>
-                                    <Typography variant='body2' color='text.secondary'>
-                                      {size.centralWarehouseStock}
-                                    </Typography>
-                                  </td>
-                                  <td>
-                                    <Tooltip title={size.warehouseStock === 0 ? 'Sin stock en el depósito' : `Hasta ${size.warehouseStock}`}>
+                                    <Tooltip
+                                      title={
+                                        size.warehouseStock === 0
+                                          ? 'Sin stock en la bodega'
+                                          : `Hasta ${size.warehouseStock}`
+                                      }
+                                    >
                                       <span>
                                         <CustomTextField
                                           type='number'
@@ -413,7 +399,21 @@ const BranchStockTable = () => {
                                     </Tooltip>
                                   </td>
                                   <td>
-                                    <Tooltip title={size.availableStock === 0 ? 'Sin stock en la tienda' : `Hasta ${size.availableStock}`}>
+                                    <Chip
+                                      label={size.availableStock}
+                                      size='small'
+                                      variant='tonal'
+                                      color={size.availableStock > 0 ? 'success' : 'default'}
+                                    />
+                                  </td>
+                                  <td>
+                                    <Tooltip
+                                      title={
+                                        size.availableStock === 0
+                                          ? 'Sin stock en la tienda'
+                                          : `Hasta ${size.availableStock}`
+                                      }
+                                    >
                                       <span>
                                         <CustomTextField
                                           type='number'

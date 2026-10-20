@@ -113,9 +113,7 @@ const CentralWarehouseTable = () => {
   const [movementsTarget, setMovementsTarget] = useState<MovementsTarget | null>(null)
   const [isSaving, setIsSaving] = useState(false)
 
-  const [snackbar, setSnackbar] = useState<{ message: string; severity: 'success' | 'error' | 'warning' } | null>(
-    null
-  )
+  const [snackbar, setSnackbar] = useState<{ message: string; severity: 'success' | 'error' | 'warning' } | null>(null)
 
   // La sucursal destino es la que esta elegida en la navbar
   const { selectedBranch } = useBranchContext()
@@ -151,7 +149,10 @@ const CentralWarehouseTable = () => {
 
     if (Object.keys(outgoing).length > 0) {
       setOutgoing({})
-      setSnackbar({ message: 'Cambió la sucursal seleccionada: se vaciaron las cantidades a enviar', severity: 'warning' })
+      setSnackbar({
+        message: 'Cambió la sucursal seleccionada: se vaciaron las cantidades a enviar',
+        severity: 'warning'
+      })
     }
   }, [selectedBranch?.id, outgoing])
 
@@ -180,8 +181,7 @@ const CentralWarehouseTable = () => {
 
   // Lo que se ingresa en esta misma pantalla ya cuenta como disponible para enviar,
   // porque el addstock se guarda antes que el envio
-  const maxToSend = (variantSizeId: number) =>
-    (stockById[variantSizeId] ?? 0) + (incoming[variantSizeId] || 0)
+  const maxToSend = (variantSizeId: number) => (stockById[variantSizeId] ?? 0) + (incoming[variantSizeId] || 0)
 
   const overStock = outgoingEntries.filter(([id, quantity]) => quantity > maxToSend(Number(id)))
 
@@ -190,12 +190,7 @@ const CentralWarehouseTable = () => {
   const total = data?.meta?.total || 0
   const isLoading = isLoadingWarehouse || isLoadingVariants
 
-  const setQuantity = (
-    setter: typeof setIncoming,
-    variantSizeId: number,
-    label: string,
-    value: string
-  ) => {
+  const setQuantity = (setter: typeof setIncoming, variantSizeId: number, label: string, value: string) => {
     const quantity = parseInt(value, 10)
 
     setLabels(prev => ({ ...prev, [variantSizeId]: label }))
@@ -333,12 +328,7 @@ const CentralWarehouseTable = () => {
               showMessage={(message, severity) => setSnackbar({ message, severity })}
             />
             {incomingEntries.length > 0 && (
-              <Chip
-                label={`+${prendas(incomingUnits)} a bodega`}
-                color='success'
-                variant='tonal'
-                size='small'
-              />
+              <Chip label={`+${prendas(incomingUnits)} a bodega`} color='success' variant='tonal' size='small' />
             )}
             {outgoingEntries.length > 0 && (
               <Chip
@@ -369,8 +359,8 @@ const CentralWarehouseTable = () => {
         {overStock.length > 0 && (
           <Box sx={{ px: 6, pb: 4 }}>
             <Alert severity='error'>
-              Hay cantidades a enviar que superan el stock de la bodega. El envío se rechaza entero, no se
-              despacha parcial.
+              Hay cantidades a enviar que superan el stock de la bodega. El envío se rechaza entero, no se despacha
+              parcial.
             </Alert>
           </Box>
         )}
@@ -446,9 +436,20 @@ const CentralWarehouseTable = () => {
                           <tr>
                             <th>Color</th>
                             <th>Talla</th>
+                            <th>Añadir stock</th>
                             <th>En bodega</th>
-                            <th>Ingresar</th>
-                            <th>{selectedBranch ? `Enviar a ${selectedBranch.name}` : 'Enviar'}</th>
+                            <th>
+                              {selectedBranch ? (
+                                <Chip
+                                  label={`Enviar a ${selectedBranch.name}`}
+                                  size='small'
+                                  variant='tonal'
+                                  color='primary'
+                                />
+                              ) : (
+                                'Enviar'
+                              )}
+                            </th>
                             <th />
                           </tr>
                         </thead>
@@ -483,14 +484,6 @@ const CentralWarehouseTable = () => {
                                     <Typography variant='body2'>{size.sizeName}</Typography>
                                   </td>
                                   <td>
-                                    <Chip
-                                      label={size.warehouseStock}
-                                      size='small'
-                                      variant='tonal'
-                                      color={size.warehouseStock > 0 ? 'success' : 'default'}
-                                    />
-                                  </td>
-                                  <td>
                                     <CustomTextField
                                       type='number'
                                       size='small'
@@ -501,6 +494,14 @@ const CentralWarehouseTable = () => {
                                       }
                                       sx={{ width: '100px' }}
                                       inputProps={{ min: 0 }}
+                                    />
+                                  </td>
+                                  <td>
+                                    <Chip
+                                      label={size.warehouseStock}
+                                      size='small'
+                                      variant='tonal'
+                                      color={size.warehouseStock > 0 ? 'success' : 'default'}
                                     />
                                   </td>
                                   <td>
@@ -534,9 +535,7 @@ const CentralWarehouseTable = () => {
                                     <Tooltip title='Ver movimientos'>
                                       <IconButton
                                         size='small'
-                                        onClick={() =>
-                                          setMovementsTarget({ variantSizeId: size.variantSizeId, label })
-                                        }
+                                        onClick={() => setMovementsTarget({ variantSizeId: size.variantSizeId, label })}
                                       >
                                         <i className='tabler-history' />
                                       </IconButton>
@@ -591,11 +590,7 @@ const CentralWarehouseTable = () => {
         />
       </Card>
 
-      <MovementsModal
-        target={movementsTarget}
-        warehouseId={warehouse?.id}
-        onClose={() => setMovementsTarget(null)}
-      />
+      <MovementsModal target={movementsTarget} warehouseId={warehouse?.id} onClose={() => setMovementsTarget(null)} />
 
       <RenameWarehouseModal
         open={renameOpen}

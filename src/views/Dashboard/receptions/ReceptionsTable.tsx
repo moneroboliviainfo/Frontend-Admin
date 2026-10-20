@@ -152,8 +152,6 @@ const ReceptionsTable = () => {
                 <tr>
                   <th>Traslado</th>
                   <th>Viene de</th>
-                  <th>Tipo</th>
-                  <th>Cliente</th>
                   <th>{status === 'in_transit' || status === 'not_found' ? 'Lo envió' : 'Lo pidió'}</th>
                   <th>Acciones</th>
                 </tr>
@@ -164,8 +162,6 @@ const ReceptionsTable = () => {
                     (sum, item) => sum + (item.dispatchedQuantity ?? item.quantity),
                     0
                   )
-
-                  const isFromWarehouse = transfer.type === 'central_dispatch'
 
                   return (
                     <tr key={transfer.id}>
@@ -179,30 +175,6 @@ const ReceptionsTable = () => {
                       </td>
                       <td>
                         <Typography variant='body2'>{transfer.sourceBranch?.name || 'Bodega central'}</Typography>
-                      </td>
-                      <td>
-                        <Chip
-                          label={isFromWarehouse ? 'Envío de bodega' : 'Pedido'}
-                          size='small'
-                          variant='tonal'
-                          color={isFromWarehouse ? 'primary' : 'warning'}
-                        />
-                      </td>
-                      <td>
-                        {transfer.customerName ? (
-                          <>
-                            <Typography variant='body2'>{transfer.customerName}</Typography>
-                            {transfer.customerPhone && (
-                              <Typography variant='caption' color='text.secondary'>
-                                {transfer.customerPhone}
-                              </Typography>
-                            )}
-                          </>
-                        ) : (
-                          <Typography variant='body2' color='text.secondary'>
-                            —
-                          </Typography>
-                        )}
                       </td>
                       <td>
                         <Typography variant='body2'>

@@ -101,7 +101,7 @@ POST /facturacion/facturacion/offline           ?codigoPuntoVenta&codigoSucursal
 POST /facturacion/facturacion/verificacion                                         body: VerificacionEstadoFacturaDto
 POST /facturacion/facturacion/anulacion                                            body: AnulacionFacturaDto — anula una factura ya emitida
 POST /facturacion/facturacion/reversion                                            body: ReversionAnulacionFacturaDto — revierte una anulación
-GET  /facturacion/facturacion?codigoPuntoVenta=&codigoSucursal=&limit=&page=&search=&fechaInicio=&fechaFin=
+GET  /facturacion/facturacion?branchId=&codigoPuntoVenta?=&limit=&page=&search=&fechaInicio=&fechaFin=
 GET  /facturacion/facturacion/:id/representacion-grafica                           PDF (application/pdf), ver nota abajo
 ```
 **Ojo con la ruta duplicada**: el controller vive en `/facturacion` y cada
@@ -122,8 +122,15 @@ en el código, no es un error de este doc.
   - una `REVERTIDA` es vigente y **definitiva**: no se puede volver a anular.
   Tabla completa de estados en
   [07-branches-daily-cash-billing.md](07-branches-daily-cash-billing.md).
-- El total facturado del listado (`GET /facturacion/facturacion`) cuenta las
-  facturas `VALIDADA` y `REVERTIDA`.
+- **Listado** (`GET /facturacion/facturacion`): por **sucursal** del sistema
+  (`?branchId=`, como el resto de los endpoints de ADMIN/SUPERVISOR); el
+  `codigoSucursal` SIAT sale de los datos SIAT de esa sucursal. Ya **no**
+  acepta `codigoSucursal` (`400`). `codigoPuntoVenta` es opcional: sin él,
+  todos los puntos de venta de la sucursal. Sin `branchId` → `403`;
+  sucursal inexistente → `404`; sucursal sin datos SIAT → `400`. Devuelve
+  `{ data, meta, totalFacturado }`, más nuevas primero.
+- El total facturado del listado (`totalFacturado`) cuenta las facturas
+  `VALIDADA` y `REVERTIDA`.
 - **PDF**: `GET /facturacion/facturacion/:id/representacion-grafica` es el
   único lugar donde se puede pedir el PDF de una factura por API, y es solo
   ADMIN/SUPERVISOR a propósito — ver la nota en

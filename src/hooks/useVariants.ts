@@ -3,6 +3,7 @@
 import { useMemo } from 'react'
 
 import { useQuery, useMutation, useQueryClient, useInfiniteQuery } from '@tanstack/react-query'
+import type { QueryClient } from '@tanstack/react-query'
 
 import { variantService } from '@/services/variantService'
 import type {
@@ -79,20 +80,22 @@ export const useUpdateVariant = () => {
   })
 }
 
+// Mover stock deja rastro en varias vistas: la variante, el listado, el stock
+// por sucursal, la bodega principal y el historial de movimientos. Este ultimo
+// era el que faltaba: dar de baja no refrescaba MovementsModal.
+const CLAVES_STOCK = ['variants', 'variant', 'branch-stock', 'central-warehouse', 'variant-movements']
+
+const invalidarStock = (queryClient: QueryClient) => {
+  CLAVES_STOCK.forEach(key => queryClient.invalidateQueries({ queryKey: [key], refetchType: 'active' }))
+}
+
 export const useAddStock = () => {
   const queryClient = useQueryClient()
 
   return useMutation({
     mutationFn: (data: AddStockRequest) => variantService.addStock(data),
     onSuccess: () => {
-      queryClient.invalidateQueries({
-        queryKey: ['variants'],
-        refetchType: 'active'
-      })
-      queryClient.invalidateQueries({
-        queryKey: ['variant'],
-        refetchType: 'active'
-      })
+      invalidarStock(queryClient)
     },
     onError: error => {
       console.error('Error adding stock:', error)
@@ -106,14 +109,7 @@ export const useSubtractStock = () => {
   return useMutation({
     mutationFn: (data: SubtractStockRequest) => variantService.subtractStock(data),
     onSuccess: () => {
-      queryClient.invalidateQueries({
-        queryKey: ['variants'],
-        refetchType: 'active'
-      })
-      queryClient.invalidateQueries({
-        queryKey: ['variant'],
-        refetchType: 'active'
-      })
+      invalidarStock(queryClient)
     },
     onError: error => {
       console.error('Error subtracting stock:', error)
@@ -127,14 +123,7 @@ export const useTransferStock = () => {
   return useMutation({
     mutationFn: (data: TransferStockRequest) => variantService.transferStock(data),
     onSuccess: () => {
-      queryClient.invalidateQueries({
-        queryKey: ['variants'],
-        refetchType: 'active'
-      })
-      queryClient.invalidateQueries({
-        queryKey: ['variant'],
-        refetchType: 'active'
-      })
+      invalidarStock(queryClient)
     },
     onError: error => {
       console.error('Error transferring stock:', error)
@@ -258,8 +247,7 @@ export const usePositiveAdjustment = () => {
   return useMutation({
     mutationFn: (data: PositiveAdjustmentRequest) => variantService.positiveAdjustment(data),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['variants'], refetchType: 'active' })
-      queryClient.invalidateQueries({ queryKey: ['variant'], refetchType: 'active' })
+      invalidarStock(queryClient)
     }
   })
 }

@@ -1,6 +1,7 @@
 'use client'
 
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import type { QueryClient } from '@tanstack/react-query'
 
 import { branchTransferService } from '@/services/branchTransferService'
 import type {
@@ -16,6 +17,27 @@ import type {
   ReceiveTransferRequest,
   ReviewTransferRequest
 } from '@/types/api/branchTransfer'
+
+// Un traslado mueve mercaderia (y a veces plata), asi que toca varias vistas a
+// la vez: la lista y el detalle del traslado, el stock por sucursal, el de la
+// bodega central, la variante y su historial de movimientos. Centralizado acá
+// para que agregar una pantalla nueva no obligue a recordar cada mutacion.
+const CLAVES_TRASLADO = [
+  'branch-transfers', // lista + contador de pendientes
+  'branch-transfer', // el detalle abierto
+  'branch-stock', // que sucursales tienen la variante
+  'central-warehouse', // stock de la bodega principal
+  'variants',
+  'variant',
+  'variant-movements' // el historial que se ve en MovementsModal
+]
+
+const invalidarTraslados = (queryClient: QueryClient, tambienCaja = false) => {
+  CLAVES_TRASLADO.forEach(key => queryClient.invalidateQueries({ queryKey: [key] }))
+
+  // Cobrar un pedido o devolver un anticipo cambia lo esperado en caja
+  if (tambienCaja) queryClient.invalidateQueries({ queryKey: ['dailyCash'] })
+}
 
 export const useCentralWarehouse = (enabled: boolean = true) => {
   return useQuery({
@@ -59,8 +81,7 @@ export const useCentralDispatch = () => {
   return useMutation({
     mutationFn: (data: CentralDispatchRequest) => branchTransferService.centralDispatch(data),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['branch-transfers'] })
-      queryClient.invalidateQueries({ queryKey: ['variants'] })
+      invalidarTraslados(queryClient)
     }
   })
 }
@@ -72,8 +93,7 @@ export const useReceiveTransfer = () => {
     mutationFn: ({ transferId, data }: { transferId: number; data: ReceiveTransferRequest }) =>
       branchTransferService.receive(transferId, data),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['branch-transfers'] })
-      queryClient.invalidateQueries({ queryKey: ['variants'] })
+      invalidarTraslados(queryClient)
     }
   })
 }
@@ -85,8 +105,7 @@ export const useCancelTransfer = () => {
     mutationFn: ({ transferId, data }: { transferId: number; data?: CancelTransferRequest }) =>
       branchTransferService.cancel(transferId, data),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['branch-transfers'] })
-      queryClient.invalidateQueries({ queryKey: ['variants'] })
+      invalidarTraslados(queryClient)
     }
   })
 }
@@ -98,7 +117,7 @@ export const useMarkLostTransfer = () => {
     mutationFn: ({ transferId, data }: { transferId: number; data: MarkLostTransferRequest }) =>
       branchTransferService.markLost(transferId, data),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['branch-transfers'] })
+      invalidarTraslados(queryClient)
     }
   })
 }
@@ -110,8 +129,7 @@ export const useReviewTransfer = () => {
     mutationFn: ({ transferId, data }: { transferId: number; data: ReviewTransferRequest }) =>
       branchTransferService.review(transferId, data),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['branch-transfers'] })
-      queryClient.invalidateQueries({ queryKey: ['variants'] })
+      invalidarTraslados(queryClient)
     }
   })
 }
@@ -141,8 +159,7 @@ export const useCreateBranchRequest = () => {
   return useMutation({
     mutationFn: (data: CreateBranchRequest) => branchTransferService.createRequest(data),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['branch-transfers'] })
-      queryClient.invalidateQueries({ queryKey: ['variants'] })
+      invalidarTraslados(queryClient, true)
     }
   })
 }
@@ -154,8 +171,7 @@ export const useDispatchTransfer = () => {
     mutationFn: ({ transferId, data }: { transferId: number; data?: DispatchRequest }) =>
       branchTransferService.dispatch(transferId, data),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['branch-transfers'] })
-      queryClient.invalidateQueries({ queryKey: ['variants'] })
+      invalidarTraslados(queryClient)
     }
   })
 }
@@ -167,8 +183,7 @@ export const useMarkPickup = () => {
     mutationFn: ({ transferId, data }: { transferId: number; data: PickupRequest }) =>
       branchTransferService.markPickup(transferId, data),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['branch-transfers'] })
-      queryClient.invalidateQueries({ queryKey: ['variants'] })
+      invalidarTraslados(queryClient)
     }
   })
 }
@@ -217,7 +232,7 @@ export const useRefundRequest = () => {
     mutationFn: ({ transferId, data }: { transferId: number; data?: RefundRequest }) =>
       branchTransferService.refundRequest(transferId, data),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['branch-transfers'] })
+      invalidarTraslados(queryClient, true)
     }
   })
 }

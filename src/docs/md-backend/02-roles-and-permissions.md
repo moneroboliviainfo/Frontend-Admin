@@ -132,13 +132,16 @@ A = ADMIN, S = SUPERVISOR, M = MANAGER, C = CASHIER.
 | `GET /central-warehouse` | A, S | `{ id, name }` de la bodega |
 | `PATCH /central-warehouse` | A, S | renombrar |
 | `POST /branch-transfers/central-dispatch` | A, S | envío bodega → tienda |
+| `POST /branch-transfers/replenishments` | M, C | pedir variantes a la bodega (reposición; agrega a la abierta de la tienda) |
+| `DELETE /branch-transfers/replenishments/:id/items/:itemId` | M, C | quitar una variante de la reposición pendiente de su tienda |
+| `POST /branch-transfers/replenishments/:id/dispatch` | A, S | atender (elegir cantidades) o rechazar (todo en 0) una reposición |
 | `POST /branch-transfers/requests` | M, C | pedido de mi tienda a otra (con o sin cobro) |
 | `POST /branch-transfers/requests/quote` | M, C | cotizar un pedido cobrado (no guarda nada) |
 | `POST /branch-transfers/requests/:id/refund` | M, C | devolver al cliente lo pendiente del anticipo (caja abierta) |
 | `POST /payments/generate-qr/request/:id` | M, C | QR del anticipo de un pedido de mi tienda |
 | `POST /branch-transfers/dispatch/:id` | M, C | la tienda origen despacha un pedido |
 | `POST /branch-transfers/receive/:id` | M, C | la tienda destino recibe |
-| `POST /branch-transfers/cancel/:id` | A, S, M, C | M/C: solo pedidos de su tienda, antes del despacho |
+| `POST /branch-transfers/cancel/:id` | A, S, M, C | M/C: solo pedidos de su tienda antes del despacho, o su reposición pendiente |
 | `POST /branch-transfers/mark-lost/:id` | A, S | no llegó nada |
 | `POST /branch-transfers/review/:id` | A, S | resolver faltantes |
 | `POST /branch-transfers/pickup/:id` | M, C | retiro manual / "no retirado" |
@@ -147,8 +150,11 @@ A = ADMIN, S = SUPERVISOR, M = MANAGER, C = CASHIER.
 | `GET /branch-transfers/pending-count` | A, S, M, C | badges |
 | `GET /branch-transfers/pickup-stats` | A, S | estadística de retiro |
 
-Detalle en [11-central-warehouse-and-branch-transfers.md](11-central-warehouse-and-branch-transfers.md)
-y, para el cobro, [13-prepaid-branch-requests.md](13-prepaid-branch-requests.md).
+Detalle en [11-central-warehouse-and-branch-transfers.md](11-central-warehouse-and-branch-transfers.md),
+para el cobro [13-prepaid-branch-requests.md](13-prepaid-branch-requests.md) y,
+para reposiciones, [15-replenishments-and-transfer-stages.md](15-replenishments-and-transfer-stages.md).
+Cada traslado trae `allowedActions`: las acciones que **ese usuario** puede
+hacer ahora (ya filtradas por rol y sucursal).
 
 ### Configuración del sistema (`/settings`)
 

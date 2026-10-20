@@ -376,12 +376,111 @@ primeras sucursales sean las mas distintas entre si. La regla esta escrita en
 Una ruta sin clasificar cae en general (azul, sin selector): nunca miente, solo
 queda sosa. En desarrollo avisa por consola una vez por ruta.
 
+### Rutas que mezclan los dos casos
+
+Tres rutas no son de un solo tipo:
+
+| Ruta | Si aplica | No aplica |
+| --- | --- | --- |
+| `/products` | paso 2 (Variantes) | listado y paso 1 |
+| `/siat` | eventos, facturacion | cafc, paquetes |
+
+SIAT se resolvio partiendo la ruta en sub-rutas. Productos comparte direccion
+con la vista del otro tipo, asi que la vista interna declara su alcance con
+`useDeclareBranchScope` (`BranchScopeContext`): Variantes declara `true`, y al
+desmontarse se limpia sola.
+
+Bodega Central tenia el mismo problema con la pestana Retiros, que declaraba
+`false`. Se resolvio **mudando la pantalla** en vez de declarar: el informe
+vive ahora en Inicio, que ya es general. Que una pantalla necesitara declarar
+lo contrario a su ruta era la senal de que estaba en el menu equivocado.
+
+Las declaraciones se guardan en una pila con un id por declarante, para que uno
+anidado no borre el de afuera al salir. Funciona porque ni el asistente ni las
+pestanas montan mas de una vista a la vez: el wizard renderiza un solo paso, y
+`TabPanel` de MUI solo monta la pestana activa (sin `keepMounted`, que no se
+usa). Si alguna vez se monta mas de una, la de adentro manda.
+
 ### Selector de sucursal
 
-Paso de botones (`ToggleButtonGroup`) a un **select** de 150px, movido al grupo
-izquierdo de la navbar, con el nombre de la sucursal repetido al lado en `h5` y
-en el color del tema. La repeticion es a proposito: el select es para cambiar,
-el nombre grande es para saber sobre que sucursal se esta actuando sin buscarlo.
+Paso de botones (`ToggleButtonGroup`) a un **select** de 150px en el grupo
+izquierdo de la navbar.
+
+El nombre de la sucursal se separo en `BranchIndicator`: un chip grande
+(`variant='tonal'`, en el color del tema) al **centro** de la navbar. La
+division es a proposito —el select cambia, el chip orienta— y separarlos deja
+el chip en el punto donde la vista cae primero. Los dos comparten las mismas
+guardas (`isAdmin` + `isBranchScoped`), asi que aparecen y desaparecen juntos.
+
+### Retiros, de Bodega Central a Inicio
+
+El informe `pickup-stats` no habla de la bodega sino de los pedidos entre
+tiendas, y era la unica pestana de Bodega Central que no dependia del selector
+de sucursal. Paso a ser una tarjeta ancha del tablero de Inicio, junto a Stock
+bajo y Mas vendidos, que es donde viven los otros informes.
+
+El archivo se movio a `views/Dashboard/ecommerce/` con el resto de las tarjetas
+del tablero. Lleva guarda propia (`isAdmin`): el encargado ve Inicio pero el
+informe es de ADMIN/SUPERVISOR, y la consulta ni se dispara para el. Bodega
+Central queda con sus dos pestanas reales: Stock y Envios.
+
+## Refresco de listas despues de cada accion (19/10/2026)
+
+Sintoma reportado: dar de baja stock no refrescaba el historial de movimientos.
+Causa: ninguna mutacion invalidaba `variant-movements`.
+
+Se relevaron **todas** las claves de consulta contra todo lo que se invalida.
+Resultado: no era un caso aislado.
+
+| Mutacion | No refrescaba |
+| --- | --- |
+| stock (alta, baja, traspaso, sobrante) | historial de movimientos, stock por sucursal, bodega central |
+| traslados (9 mutaciones) | el detalle abierto, stock por sucursal, bodega central, movimientos |
+| cobrar un pedido / devolver anticipo | la caja del turno |
+| crear CAFC / evento / paquete SIAT | su propia lista |
+| guardar datos de facturacion | esos datos al volver a buscar el CI |
+
+En vez de repetir claves en cada mutacion se centralizo en dos constantes:
+`CLAVES_TRASLADO` (useBranchTransfers) y `CLAVES_STOCK` (useVariants), con un
+helper por archivo. Agregar una pantalla nueva ahora es sumar una clave en un
+solo lugar, no recordar cada mutacion.
+
+Quedan sin invalidar a proposito: catalogos SIAT que no cambian desde el panel
+(actividades economicas, tipos de documento, parametricas), claves en singular
+cuyo plural si se invalida, `dashboard` (es una foto) y `verify-payment` (se
+pollea solo).
+
+## Variantes: pantalla global (19/10/2026)
+
+Hecho. La pestana Variantes ya no depende del selector de sucursal.
+
+**Lectura**: muestra solo **talla** y **cantidad en bodega central**. Se fueron
+las columnas Tienda, Bodega sucursal y En camino. La consulta manda
+`?branchId=<bodega>` (el id sale de `GET /central-warehouse`).
+
+> Nota tecnica: `centralWarehouseStock` **no depende** del `branchId` (doc 06:
+> "igual: la bodega principal, no depende de X"), asi que la llamada sin
+> parametro habria dado el mismo numero. Se manda igual por decision del
+> equipo.
+
+**Acciones quitadas**: Quitar Stock, Mover Variante y Registrar Sobrante. Las
+tres mandaban `?branchId=<sucursal>` y con el id de la bodega no funcionan
+(`positive-adjustment` con la bodega da **403**; mover piso/deposito no aplica).
+
+### Lo que esto deja pendiente
+
+- **Dar de baja y registrar sobrante de una TIENDA**: hoy no tienen pantalla
+  para el ADMIN. Hay que sumarlas a Bodega Central eligiendo la tienda (nunca
+  la bodega: 403 en el sobrante). El MANAGER no quedo sin nada: las hace desde
+  Inventario → Mi stock.
+- Mover piso/deposito ya existia en Inventario → Mi stock, no se perdio nada.
+- `/products` quedo como ruta general pura: se borro el
+  `useDeclareBranchScope(true)` y **no queda ningun caso especial en el
+  sistema**. `BranchScopeContext` sigue montado pero sin declarantes: se puede
+  borrar si no aparece otro caso.
+
+Una nota anterior listaba "Ver movimientos" entre las acciones de Variantes.
+Era falso: `MovementsModal` se abre solo desde Bodega Central.
 
 ## Pendientes de esta tanda
 

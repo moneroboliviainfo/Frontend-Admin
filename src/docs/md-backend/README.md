@@ -29,9 +29,11 @@ shape exacto de request/response en Swagger.
 Empezá por [14-changelog-2026-10.md](14-changelog-2026-10.md): los cambios
 del 9 y 10 de octubre de 2026 (pedidos entre sucursales cobrados al pedir,
 cobro por QR, devoluciones, configuración de plazos, desglose del cierre de
-caja), qué se rompe y el checklist del front; al final, la actualización
+caja), qué se rompe y el checklist del front; después, la actualización
 del 18 de octubre (stock de la bodega principal separado en
-`centralWarehouseStock`, storefront solo con `availableStock`). Los anteriores, del 28 al 30
+`centralWarehouseStock`, storefront solo con `availableStock`) y la del
+**19 de octubre** (reposiciones, `stage`/`allowedActions` en los traslados,
+listado de facturas por sucursal). Los anteriores, del 28 al 30
 de septiembre (rol supervisor, bodega principal, envíos y pedidos entre
 sucursales, facturas), están en [12-changelog-2026-09.md](12-changelog-2026-09.md).
 
@@ -52,7 +54,8 @@ sucursales, facturas), están en [12-changelog-2026-09.md](12-changelog-2026-09.
 | [11-central-warehouse-and-branch-transfers.md](11-central-warehouse-and-branch-transfers.md) | Bodega principal, envíos de la bodega a las tiendas, pedidos entre sucursales (reserva, retiro, integración con el POS), faltantes y revisión |
 | [12-changelog-2026-09.md](12-changelog-2026-09.md) | Qué cambió (28–30/09/2026), qué rompe y checklist del front |
 | [13-prepaid-branch-requests.md](13-prepaid-branch-requests.md) | Pedidos entre sucursales cobrados al pedir: configuración de plazos, cotizar y cobrar (efectivo, tarjeta, QR), devoluciones, venta de retiro con anticipo, anticipo perdido, caja |
-| [14-changelog-2026-10.md](14-changelog-2026-10.md) | Qué cambió (9–10/10/2026 y 18/10/2026), qué rompe y checklist del front |
+| [14-changelog-2026-10.md](14-changelog-2026-10.md) | Qué cambió (9–10/10, 18/10 y 19/10/2026), qué rompe y checklist del front |
+| [15-replenishments-and-transfer-stages.md](15-replenishments-and-transfer-stages.md) | Reposiciones (la tienda pide a la bodega, la central atiende), marca `pendingReplenishment`, y `stage`/`stageLabel`/`allowedActions` de todos los traslados; pantallas sugeridas en dos menús |
 
 Este índice cubre **todos** los controllers del backend — si un endpoint no
 aparece en ninguno de estos archivos, no existe (o es nuevo y este doc

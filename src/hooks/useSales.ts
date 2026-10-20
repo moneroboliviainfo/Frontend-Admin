@@ -185,8 +185,15 @@ export const useSearchBilling = (ci: string) => {
 
 // Hook para crear o actualizar datos de facturación (upsert)
 export const useCreateOrUpdateBilling = () => {
+  const queryClient = useQueryClient()
+
   return useMutation({
     mutationFn: (data: BillingInfo) => cartService.createOrUpdateBilling(data),
+    onSuccess: () => {
+      // El POS busca los datos de facturacion por CI: sin esto, al volver a
+      // consultar el mismo CI devolvia los datos viejos desde la cache.
+      queryClient.invalidateQueries({ queryKey: ['billing'] })
+    },
     onError: (error: any) => {
       console.error('Error creating/updating billing:', error)
       throw error
@@ -280,8 +287,13 @@ export const useCafcs = () => {
 
 // Hook para crear CAFC
 export const useCreateCafc = () => {
+  const queryClient = useQueryClient()
+
   return useMutation({
     mutationFn: (data: CafcCreateRequest) => cartService.createCafc(data),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['cafcs'] })
+    },
     onError: (error: any) => {
       console.error('Error creando CAFC:', error)
     }
@@ -326,6 +338,8 @@ export const useEventosSignificativosBySucursal = (
 
 // Hook para crear evento significativo
 export const useCrearEventoSignificativo = () => {
+  const queryClient = useQueryClient()
+
   return useMutation({
     mutationFn: ({
       data,
@@ -336,6 +350,11 @@ export const useCrearEventoSignificativo = () => {
       codigoSucursal?: number
       codigoPuntoVenta?: number
     }) => cartService.crearEventoSignificativo(data, codigoSucursal, codigoPuntoVenta),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['eventos-significativos'] })
+      queryClient.invalidateQueries({ queryKey: ['eventos-significativos-sucursal'] })
+      queryClient.invalidateQueries({ queryKey: ['eventos-by-cafc'] })
+    },
     onError: (error: any) => {
       console.error('Error creando evento significativo:', error)
     }
@@ -365,8 +384,13 @@ export const usePaquete = (id: number, enabled: boolean = true) => {
 
 // Hook para crear paquete de contingencia
 export const useCrearPaqueteContingencia = () => {
+  const queryClient = useQueryClient()
+
   return useMutation({
     mutationFn: (data: PaqueteContingenciaRequest) => cartService.crearPaqueteContingencia(data),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['paquetes'] })
+    },
     onError: (error: any) => {
       console.error('Error creando paquete de contingencia:', error)
     }

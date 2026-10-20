@@ -12,7 +12,6 @@ import TabPanel from '@mui/lab/TabPanel'
 import { useCentralWarehouse, usePendingCount } from '@/hooks/useBranchTransfers'
 import CentralWarehouseTable from './CentralWarehouseTable'
 import DispatchHistoryTable from './DispatchHistoryTable'
-import PickupStatsTable from './PickupStatsTable'
 
 const CentralWarehouseView = () => {
   const [tab, setTab] = useState('stock')
@@ -27,18 +26,16 @@ const CentralWarehouseView = () => {
   return (
     <TabContext value={tab}>
       <TabList onChange={(_, value) => setTab(value)} sx={{ mb: 4 }}>
-        <Tab value='stock' label='Stock' />
+        <Tab value='stock' label='Stock Bodega Central' />
         <Tab
           value='dispatches'
           label={
             <Box className='flex items-center gap-2'>
-              <span>Envíos</span>
+              <span>Historial de Envíos</span>
               {inTransit > 0 && <Chip label={inTransit} size='small' variant='tonal' color='primary' />}
-              {pendingReview > 0 && <Chip label={pendingReview} size='small' variant='tonal' color='warning' />}
             </Box>
           }
         />
-        <Tab value='pickup-stats' label='Retiros' />
       </TabList>
 
       <TabPanel value='stock' sx={{ p: 0 }}>
@@ -47,10 +44,6 @@ const CentralWarehouseView = () => {
 
       <TabPanel value='dispatches' sx={{ p: 0 }}>
         <DispatchHistoryTable />
-      </TabPanel>
-
-      <TabPanel value='pickup-stats' sx={{ p: 0 }}>
-        <PickupStatsTable />
       </TabPanel>
     </TabContext>
   )

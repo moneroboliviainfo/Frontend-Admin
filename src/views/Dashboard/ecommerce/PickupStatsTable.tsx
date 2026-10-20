@@ -14,6 +14,7 @@ import Alert from '@mui/material/Alert'
 import CustomTextField from '@core/components/mui/TextField'
 import tableStyles from '@core/styles/table.module.css'
 import { usePickupStats } from '@/hooks/useBranchTransfers'
+import { useBranchContext } from '@/contexts/BranchContext'
 
 const today = new Date()
 const firstOfMonth = new Date(today.getFullYear(), today.getMonth(), 1)
@@ -24,9 +25,15 @@ const PickupStatsTable = () => {
   const [from, setFrom] = useState(toInput(firstOfMonth))
   const [to, setTo] = useState(toInput(today))
 
-  const { data, isLoading, isError } = usePickupStats(from, to)
+  // El informe es de ADMIN/SUPERVISOR, pero el encargado tambien ve Inicio:
+  // sin la guarda le pediria al backend algo que le va a negar.
+  const { isAdmin } = useBranchContext()
+
+  const { data, isLoading, isError } = usePickupStats(from, to, isAdmin)
 
   const rows = data || []
+
+  if (!isAdmin) return null
 
   return (
     <Card>

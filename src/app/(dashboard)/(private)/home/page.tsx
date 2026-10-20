@@ -6,6 +6,7 @@ import CongratulationsJohn from '@views/Dashboard/ecommerce/Congratulations'
 import StatisticsCard from '@views/Dashboard/ecommerce/StatisticsCard'
 import LowStock from '@/views/Dashboard/ecommerce/LowStock'
 import BestSellers from '@/views/Dashboard/ecommerce/BestSellers'
+import PickupStatsTable from '@/views/Dashboard/ecommerce/PickupStatsTable'
 
 const EcommerceDashboard = () => {
   return (
@@ -22,6 +23,9 @@ const EcommerceDashboard = () => {
         </Grid>
         <Grid size={{ xs: 12, md: 8 }}>
           <BestSellers />
+        </Grid>
+        <Grid size={{ xs: 12 }}>
+          <PickupStatsTable />
         </Grid>
       </Grid>
     </>

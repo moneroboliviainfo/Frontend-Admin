@@ -6,6 +6,7 @@ import { VerticalNavProvider } from '@menu/contexts/verticalNavContext'
 import { SettingsProvider } from '@core/contexts/settingsContext'
 import { AuthProvider } from '@/contexts/AuthContext'
 import { BranchProvider } from '@/contexts/BranchContext'
+import { BranchScopeProvider } from '@/contexts/BranchScopeContext'
 import ThemeProvider from '@components/theme'
 import BranchThemeSync from '@components/BranchThemeSync'
 
@@ -30,14 +31,16 @@ const Providers = async (props: Props) => {
     <ReactQueryProvider>
       <AuthProvider>
         <BranchProvider>
-          <VerticalNavProvider>
-            <SettingsProvider settingsCookie={settingsCookie} mode={mode}>
-              <ThemeProvider direction={direction} systemMode={systemMode}>
-                <BranchThemeSync />
-                {children}
-              </ThemeProvider>
-            </SettingsProvider>
-          </VerticalNavProvider>
+          <BranchScopeProvider>
+            <VerticalNavProvider>
+              <SettingsProvider settingsCookie={settingsCookie} mode={mode}>
+                <ThemeProvider direction={direction} systemMode={systemMode}>
+                  <BranchThemeSync />
+                  {children}
+                </ThemeProvider>
+              </SettingsProvider>
+            </VerticalNavProvider>
+          </BranchScopeProvider>
         </BranchProvider>
       </AuthProvider>
     </ReactQueryProvider>

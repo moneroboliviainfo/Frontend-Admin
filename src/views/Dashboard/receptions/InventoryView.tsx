@@ -30,12 +30,12 @@ const InventoryView = () => {
   return (
     <TabContext value={tab}>
       <TabList onChange={(_, value) => setTab(value)} sx={{ mb: 4 }}>
-        <Tab value='stock' label='Mi stock' />
+        <Tab value='stock' label='Stock' />
         <Tab
           value='receptions'
           label={
             <Box className='flex items-center gap-2'>
-              <span>Por recibir</span>
+              <span>Envios desde bodega Central</span>
               {toReceive > 0 && <Chip label={toReceive} size='small' variant='tonal' color='primary' />}
             </Box>
           }
@@ -88,7 +88,6 @@ const InventoryView = () => {
       <TabPanel value='refunds' sx={{ p: 0 }}>
         <RefundsTable />
       </TabPanel>
-
     </TabContext>
   )
 }

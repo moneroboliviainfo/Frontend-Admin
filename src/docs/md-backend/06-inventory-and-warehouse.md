@@ -47,8 +47,9 @@ Recorrido normal de una prenda nueva:
 ```
 POST /variants/addstock                        → depósito de la bodega principal
 POST /branch-transfers/central-dispatch        → en camino a la tienda
-POST /branch-transfers/receive/:id             → depósito de la tienda
-POST /stock-transfers (warehouse_to_floor)     → piso de la tienda (recién ahí se vende)
+   (o la tienda la pide: POST /branch-transfers/replenishments → la central la atiende, ver 15)
+POST /branch-transfers/receive/:id             → depósito de la tienda (o directo al piso con "location": "sales_floor")
+POST /stock-transfers (warehouse_to_floor)     → piso de la tienda (recién ahí se vende) — no hace falta si se recibió al piso
 ```
 
 - El **stock vendible** (lo que usa el checkout, el reprice, el catálogo
@@ -75,7 +76,10 @@ Las respuestas de listado/detalle traen, por variante:
 - `availableStock`: vendible (piso − reservas de venta − reservas de pedidos);
 - `warehouseStock`: en depósito (todavía no vendible);
 - `inTransitStock`: en camino hacia la sucursal;
-- `centralWarehouseStock`: en la bodega principal (ver abajo).
+- `centralWarehouseStock`: en la bodega principal (ver abajo);
+- `pendingReplenishment` (sí/no): la sucursal ya la pidió a la bodega y la
+  central todavía no la atendió — en la vista general, alguna tienda la
+  pidió (ver [15](15-replenishments-and-transfer-stages.md) §2).
 
 Mostrá los que tu UI de inventario necesite; no asumas que
 `availableStock` es "todo lo que hay". Con `?branchId=<bodega>`,
@@ -83,7 +87,11 @@ Mostrá los que tu UI de inventario necesite; no asumas que
 
 **Vista general (sin sucursal)** — `GET /products/:id` y `GET /outfits/:id`
 (admin) no filtran por sucursal: suman todas. Ahí los cuatro campos **no se
-pisan** y sumados dan el total. Con `?branchId=X`, `centralWarehouseStock`
+pisan** (ninguna unidad aparece en dos), pero sumados **no** son el stock
+físico total: `availableStock` ya viene neto de las ventas en curso y de lo
+apartado para pedidos, y las unidades de un pedido entre sucursales que la
+tienda origen todavía no despachó (`pending_dispatch`) no están en ninguno.
+Con `?branchId=X`, `centralWarehouseStock`
 sigue mostrando la bodega principal (cuánto queda por despachar) — no lo
 sumes al stock de X; con `X = bodega` es el mismo número que
 `warehouseStock`.
@@ -94,6 +102,7 @@ sumes al stock de X; con `X = bodega` es el mismo número que
 | `warehouseStock` | depósitos de las **tiendas** (sin la bodega principal) | depósito de X (si X es la bodega: su stock) |
 | `centralWarehouseStock` | **solo** la bodega principal | **igual**: la bodega principal (no depende de X) |
 | `inTransitStock` | en camino hacia cualquier tienda | en camino hacia X |
+| `pendingReplenishment` | alguna tienda la pidió y la central no la atendió | X la pidió y la central no la atendió |
 
 ## Consultar stock
 
@@ -120,8 +129,9 @@ de quién lo hizo, o `null`), `orderId`, `stockTransferId`, `branchTransferId`,
 **Disponibilidad por sucursal** (`branch-stock`) — una fila por tienda
 activa (sin la bodega, **incluida la propia**): `salesFloor`, `warehouse`,
 `reserved`, `heldForRequests`, `availableToRequest` (lo que se le puede pedir
-a esa tienda) e `inTransit`. Es lo que usa el POS para "buscar en otras
-sucursales".
+a esa tienda), `inTransit` y `pendingReplenishment` (esa tienda pidió la
+variante a la bodega y la central no la atendió). Es lo que usa el POS para
+"buscar en otras sucursales".
 
 ## Ingresar / dar de baja / ajustar stock
 

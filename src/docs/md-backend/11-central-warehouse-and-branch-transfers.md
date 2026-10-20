@@ -4,7 +4,9 @@ Tres piezas nuevas que trabajan juntas:
 
 1. **Bodega principal**: por donde entra **todo** el stock nuevo.
 2. **Envíos desde la bodega** (`central_dispatch`): la bodega le manda
-   mercadería a una tienda.
+   mercadería a una tienda — por su cuenta, o porque la tienda se la
+   **pidió** (reposición, `replenishment: true`: ver
+   [15-replenishments-and-transfer-stages.md](15-replenishments-and-transfer-stages.md)).
 3. **Pedidos entre sucursales** (`branch_request`): la tienda A le pide a la
    tienda B una prenda para un cliente que está en A. El cliente la **paga al
    retirarla**, con una venta normal en A — o **por adelantado al pedir**
@@ -107,12 +109,17 @@ POST /branch-transfers/central-dispatch
                                        ve "por recibir" en pending-count
                                        POST /branch-transfers/receive/:id
                                          → status "received"
-                                         → entra a SU DEPÓSITO (no al piso)
-                                       POST /stock-transfers (warehouse_to_floor) para venderlo
+                                         → entra a SU DEPÓSITO (por defecto)
+                                           o directo al PISO con "location": "sales_floor"
+                                       POST /stock-transfers (warehouse_to_floor) si entró al depósito
 ```
 
 Mientras está `in_transit` el stock **no está en ninguna sucursal** (la tienda
 lo ve como `inTransitStock` / `inTransit`).
+
+Esto es el envío que la central manda **por su cuenta**. Si la tienda lo
+**pide** (reposición), nace `pending_dispatch` sin cantidades y la central lo
+atiende después: ver [15](15-replenishments-and-transfer-stages.md) §1.
 
 ### Crear el envío
 
@@ -136,8 +143,10 @@ Errores:
 ```
 POST /branch-transfers/cancel/:id  { "note?": "Sucursal equivocada" }   (ADMIN, SUPERVISOR)
 ```
-Solo mientras está `in_transit`. Todo vuelve al depósito de la bodega. Una
-tienda que intenta anular un envío de la bodega recibe `403`.
+Solo mientras está `in_transit`. Vuelve al depósito de la bodega todo lo
+**despachado** (`dispatchedQuantity`). Una tienda que intenta anular un envío
+de la bodega recibe `403` (excepción: su propia reposición **pendiente**, ver
+[15](15-replenishments-and-transfer-stages.md) §1.5).
 
 ### Marcar perdido (no llegó nada)
 
@@ -156,7 +165,8 @@ ingreso o un ajuste positivo.
 POST /branch-transfers/receive/:id                 (MANAGER, CASHIER de la tienda destino)
 {
   "items": [ { "transferItemId": 31, "quantity": 5 }, { "transferItemId": 32, "quantity": 2 } ],
-  "note?": "Vino una menos"
+  "note?": "Vino una menos",
+  "location?": "warehouse" | "sales_floor"     // solo envíos de la bodega (ver abajo)
 }
 ```
 
@@ -169,8 +179,15 @@ POST /branch-transfers/receive/:id                 (MANAGER, CASHIER de la tiend
   (`400 Llegó menos de lo despachado: la nota es obligatoria`) y el traslado
   queda **"por revisar"** (`discrepancyStatus: "pending_review"`).
 - Se recibe **una sola vez**. Otra vez → `409 No se puede recibir: el traslado #N ya fue recibido`.
-- A dónde entra: envío de bodega → **depósito** de la tienda; pedido entre
-  sucursales → **piso** de la tienda (queda listo para venderle al cliente).
+- A dónde entra:
+  - envío de la bodega (incluida la reposición) → lo elige la tienda con
+    `location`, **todo junto a un mismo lugar**: sin `location` (o
+    `"warehouse"`) al **depósito**; con `"sales_floor"` directo al **piso**,
+    vendible en el acto. Para repartir (parte al piso, parte al depósito),
+    recibí todo en un lugar y mové el resto con `/stock-transfers`. El
+    traslado guarda `receivedLocation`.
+  - pedido entre sucursales → siempre al **piso** de la tienda (queda listo
+    para venderle al cliente). Mandar `location` → `400 Un pedido entre sucursales entra siempre al piso: no se elige la ubicación`.
 - Otra sucursal que intente recibirlo → `404`.
 
 ---
@@ -197,7 +214,7 @@ POST /branch-transfers/review/:id
 | `outcome` | Qué pasa con el faltante de esa línea |
 |---|---|
 | `lost` | Queda como pérdida. No mueve stock. |
-| `found_at_destination` | Suma al **depósito** de la tienda destino. No se permite si la línea tiene unidades que **nunca salieron** del origen (`400 ... nunca salieron del origen, no pueden aparecer en el destino`). |
+| `found_at_destination` | Suma en la tienda destino, **donde se recibió** el envío (`receivedLocation`; en pedidos y envíos viejos, el **depósito**). No se permite si la línea tiene unidades que **nunca salieron** del origen (`400 ... nunca salieron del origen, no pueden aparecer en el destino`). |
 | `found_at_origin` | Vuelve a donde salió: depósito de la bodega (envío) o **piso** de la tienda origen (pedido). |
 
 - Cada línea se revisa **una sola vez**. Podés revisar algunas ahora y otras
@@ -463,6 +480,7 @@ GET /branch-transfers?page=1&limit=10
   &discrepancyStatus=pending_review|reviewed
   &awaitingPickup=true
   &pendingRefund=true                         (pedidos cobrados con devolución pendiente, ver 13 §5)
+  &replenishment=true|false                   (solo reposiciones / sin reposiciones, ver 15 §3)
   &variantIds=10,15
   &branchId=<solo ADMIN/SUPERVISOR>
 → { data: BranchTransfer[], meta: {...} }     (más nuevos primero)
@@ -474,7 +492,7 @@ GET /branch-transfers?page=1&limit=10
 - `direction` solo aplica con una sucursal: `outgoing` = sale de ella,
   `incoming` = llega a ella.
 - `awaitingPickup=true` = pedidos recibidos **en esta tienda** que esperan a
-  su cliente dentro del plazo.
+  su cliente dentro del plazo (con al menos una prenda recibida).
 - Un pedido en `pending_payment` (cobro QR sin pagar) **solo lo ve la tienda
   que lo hizo**: la tienda origen no lo lista y su detalle le da `404`.
 
@@ -490,6 +508,7 @@ Listas típicas de ADMIN/SUPERVISOR:
 | Pantalla | Query |
 |---|---|
 | Faltantes por revisar | `discrepancyStatus=pending_review` |
+| Reposiciones por atender | `replenishment=true&status=pending_dispatch` |
 | Envíos en camino | `type=central_dispatch&status=in_transit` |
 | Historial de la bodega | `branchId=<bodega>&direction=outgoing` |
 
@@ -506,9 +525,17 @@ MANAGER/CASHIER: `404` si su tienda no es origen ni destino.
 {
   "id": 15,
   "type": "branch_request",                 // o "central_dispatch"
+  "replenishment": false,                   // true = reposición (central_dispatch que pidió la tienda, ver 15)
   "status": "received",
   "discrepancyStatus": null,                // "pending_review" | "reviewed" | null
   "note": "Pasa a retirar el sábado",
+
+  // cómo lo ve quien consulta — usá esto para la etiqueta y los botones (ver 15 §4)
+  "stage": "awaiting_customer",
+  "stageLabel": "Esperando al cliente",
+  "allowedActions": ["pickupInPos", "markNotPickedUp", "linkPickupSale"],
+  "pendingReview": false,
+
   "customerName": "María Pérez",            // solo pedidos
   "customerPhone": "70012345",
   "customerCi": "1234567",
@@ -544,7 +571,7 @@ MANAGER/CASHIER: `404` si su tienda no es origen ni destino.
         "size": { "id": 2, "name": "M" },
         "productColor": { "id": 5, "product": { "id": 1, "name": "Camisa" }, "color": { "id": 3, "name": "Azul", "code": "#00f" } }
       },
-      "quantity": 1,                        // pedido / enviado
+      "quantity": 1,                        // pedido / enviado — ⚠️ null en una reposición
       "dispatchedQuantity": 1,              // salió del origen (null = todavía no)
       "receivedQuantity": 1,                // llegó (null = todavía no)
       "reviewOutcome": null, "reviewNote": null, "reviewedBy": null, "reviewedAt": null
@@ -553,19 +580,22 @@ MANAGER/CASHIER: `404` si su tienda no es origen ni destino.
 }
 ```
 
-Faltante de una línea = no encontrado (`quantity − dispatchedQuantity`) +
-perdido en el camino (`dispatchedQuantity − receivedQuantity`).
+Faltante de una línea = no encontrado (`quantity − dispatchedQuantity`, solo
+en pedidos) + perdido en el camino (`dispatchedQuantity − receivedQuantity`).
+En un envío de la central (incluida la reposición) no hay "no encontrado":
+lo que la central no mandó nunca salió de la bodega.
 
 ### Contador de pendientes (badges)
 
 ```
 GET /branch-transfers/pending-count?branchId=<solo ADMIN/SUPERVISOR>
-→ { "toDispatch": 1, "toReceive": 2, "inTransit": 0, "pendingReview": 1, "awaitingPickup": 3, "pendingRefunds": 0 }
+→ { "toDispatch": 1, "replenishmentsPending": 0, "toReceive": 2, "inTransit": 0, "pendingReview": 1, "awaitingPickup": 3, "pendingRefunds": 0 }
 ```
 
 | Campo | Significa (para la sucursal consultada) |
 |---|---|
-| `toDispatch` | pedidos que **tengo que despachar** |
+| `toDispatch` | pedidos que **tengo que despachar** (nunca reposiciones) |
+| `replenishmentsPending` | reposiciones sin atender: tienda `0`/`1` (la suya); central = cuántas tiendas esperan (ver 15 §3) |
 | `toReceive` | traslados en camino **hacia mí** |
 | `inTransit` | traslados que **salieron de mí** y siguen en camino |
 | `pendingReview` | traslados cerrados con faltantes sin revisar |
@@ -574,6 +604,7 @@ GET /branch-transfers/pending-count?branchId=<solo ADMIN/SUPERVISOR>
 
 No hay websockets: **consultalo cada ~30 segundos** y mostralo como badges.
 ADMIN/SUPERVISOR sin `branchId` ven los totales de todas las sucursales.
+Qué sumar en el badge de cada rol: [15](15-replenishments-and-transfer-stages.md) §3.
 
 ---
 
@@ -581,8 +612,12 @@ ADMIN/SUPERVISOR sin `branchId` ven los totales de todas las sucursales.
 
 ```
 central_dispatch:   in_transit ──receive──▶ received
-                        │ ├──cancel──▶ cancelled   (vuelve a la bodega)
+                        │ ├──cancel──▶ cancelled   (vuelve a la bodega lo despachado)
                         │ └──mark-lost─▶ lost
+
+reposición:         pending_dispatch ──attend (algo > 0)──▶ in_transit ──▶ (igual que central_dispatch)
+(central_dispatch +     │  └──attend (todo en 0)──▶ not_found   ("Rechazada")
+ replenishment)         └──cancel / quitar la última variante──▶ cancelled   (no se movió nada)
 branch_request:     pending_dispatch ──dispatch──▶ in_transit ──receive──▶ received
                         │                  │            └──mark-lost──▶ lost
                         │                  └─(nada)──▶ not_found
@@ -594,6 +629,10 @@ con cobro por QR:   pending_payment ──pago QR──▶ pending_dispatch ─�
 ```
 
 Actuar en un estado que no corresponde → `409 No se puede <acción>: el traslado #N <ya fue recibido | fue anulado | ...>`.
+
+Para mostrar el estado **no traduzcas `status` a mano**: usá `stageLabel` y
+`allowedActions` (dependen también de quién mira, de los plazos y de la
+plata). Tablas completas en [15](15-replenishments-and-transfer-stages.md) §4.
 
 ---
 
@@ -646,3 +685,6 @@ negativo (baja) o positivo (ajuste positivo): distinguilo por el signo de
   `branchTransferId` en reprice y venta.
 - **Pedidos cobrados, QR, devoluciones y configuración**: pantallas en
   [13-prepaid-branch-requests.md](13-prepaid-branch-requests.md) §10.
+
+**Reposiciones** y la organización sugerida en dos menús ("Movimientos de
+stock" y "Pedidos entre sucursales"): [15](15-replenishments-and-transfer-stages.md) §5.

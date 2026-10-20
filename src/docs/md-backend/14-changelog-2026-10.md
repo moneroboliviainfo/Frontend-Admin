@@ -1,4 +1,10 @@
-# Cambios en `develop` — 9 y 10 de octubre de 2026
+# Cambios en `develop` — octubre de 2026
+
+Secciones: 9–10 de octubre (abajo), [18 de octubre](#actualización-18-de-octubre--stock-de-la-bodega-principal-separado)
+y [19 de octubre](#actualización-19-de-octubre--reposiciones-etapas-de-los-traslados-facturas-por-sucursal)
+(al final).
+
+## 9 y 10 de octubre
 
 Qué cambió en el backend desde [12-changelog-2026-09.md](12-changelog-2026-09.md),
 **qué se rompe** y **qué tiene que hacer el front**. El detalle está en los
@@ -71,12 +77,67 @@ Cambios que **no** rompen pero conviene saber:
 
 | Endpoint | Cambio |
 |---|---|
-| `GET /products/:id`, `GET /outfits/:id` (admin, vista general) | Campo nuevo **`centralWarehouseStock`** por variante (solo la bodega principal). ⚠️ **`warehouseStock` ya no incluye la bodega**: ahora son solo los depósitos de las tiendas. Los 4 campos no se pisan; sumados dan el total. |
+| `GET /products/:id`, `GET /outfits/:id` (admin, vista general) | Campo nuevo **`centralWarehouseStock`** por variante (solo la bodega principal). ⚠️ **`warehouseStock` ya no incluye la bodega**: ahora son solo los depósitos de las tiendas. Los 4 campos no se pisan (ninguna unidad aparece en dos), pero sumados no son el stock físico total (ver 06). |
 | `GET /variants`, `GET /variants/:id` (con `?branchId`) | `warehouseStock` sin cambios (depósito de esa sucursal). Campo nuevo **`centralWarehouseStock`**: lo que hay en la bodega principal, sea cual sea la sucursal — no sumarlo al stock de la sucursal. |
 | `GET /web-page/products/:id`, `GET /web-page/outfits/:id` (público) | Cada variante trae **solo `availableStock`**: ya no vienen `warehouseStock` ni `inTransitStock`. |
+| `GET /users` | Cada usuario trae **`branch: { id, name }`** (sucursal del cajero/encargado; `null` para admin/supervisor). Ya no viene `sessionId`. Ordenado por `id`. |
 
 Detalle en [06](06-inventory-and-warehouse.md) "Vista general".
 
 - [ ] Detalle de producto (admin): mostrar `centralWarehouseStock` ("Bodega principal") aparte de `warehouseStock` ("Depósitos de tiendas"); si se sumaba `warehouseStock` para un total, sumar también `centralWarehouseStock`.
 - [ ] Storefront: no usar `warehouseStock`/`inTransitStock` (ya no vienen).
 - [ ] (Opcional) Inventario de una tienda (`/variants?branchId=`): mostrar "En bodega principal: N" con `centralWarehouseStock`, sin sumarlo al stock de la tienda.
+
+---
+
+## Actualización 19 de octubre — reposiciones, etapas de los traslados, facturas por sucursal
+
+| # | Cambio | Impacto en el front | Detalle |
+|---|---|---|---|
+| 1 | **Reposiciones**: la tienda pide variantes (sin cantidad) a la bodega principal; la central elige cuánto manda | Pantallas nuevas: "Reposición" (tienda) y "Por atender" (central) | [15](15-replenishments-and-transfer-stages.md) §1 |
+| 2 | **`stage`, `stageLabel`, `allowedActions`, `pendingReview`** en todos los traslados | Dibujar etapa y botones desde la respuesta | [15](15-replenishments-and-transfer-stages.md) §4 |
+| 3 | Marca **`pendingReplenishment`** por variante | "Reposición pedida" en el inventario | [15](15-replenishments-and-transfer-stages.md) §2 |
+| 4 | `pending-count`: nuevo **`replenishmentsPending`**; `toDispatch` sin reposiciones | Badge nuevo | [15](15-replenishments-and-transfer-stages.md) §3 |
+| 5 | Filtro **`?replenishment=true\|false`** en `GET /branch-transfers` | Listas nuevas | [15](15-replenishments-and-transfer-stages.md) §3 |
+| 6 | **Listado de facturas por sucursal**: `GET /facturacion/facturacion` toma `?branchId` (el código SIAT sale de la sucursal) | Cambiar los query params | [10](10-siat-low-level.md) |
+| 7 | **Recibir un envío de la bodega directo al piso**: `location` opcional en `receive` (todo junto; por defecto, depósito) | Opción "Recibir al piso" | [11](11-central-warehouse-and-branch-transfers.md) §3 |
+
+### ⚠️ Lo que rompe
+
+1. **`items[].quantity` puede ser `null`** (líneas de una reposición: no hay
+   cantidad pedida). Cualquier pantalla de traslados que haga cuentas con
+   `quantity` (por ejemplo "no encontrado" = `quantity − dispatchedQuantity`)
+   tiene que contemplarlo; en reposiciones usá `dispatchedQuantity`.
+2. **Un `central_dispatch` puede estar en `pending_dispatch`** (reposición
+   sin atender) **o en `not_found`** (reposición rechazada). Antes un envío
+   nacía siempre `in_transit`. Un `switch` sobre `status` que asumía eso va a
+   mostrar mal estos casos: usá `stageLabel`.
+3. **`toDispatch` de `pending-count` sin `branchId` (central) ya no cuenta las
+   reposiciones**: van en `replenishmentsPending`.
+4. **`GET /facturacion/facturacion` ya no acepta `codigoSucursal`** (mandarlo
+   da `400` por la validación estricta). Se manda `?branchId=<sucursal>` y,
+   opcional, `codigoPuntoVenta` (sin él: todos los puntos de venta de esa
+   sucursal). Sucursal sin datos SIAT → `400`; inexistente → `404`.
+
+No rompe, pero conviene saber:
+- `awaitingPickup` (filtro y contador) ya no incluye pedidos recibidos sin
+  ninguna prenda (llegó todo en 0): ahora se ven como "Recibido".
+- Anular un envío en camino devuelve a la bodega lo **despachado** (en una
+  reposición atendida a medias, no lo pedido).
+- Las respuestas de cada acción (despachar, recibir, anular…) vienen con la
+  etapa y las acciones **de quien la hizo**.
+- `receive` sin `location` funciona igual que antes (envío → depósito,
+  pedido → piso). Mandar `location` en un **pedido** entre sucursales da
+  `400`.
+
+### Checklist
+
+- [ ] Traslados: reemplazar la lógica propia de etiquetas/botones por `stageLabel` + `allowedActions` (+ badges `pendingReview` y `refundPending`).
+- [ ] Tolerar `items[].quantity: null` y los estados `pending_dispatch`/`not_found` en envíos de la central.
+- [ ] **Tienda – Reposición**: "Pedir reposición" desde el inventario (`POST /branch-transfers/replenishments`), ver/editar la abierta (quitar líneas, anular), historial; marca "Reposición pedida" con `pendingReplenishment`.
+- [ ] **Central – Por atender**: lista `?replenishment=true&status=pending_dispatch`, pantalla de atención por línea (cantidad 0..stock de la bodega), rechazo con nota; manejar `400 Faltan las líneas` (recargar).
+- [ ] Badge `replenishmentsPending` (central: por atender; tienda: "reposición abierta").
+- [ ] Contador de la tienda: sumar solo `toDispatch + toReceive + awaitingPickup + pendingRefunds`.
+- [ ] Pedidos recibidos: mostrar `holdUntil` ("apartado hasta") y `pickupDeadline` ("espera hasta").
+- [ ] Listado de facturas: `?branchId=` en vez de `codigoSucursal`.
+- [ ] Recibir envíos/reposiciones: elegir "Depósito" o "Piso" (`location`) para todo lo recibido; no mostrar la opción en pedidos entre sucursales.
