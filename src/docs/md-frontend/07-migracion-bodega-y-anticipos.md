@@ -593,6 +593,24 @@ Efecto lateral asumido: con el switch encendido (todas), la navbar igual
 muestra una sucursal. El switch manda sobre la tabla; el selector solo dice
 cual se usaria al apagarlo.
 
+## De donde sale la prenda al despachar (20/10/2026)
+
+El back empezo a mandar, por linea de un traslado, **`fromWarehouse`** y
+**`fromSalesFloor`**: de donde se descuenta la prenda. Descuenta primero de la
+**bodega** de la tienda origen y recien cuando no alcanza toma del **salon**.
+`{ fromWarehouse: 0, fromSalesFloor: 1 }` = no habia en bodega.
+
+> Todavia no esta en los docs del back (no aparece en 11 ni en 15). Los campos
+> se tipearon como opcionales por eso.
+
+En *Por despachar* hay ahora una columna **"De donde sale"** con un chip por
+origen —bodega en el color de la marca, salon en ambar— y, cuando algo sale del
+salon, un aviso: *"N prendas salen del salon: no habia suficiente en la bodega.
+Saquela de la percha antes de despachar."*
+
+Sin esto el cajero busca la prenda en la bodega, no la encuentra y da el pedido
+por perdido, cuando en realidad esta colgada en el salon.
+
 ## Pendientes de esta tanda
 
 - [x] **Prendas pagadas protegidas en el carrito** (18/10/2026): con un pedido

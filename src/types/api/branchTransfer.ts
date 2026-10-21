@@ -39,6 +39,12 @@ export interface BranchTransferItem {
   // null en una reposicion: la tienda pide la variante sin cantidad, la decide la central
   quantity: number | null
   dispatchedQuantity: number | null
+
+  // De donde sale la prenda al despachar. El back descuenta primero de la
+  // bodega de la tienda origen y recien cuando no alcanza toma del salon:
+  // { fromWarehouse: 0, fromSalesFloor: 1 } = no habia en bodega.
+  fromWarehouse?: number
+  fromSalesFloor?: number
   receivedQuantity: number | null
   reviewOutcome: ReviewOutcome | null
   reviewNote: string | null

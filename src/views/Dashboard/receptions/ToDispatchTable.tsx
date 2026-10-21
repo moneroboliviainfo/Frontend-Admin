@@ -5,6 +5,7 @@ import { useEffect, useState } from 'react'
 import Card from '@mui/material/Card'
 import CardHeader from '@mui/material/CardHeader'
 import Box from '@mui/material/Box'
+import Chip from '@mui/material/Chip'
 import Divider from '@mui/material/Divider'
 import Typography from '@mui/material/Typography'
 import Button from '@mui/material/Button'
@@ -44,7 +45,7 @@ const ToDispatchTable = () => {
 
   const dispatchTransfer = useDispatchTransfer()
 
-  // Pedidos que me hicieron otras tiendas: salen de MI piso de venta
+  // Pedidos que me hicieron otras tiendas: salen de MI tienda
   const { data, isLoading, isError } = useBranchTransfers({
     direction: 'outgoing',
     status: 'pending_dispatch',
@@ -66,6 +67,10 @@ const ToDispatchTable = () => {
 
   const isShort = totalToSend < totalRequested
   const overRequested = requested.some(item => (quantities[item.id] ?? 0) > (item.quantity ?? 0))
+
+  // El back arma el envio tomando primero de la bodega; lo que ahi no alcanza
+  // sale de la tienda, donde la prenda esta a la venta. Conviene avisarlo.
+  const deTienda = requested.reduce((sum, item) => sum + (item.fromSalesFloor || 0), 0)
 
   // Si no sale todo, la nota es obligatoria
   const isValid = !overRequested && (!isShort || !!note.trim())
@@ -190,8 +195,7 @@ const ToDispatchTable = () => {
 
         <DialogContent>
           <Alert severity='info' sx={{ mb: 4 }}>
-            Registre el despacho <strong>antes</strong> de entregar el paquete al transporte. Si el pedido fue anulado
-            mientras tanto, el sistema lo informa en este momento y se evita un envío innecesario.
+            Confirme <strong>antes</strong> de entregar el paquete. Si el pedido se anuló, se lo avisamos acá.
           </Alert>
 
           <FormControlLabel
@@ -205,6 +209,7 @@ const ToDispatchTable = () => {
               <thead>
                 <tr>
                   <th>Prenda</th>
+                  <th>De dónde sale</th>
                   <th>Pedido</th>
                   <th>Envío</th>
                 </tr>
@@ -214,6 +219,35 @@ const ToDispatchTable = () => {
                   <tr key={item.id}>
                     <td>
                       <Typography variant='body2'>{itemLabel(item)}</Typography>
+                    </td>
+                    <td>
+                      {/* El back descuenta primero de la bodega y solo toma del
+                          tienda lo que ahi no alcanza: decirlo evita que el
+                          cajero busque la prenda donde no esta. */}
+                      {item.fromWarehouse || item.fromSalesFloor ? (
+                        <Box className='flex flex-wrap items-center gap-2'>
+                          {!!item.fromWarehouse && (
+                            <Chip
+                              label={`${item.fromWarehouse} de bodega`}
+                              size='small'
+                              variant='tonal'
+                              color='primary'
+                            />
+                          )}
+                          {!!item.fromSalesFloor && (
+                            <Chip
+                              label={`${item.fromSalesFloor} de tienda`}
+                              size='small'
+                              variant='tonal'
+                              color='warning'
+                            />
+                          )}
+                        </Box>
+                      ) : (
+                        <Typography variant='body2' color='text.secondary'>
+                          —
+                        </Typography>
+                      )}
                     </td>
                     <td>
                       <Typography variant='body2'>{item.quantity}</Typography>
@@ -243,6 +277,13 @@ const ToDispatchTable = () => {
               </tbody>
             </table>
           </div>
+
+          {deTienda > 0 && (
+            <Alert severity='info' sx={{ mt: 3 }}>
+              {deTienda === 1 ? 'Una prenda sale' : `${deTienda} prendas salen`} <strong>de la tienda</strong>: no
+              había suficiente en la bodega. Búsquela ahí antes de despachar.
+            </Alert>
+          )}
 
           {isShort && !overRequested && (
             <Alert severity='warning' sx={{ mt: 3 }}>

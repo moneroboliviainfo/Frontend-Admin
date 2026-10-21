@@ -48,7 +48,7 @@ const StoreRequestsView = () => {
         <Tab value='mine' label={<TabLabel text='Mis pedidos' count={toReceive} color='primary' />} />
         <Tab
           value='dispatch'
-          label={<TabLabel text='Por despachar' count={pending?.toDispatch || 0} color='warning' />}
+          label={<TabLabel text='Pedidos de Sucursales' count={pending?.toDispatch || 0} color='warning' />}
         />
         <Tab
           value='pickup'
