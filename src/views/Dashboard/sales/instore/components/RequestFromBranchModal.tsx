@@ -102,9 +102,12 @@ const RequestFromBranchModal = ({ target, onClose, onAwaitingQr, showMessage }: 
         sourceBranchId,
         items: [{ variantId: target.variantSizeId, quantity: parsed }],
         ...(charges && { paymentType, expectedTotal: Number(quotedTotal) }),
-        ...(customerName.trim() && { customerName: customerName.trim() }),
-        ...(customerPhone.trim() && { customerPhone: customerPhone.trim() }),
-        ...(customerCi.trim() && { customerCi: customerCi.trim() })
+
+        // Para sucursal no lleva cliente aunque se haya escrito antes de cambiar la opcion:
+        // sin cliente y sin cobro es lo que identifica a un pedido de reposicion entre tiendas
+        ...(charges && customerName.trim() && { customerName: customerName.trim() }),
+        ...(charges && customerPhone.trim() && { customerPhone: customerPhone.trim() }),
+        ...(charges && customerCi.trim() && { customerCi: customerCi.trim() })
       })
 
       if (paymentType === 'qr') {

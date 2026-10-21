@@ -18,6 +18,7 @@ import Snackbar from '@mui/material/Snackbar'
 
 import tableStyles from '@core/styles/table.module.css'
 import { useBranchContext } from '@/contexts/BranchContext'
+import { useDeclareBranchScope } from '@/contexts/BranchScopeContext'
 import { useBranchTransfers } from '@/hooks/useBranchTransfers'
 import type { BranchTransfer } from '@/types/api/branchTransfer'
 import TransferActionsModal from '@/views/Dashboard/central-warehouse/TransferActionsModal'
@@ -37,6 +38,9 @@ const PendingReplenishmentsTable = () => {
   const [snackbar, setSnackbar] = useState<{ message: string; severity: 'success' | 'error' } | null>(null)
 
   const { selectedBranchId, selectedBranch } = useBranchContext()
+
+  // Con "Todas" el selector de la navbar no cambia nada de lo que se ve: se oculta
+  useDeclareBranchScope(!todasLasSucursales)
 
   const { data, isLoading, isError } = useBranchTransfers({
     page,

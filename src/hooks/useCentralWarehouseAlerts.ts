@@ -22,6 +22,12 @@ export const useCentralWarehouseAlerts = () => {
   const { data: deLaBodega } = usePendingCount(warehouse?.id, isAdminLike && !!warehouse?.id)
   const { data: deLaCentral } = usePendingCount(undefined, isAdminLike)
 
+  // enabled: false no alcanza: la tienda usa la misma clave (pending-count sin branchId) en
+  // Reposiciones y Pedidos, y useQuery devuelve lo que haya en cache aunque este apagado.
+  // Para la tienda replenishmentsPending = 1 es "tengo mi reposicion abierta", que no es
+  // una accion suya (espera a la central, doc 15 §3): no se avisa
+  if (!isAdminLike) return { pendingReview: 0, replenishmentsPending: 0 }
+
   return {
     pendingReview: deLaBodega?.pendingReview || 0,
     replenishmentsPending: deLaCentral?.replenishmentsPending || 0

@@ -32,6 +32,8 @@ import {
 import { useDailyCash, useOpenDailyCash, useCloseDailyCash } from '@/hooks/useDailyCash'
 import type { DailyCash } from '@/types/api/dailyCash'
 import { useAwaitingPickupFor } from '@/hooks/useBranchTransfers'
+import { isRestockRequest } from '@/views/Dashboard/central-warehouse/transfers'
+import type { PickupOrder } from './components/ProductCatalog'
 import { useUserRole } from '@/hooks/useUserRole'
 import CloseCashSummaryModal from './CloseCashSummaryModal'
 import { useVariants } from '@/hooks/useVariants'
@@ -306,13 +308,26 @@ const PointOfSale: React.FC = () => {
     allFlattenedVariants.map((variant: any) => variant.variantSizeId)
   )
 
-  // variantId -> pedido que lo espera, para pintarlo en su tarjeta
+  // variantId -> pedidos que lo esperan, para pintarlos en su tarjeta. Es una lista: dos
+  // clientes pueden haber pedido la misma talla, y cada uno tiene su unidad apartada
   const pickupByVariant = useMemo(() => {
-    const map: Record<number, { id: number; customerName: string | null }> = {}
+    const map: Record<number, PickupOrder[]> = {}
 
-    ;(awaitingPickupData?.data || []).forEach(transfer => {
+    // Lo pedido para la sucursal no tiene a quien entregarse: se vende como cualquier prenda
+    ;(awaitingPickupData?.data || []).filter(transfer => !isRestockRequest(transfer)).forEach(transfer => {
       transfer.items.forEach(item => {
-        map[item.variantId] = { id: transfer.id, customerName: transfer.customerName }
+        const orders = (map[item.variantId] ||= [])
+
+        if (orders.some(order => order.id === transfer.id)) return
+
+        orders.push({
+          id: transfer.id,
+          customerName: transfer.customerName,
+          customerPhone: transfer.customerPhone,
+          customerCi: transfer.customerCi,
+          pickupDeadline: transfer.pickupDeadline,
+          paid: !!transfer.advancePaidAt
+        })
       })
     })
 

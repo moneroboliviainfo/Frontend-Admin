@@ -22,6 +22,7 @@ import CustomTextField from '@core/components/mui/TextField'
 import tableStyles from '@core/styles/table.module.css'
 import { useBranchTransfers, useMarkPickup } from '@/hooks/useBranchTransfers'
 import type { BranchTransfer, BranchTransferItem } from '@/types/api/branchTransfer'
+import { isRestockRequest } from '@/views/Dashboard/central-warehouse/transfers'
 
 const itemLabel = (item: BranchTransferItem) => {
   const productColor = item.variant?.productColor
@@ -45,7 +46,8 @@ const AwaitingPickupTable = () => {
 
   const { data, isLoading, isError } = useBranchTransfers({ awaitingPickup: true })
 
-  const transfers = data?.data || []
+  // Lo pedido para la sucursal no espera a nadie: ya esta en el stock de la tienda
+  const transfers = (data?.data || []).filter(transfer => !isRestockRequest(transfer))
 
   const handleNotPickedUp = async () => {
     if (!target) return
@@ -68,7 +70,7 @@ const AwaitingPickupTable = () => {
     <>
       <Card>
         <CardHeader
-          title='Para entregar'
+          title='Pedidos Para Entregar'
           subheader='Pedidos recibidos y apartados a la espera de su cliente. Verifique el documento antes de entregar.'
         />
 
@@ -147,9 +149,7 @@ const AwaitingPickupTable = () => {
                             }
                             size='small'
                             variant='tonal'
-                            color={
-                              transfer.advanceForfeited ? 'error' : transfer.advancePaidAt ? 'success' : 'warning'
-                            }
+                            color={transfer.advanceForfeited ? 'error' : transfer.advancePaidAt ? 'success' : 'warning'}
                           />
                         </>
                       ) : (
@@ -187,8 +187,8 @@ const AwaitingPickupTable = () => {
 
         <DialogContent>
           <Alert severity='warning' sx={{ mb: 4 }}>
-            La prenda <strong>deja de estar apartada</strong> para {target?.customerName || 'el cliente'} y vuelve
-            a estar disponible para la venta. Esta acción no se puede deshacer.
+            La prenda <strong>deja de estar apartada</strong> para {target?.customerName || 'el cliente'} y vuelve a
+            estar disponible para la venta. Esta acción no se puede deshacer.
           </Alert>
 
           {/* Si pago un anticipo y todavia no lo perdio, marcarlo aca se lo hace perder */}

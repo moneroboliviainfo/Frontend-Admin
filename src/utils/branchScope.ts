@@ -10,9 +10,10 @@
 // arriba no afecta en nada lo que ve.
 //
 // Cuando una ruta mezcla las dos cosas, la vista de adentro lo corrige con
-// `useDeclareBranchScope` (ver BranchScopeContext). Hoy pasa en dos lugares:
-// el paso de Variantes del alta de productos (declara true) y la pestaña
-// Retiros de Bodega Central (declara false).
+// `useDeclareBranchScope` (ver BranchScopeContext). Hoy pasa en el paso de
+// Variantes del alta de productos (declara true) y en las tablas con un switch
+// "Todas las sucursales" (Bodega → Envíos, Reposiciones): con el switch
+// prendido declaran false y el selector desaparece.
 
 const CON_SUCURSAL = [
   '/sales', // ventas y caja de esa sucursal
@@ -35,7 +36,7 @@ const GENERALES = [
   '/settings',
   '/category',
   '/receptions',
-  '/branch-requests', // un pedido es entre dos tiendas: el filtro de sucursal va adentro
+  '/branch-requests', // abre con "Todas"; al apagar el switch la tabla declara el selector
   '/discounts',
   '/outfits',
   '/banners',

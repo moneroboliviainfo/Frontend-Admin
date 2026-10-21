@@ -30,6 +30,18 @@ import RequestQrDialog from './RequestQrDialog'
 import type { RequestTarget } from './RequestFromBranchModal'
 import { useBranchContext } from '@/contexts/BranchContext'
 
+// Un pedido recibido en esta tienda que espera a su cliente
+export type PickupOrder = {
+  id: number
+  customerName: string | null
+  customerPhone: string | null
+  customerCi: string | null
+  pickupDeadline: string | null
+  paid: boolean
+}
+
+const formatDay = (value: string | null) => (value ? new Date(value).toLocaleDateString('es-BO') : '—')
+
 interface ProductCatalogProps {
   searchTerm: string
   onSearchChange: (value: string) => void
@@ -43,7 +55,7 @@ interface ProductCatalogProps {
   totalVariants: number
   onPageChange: (event: unknown, newPage: number) => void
   onProductClick: (item: any) => void
-  pickupByVariant?: Record<number, { id: number; customerName: string | null }>
+  pickupByVariant?: Record<number, PickupOrder[]>
   linkedTransferId?: number | null
   onToggleLink?: (transferId: number) => void
 }
@@ -68,6 +80,9 @@ const ProductCatalog: React.FC<ProductCatalogProps> = ({
   const [transferTarget, setTransferTarget] = useState<any | null>(null)
   const [requestTarget, setRequestTarget] = useState<RequestTarget | null>(null)
   const [qrTransferId, setQrTransferId] = useState<number | null>(null)
+
+  // Varios pedidos de la misma talla: el cajero elige el del cliente que tiene enfrente
+  const [pickupChoices, setPickupChoices] = useState<PickupOrder[] | null>(null)
   const [transferQty, setTransferQty] = useState<string>('')
   const transferStock = useTransferStock()
 
@@ -282,49 +297,52 @@ const ProductCatalog: React.FC<ProductCatalogProps> = ({
                           </Button>
                         </>
                       )}
-                      {pickupByVariant[item.variantSizeId] && (
-                        <>
-                          <Typography
-                            variant='caption'
-                            color='warning.main'
-                            sx={{ fontSize: '0.68rem', lineHeight: 1.2, textAlign: 'center' }}
-                          >
-                            Pedido #{pickupByVariant[item.variantSizeId].id}
-                            {pickupByVariant[item.variantSizeId].customerName
-                              ? ` · ${pickupByVariant[item.variantSizeId].customerName}`
-                              : ''}
-                          </Typography>
-                          <Button
-                            size='small'
-                            variant={
-                              linkedTransferId === pickupByVariant[item.variantSizeId].id ? 'contained' : 'outlined'
-                            }
-                            color={
-                              linkedTransferId === pickupByVariant[item.variantSizeId].id ? 'success' : 'warning'
-                            }
-                            onClick={e => {
-                              e.stopPropagation()
-                              onToggleLink?.(pickupByVariant[item.variantSizeId].id)
-                            }}
-                            startIcon={
-                              <i
-                                className={
-                                  linkedTransferId === pickupByVariant[item.variantSizeId].id
-                                    ? 'tabler-check'
-                                    : 'tabler-link'
-                                }
-                                style={{ fontSize: '12px' }}
-                              />
-                            }
-                            sx={{ fontSize: '0.68rem', lineHeight: 1.2, py: 0.25, px: 1, minWidth: 0 }}
-                          >
-                            {linkedTransferId === pickupByVariant[item.variantSizeId].id
-                              ? 'Entrega este pedido'
-                              : 'Entregar este pedido'}
-                          </Button>
-                        </>
-                      )}
-                      {item.stock === 0 && item.warehouseStock === 0 && !pickupByVariant[item.variantSizeId] && (
+                      {(() => {
+                        const orders = pickupByVariant[item.variantSizeId] || []
+
+                        if (orders.length === 0) return null
+
+                        const linked = orders.find(order => order.id === linkedTransferId)
+
+                        // Con uno solo se enlaza de un clic, como siempre. Con varios se elige
+                        // en el dialogo: enlazar el pedido de otro cliente le marcaria a el el retiro
+                        const shown = linked || (orders.length === 1 ? orders[0] : null)
+
+                        return (
+                          <>
+                            <Typography
+                              variant='caption'
+                              color='warning.main'
+                              sx={{ fontSize: '0.68rem', lineHeight: 1.2, textAlign: 'center' }}
+                            >
+                              {shown
+                                ? `Pedido #${shown.id}${shown.customerName ? ` · ${shown.customerName}` : ''}`
+                                : `${orders.length} pedidos esperando`}
+                            </Typography>
+                            <Button
+                              size='small'
+                              variant={linked ? 'contained' : 'outlined'}
+                              color={linked ? 'success' : 'warning'}
+                              onClick={e => {
+                                e.stopPropagation()
+
+                                if (orders.length === 1) onToggleLink?.(orders[0].id)
+                                else setPickupChoices(orders)
+                              }}
+                              startIcon={
+                                <i
+                                  className={linked ? 'tabler-check' : orders.length > 1 ? 'tabler-users' : 'tabler-link'}
+                                  style={{ fontSize: '12px' }}
+                                />
+                              }
+                              sx={{ fontSize: '0.68rem', lineHeight: 1.2, py: 0.25, px: 1, minWidth: 0 }}
+                            >
+                              {linked ? 'Entrega este pedido' : orders.length > 1 ? 'Elegir pedido' : 'Entregar este pedido'}
+                            </Button>
+                          </>
+                        )
+                      })()}
+                      {item.stock === 0 && item.warehouseStock === 0 && !pickupByVariant[item.variantSizeId]?.length && (
                         <Button
                           size='small'
                           variant='outlined'
@@ -418,6 +436,75 @@ const ProductCatalog: React.FC<ProductCatalogProps> = ({
         onClose={() => setQrTransferId(null)}
         showMessage={(message, severity) => (severity === 'error' ? toast.error(message) : toast.success(message))}
       />
+
+      {/* Cada pedido tiene su propia unidad apartada: se entrega el del cliente presente */}
+      <Dialog open={!!pickupChoices} onClose={() => setPickupChoices(null)} maxWidth='xs' fullWidth>
+        <DialogTitle>
+          ¿De qué cliente es el pedido?
+          <Typography variant='body2' color='text.secondary' sx={{ mt: 1 }}>
+            Hay varios pedidos esperando esta prenda. Verifique el documento del cliente y elija el suyo.
+          </Typography>
+        </DialogTitle>
+
+        <DialogContent>
+          <Box sx={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
+            {(pickupChoices || []).map(order => {
+              const isLinked = order.id === linkedTransferId
+
+              return (
+                <Box
+                  key={order.id}
+                  sx={{
+                    p: 3,
+                    border: '1px solid',
+                    borderColor: isLinked ? 'success.main' : 'divider',
+                    borderRadius: 1,
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'space-between',
+                    gap: 2
+                  }}
+                >
+                  <Box>
+                    <Typography variant='body2' className='font-medium'>
+                      Pedido #{order.id} · {order.customerName || 'Sin nombre'}
+                    </Typography>
+                    <Typography variant='caption' color='text.secondary' sx={{ display: 'block' }}>
+                      {[order.customerCi && `CI ${order.customerCi}`, order.customerPhone].filter(Boolean).join(' · ') ||
+                        'Sin datos de contacto'}
+                    </Typography>
+                    <Box className='flex flex-wrap items-center gap-1' sx={{ mt: 1 }}>
+                      {order.paid && <Chip label='Pagado' size='small' variant='tonal' color='success' />}
+                      <Typography variant='caption' color='text.secondary'>
+                        Retira hasta {formatDay(order.pickupDeadline)}
+                      </Typography>
+                    </Box>
+                  </Box>
+
+                  <Button
+                    size='small'
+                    variant={isLinked ? 'outlined' : 'contained'}
+                    color={isLinked ? 'secondary' : 'primary'}
+                    onClick={() => {
+                      // onToggleLink alterna: con otro enlazado lo reemplaza, con este lo quita
+                      onToggleLink?.(order.id)
+                      setPickupChoices(null)
+                    }}
+                  >
+                    {isLinked ? 'Quitar' : 'Entregar este'}
+                  </Button>
+                </Box>
+              )
+            })}
+          </Box>
+        </DialogContent>
+
+        <DialogActions>
+          <Button onClick={() => setPickupChoices(null)} color='secondary'>
+            Cerrar
+          </Button>
+        </DialogActions>
+      </Dialog>
     </>
   )
 }

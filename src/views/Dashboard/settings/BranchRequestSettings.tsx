@@ -118,11 +118,21 @@ const BranchRequestSettings = () => {
                   }
                   inputProps={{ min: 0, max: 365 }}
                 />
+                {/* Todo pedido para un cliente se cobra al pedir y el back lo aparta todo el plazo
+                    de retiro sin mirar este valor. Solo queda afectando a los pedidos "Para sucursal",
+                    que no esperan a nadie: con mas de 0 dias esa mercaderia queda trabada sin venderse */}
                 <Typography variant='caption' color='text.secondary'>
-                  Cuántos días la prenda queda reservada solo para ese cliente. Después sigue en la lista, pero se
-                  le puede vender a otra persona. Con <strong>0</strong> no se reserva. Solo aplica a los pedidos
-                  sin cobro: si el cliente pagó un adelanto, queda apartada todo el plazo de retiro.
+                  Solo afecta a los pedidos <strong>para sucursal</strong> (reponer stock, sin cliente): cuántos días
+                  queda trabada la mercadería antes de poder venderse. Se recomienda <strong>0</strong>, para que se
+                  pueda vender apenas llega. Los pedidos de clientes ya están pagados y quedan apartados todo el
+                  plazo de retiro, sin importar este valor.
                 </Typography>
+                {hold > 0 && !holdRangeError && (
+                  <Alert severity='warning' sx={{ mt: 2 }}>
+                    Con {hold} {hold === 1 ? 'día' : 'días'}, lo que una sucursal pida para reponer stock no se podrá
+                    vender hasta que pase ese plazo.
+                  </Alert>
+                )}
               </Box>
 
               <Alert severity='info'>

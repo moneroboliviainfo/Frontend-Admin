@@ -17,6 +17,8 @@ import { Menu } from '@menu/vertical-menu'
 import useVerticalNav from '@menu/hooks/useVerticalNav'
 import { useUserRole } from '@/hooks/useUserRole'
 import { pendingReviewHint, replenishmentsHint, useCentralWarehouseAlerts } from '@/hooks/useCentralWarehouseAlerts'
+import { toReceiveHint, useInventoryAlerts } from '@/hooks/useInventoryAlerts'
+import { requestsReviewHint, storeRequestsHint, useBranchRequestAlerts } from '@/hooks/useBranchRequestAlerts'
 
 // Component Imports
 import CustomChip from '@core/components/mui/Chip'
@@ -58,13 +60,20 @@ const VerticalMenu = ({ scrollMenu }: Props) => {
 
   // Avisos al lado del nombre del menu: solo lo que espera una accion de quien mira
   const { pendingReview, replenishmentsPending } = useCentralWarehouseAlerts()
+  const { toReceive } = useInventoryAlerts()
+  const requests = useBranchRequestAlerts()
 
   // Un aviso por menu. Todos en ambar: significan lo mismo —algo espera una
   // accion del admin— y el color de la marca cambia con la sucursal elegida,
   // asi que el chip se veria distinto segun donde estuviera parado.
   const avisos: Record<string, { count: number; hint: string }> = {
     '/central-warehouse': { count: pendingReview, hint: pendingReviewHint(pendingReview) },
-    '/replenishments': { count: replenishmentsPending, hint: replenishmentsHint(replenishmentsPending) }
+    '/replenishments': { count: replenishmentsPending, hint: replenishmentsHint(replenishmentsPending) },
+    '/receptions': { count: toReceive, hint: toReceiveHint(toReceive) },
+    '/branch-requests': {
+      count: requests.total,
+      hint: requests.pendingReview > 0 ? requestsReviewHint(requests.pendingReview) : storeRequestsHint(requests)
+    }
   }
 
   const menuData = verticalMenuData(role).map(item => {

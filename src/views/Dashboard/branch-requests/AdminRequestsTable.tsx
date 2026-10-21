@@ -5,6 +5,8 @@ import { useState } from 'react'
 import Card from '@mui/material/Card'
 import CardHeader from '@mui/material/CardHeader'
 import Box from '@mui/material/Box'
+import Button from '@mui/material/Button'
+import Chip from '@mui/material/Chip'
 import Divider from '@mui/material/Divider'
 import Typography from '@mui/material/Typography'
 import MenuItem from '@mui/material/MenuItem'
@@ -20,6 +22,8 @@ import Tooltip from '@mui/material/Tooltip'
 import CustomTextField from '@core/components/mui/TextField'
 import tableStyles from '@core/styles/table.module.css'
 import { useBranchContext } from '@/contexts/BranchContext'
+import { useDeclareBranchScope } from '@/contexts/BranchScopeContext'
+import { useBranchRequestAlerts } from '@/hooks/useBranchRequestAlerts'
 import { useBranchTransfers } from '@/hooks/useBranchTransfers'
 import type { BranchTransfer, BranchTransferStatus } from '@/types/api/branchTransfer'
 import TransferActionsModal from '@/views/Dashboard/central-warehouse/TransferActionsModal'
@@ -44,19 +48,20 @@ const formatDate = (value: string | null) => (value ? new Date(value).toLocaleSt
 
 // Vista de la central sobre los pedidos de tienda a tienda. Las tiendas piden, despachan
 // y reciben; la central solo vigila, anula, da por perdido y resuelve faltantes.
-// La sucursal se elige aca y no en la navbar: el pedido es entre dos tiendas, y sin
-// elegir ninguna se ven todos
 const AdminRequestsTable = () => {
   const [page, setPage] = useState(1)
   const [pageSize, setPageSize] = useState(10)
   const [status, setStatus] = useState<BranchTransferStatus | 'all'>('all')
-  const [branchId, setBranchId] = useState<number | 'all'>('all')
+  const [todasLasSucursales, setTodasLasSucursales] = useState(true)
   const [onlyReview, setOnlyReview] = useState(false)
   const [details, setDetails] = useState<BranchTransfer | null>(null)
   const [action, setAction] = useState<{ kind: ActionKind; transfer: BranchTransfer } | null>(null)
   const [snackbar, setSnackbar] = useState<{ message: string; severity: 'success' | 'error' } | null>(null)
 
-  const { branches } = useBranchContext()
+  const { selectedBranchId, selectedBranch } = useBranchContext()
+
+  // Con "Todas" el selector de la navbar no cambia nada de lo que se ve: se oculta
+  useDeclareBranchScope(!todasLasSucursales)
 
   const { data, isLoading, isError } = useBranchTransfers({
     page,
@@ -65,12 +70,23 @@ const AdminRequestsTable = () => {
     ...(status !== 'all' && { status }),
 
     // Con una sucursal salen los pedidos donde es origen o destino
-    ...(branchId !== 'all' && { branchId }),
+    ...(!todasLasSucursales && selectedBranchId ? { branchId: selectedBranchId } : {}),
     ...(onlyReview && { discrepancyStatus: 'pending_review' as const })
   })
 
   const transfers = data?.data || []
   const total = data?.meta?.total || 0
+
+  const { pendingReview } = useBranchRequestAlerts()
+
+  const isShowingReviewable = onlyReview && todasLasSucursales && status === 'all'
+
+  const showReviewable = () => {
+    setOnlyReview(true)
+    setTodasLasSucursales(true)
+    setStatus('all')
+    setPage(1)
+  }
 
   const openAction = (kind: ActionKind, transfer: BranchTransfer) => {
     setDetails(null)
@@ -99,23 +115,27 @@ const AdminRequestsTable = () => {
             label='Solo con faltantes por revisar'
           />
 
-          <CustomTextField
-            select
-            label='Sucursal'
-            value={branchId}
-            onChange={e => {
-              setBranchId(e.target.value === 'all' ? 'all' : Number(e.target.value))
-              setPage(1)
-            }}
-            className='max-sm:is-full sm:is-[220px]'
-          >
-            <MenuItem value='all'>Todas</MenuItem>
-            {branches.map(branch => (
-              <MenuItem key={branch.id} value={branch.id}>
-                {branch.name}
-              </MenuItem>
-            ))}
-          </CustomTextField>
+          {/* Por defecto se ven todas; al apagarlo manda la sucursal del
+              selector de la navbar, que es el estado global de la app */}
+          <FormControlLabel
+            label='Todas las sucursales'
+            control={
+              <Switch
+                checked={todasLasSucursales}
+                onChange={e => {
+                  setTodasLasSucursales(e.target.checked)
+                  setPage(1)
+                }}
+              />
+            }
+          />
+          {!todasLasSucursales && (
+            <Chip
+              label={selectedBranch?.name || 'Sin sucursal'}
+              color={selectedBranch ? 'primary' : 'default'}
+              size='small'
+            />
+          )}
 
           <CustomTextField
             select
@@ -135,6 +155,26 @@ const AdminRequestsTable = () => {
             ))}
           </CustomTextField>
         </Box>
+
+        {/* El conteo es de todas las sucursales: el atajo deja la vista que los muestra a todos */}
+        {pendingReview > 0 && (
+          <Box sx={{ px: 6, pb: 4 }}>
+            <Alert
+              severity='warning'
+              action={
+                !isShowingReviewable && (
+                  <Button color='inherit' size='small' onClick={showReviewable}>
+                    Revisar
+                  </Button>
+                )
+              }
+            >
+              {pendingReview === 1
+                ? '1 pedido llegó con menos de lo pedido y falta revisarlo.'
+                : `${pendingReview} pedidos llegaron con menos de lo pedido y falta revisarlos.`}
+            </Alert>
+          </Box>
+        )}
 
         <Divider />
 

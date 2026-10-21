@@ -27,6 +27,7 @@ import StageChip, { PendingReviewChip } from './StageChip'
 import { canDo, hasPendingReview, transferUnits } from './transfers'
 import { prendas, variantes } from './units'
 import { useBranchContext } from '@/contexts/BranchContext'
+import { useDeclareBranchScope } from '@/contexts/BranchScopeContext'
 import { useBranchTransfers, useCentralWarehouse } from '@/hooks/useBranchTransfers'
 import { useCentralWarehouseAlerts } from '@/hooks/useCentralWarehouseAlerts'
 import type { BranchTransfer } from '@/types/api/branchTransfer'
@@ -62,6 +63,9 @@ const DispatchHistoryTable = () => {
       : { branchId: warehouse?.id, direction: 'outgoing' as const }
 
   const isFilteredByBranch = !!selectedBranch && !showAll
+
+  // Con "Ver todas" el selector de la navbar no cambia nada de lo que se ve: se oculta
+  useDeclareBranchScope(!showAll)
 
   const { data, isLoading, isError } = useBranchTransfers(
     {

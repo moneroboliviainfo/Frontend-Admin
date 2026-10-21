@@ -86,5 +86,12 @@ export const stageOf = (transfer: BranchTransfer): { label: string; color: ChipC
 export const canDo = (transfer: BranchTransfer, action: TransferAction, fallback: boolean) =>
   transfer.allowedActions ? transfer.allowedActions.includes(action) : fallback
 
+// Pedido "Para sucursal": una tienda reponiendo stock desde otra, sin cliente ni cobro.
+// Para un cliente siempre se cobra al pedir (no hay pedidos fiados), asi que sin anticipo
+// y sin cliente solo puede ser este. El back no lo distingue: lo trata como un pedido sin
+// cobro, lo lista en awaitingPickup y le aplica los "dias apartado" (que se dejan en 0)
+export const isRestockRequest = (transfer: BranchTransfer) =>
+  transfer.type === 'branch_request' && !transfer.advanceAmount && !transfer.customerName
+
 export const hasPendingReview = (transfer: BranchTransfer) =>
   transfer.pendingReview ?? transfer.discrepancyStatus === 'pending_review'

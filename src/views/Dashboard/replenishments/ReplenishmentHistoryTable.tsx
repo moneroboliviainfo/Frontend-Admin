@@ -20,6 +20,7 @@ import Tooltip from '@mui/material/Tooltip'
 import CustomTextField from '@core/components/mui/TextField'
 import tableStyles from '@core/styles/table.module.css'
 import { useBranchContext } from '@/contexts/BranchContext'
+import { useDeclareBranchScope } from '@/contexts/BranchScopeContext'
 import { useBranchTransfers } from '@/hooks/useBranchTransfers'
 import type { BranchTransfer, BranchTransferStatus } from '@/types/api/branchTransfer'
 import TransferDetailsModal from '@/views/Dashboard/central-warehouse/TransferDetailsModal'
@@ -49,6 +50,10 @@ const ReplenishmentHistoryTable = ({ isCentral }: { isCentral: boolean }) => {
   const [details, setDetails] = useState<BranchTransfer | null>(null)
 
   const { selectedBranchId, selectedBranch } = useBranchContext()
+
+  // Con "Todas" el selector de la navbar no cambia nada de lo que se ve: se oculta.
+  // La tienda no tiene selector (su sucursal es fija): para ella queda lo que diga la ruta
+  useDeclareBranchScope(!isCentral || !todasLasSucursales)
 
   // La tienda no manda branchId: el back resuelve la suya
   const { data, isLoading, isError } = useBranchTransfers({
