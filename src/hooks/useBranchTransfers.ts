@@ -160,10 +160,12 @@ export const useRenameCentralWarehouse = () => {
   })
 }
 
-export const useBranchStock = (variantId: number | null) => {
+// Sin branchId devuelve todas las tiendas (el POS lo usa asi para elegir a
+// cual pedirle). Con branchId, solo esa.
+export const useBranchStock = (variantId: number | null, branchId?: number) => {
   return useQuery({
-    queryKey: ['branch-stock', variantId],
-    queryFn: () => branchTransferService.getBranchStock(variantId!),
+    queryKey: ['branch-stock', variantId, branchId],
+    queryFn: () => branchTransferService.getBranchStock(variantId!, branchId),
     enabled: !!variantId
   })
 }

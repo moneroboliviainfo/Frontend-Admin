@@ -520,33 +520,78 @@ tres mandaban `?branchId=<sucursal>` y con el id de la bodega no funcionan
 Una nota anterior listaba "Ver movimientos" entre las acciones de Variantes.
 Era falso: `MovementsModal` se abre solo desde Bodega Central.
 
-## Sobrante de una tienda, desde Bodega Central (20/10/2026)
+## Stock de Sucursales (20/10/2026)
 
-Al sacar las acciones de la pestana Variantes, el ADMIN se quedo sin pantalla
-para registrar un sobrante: Inventario es del encargado (el menu se lo esconde
-al admin a proposito) y `positive-adjustment` es ADMIN/SUPERVISOR.
+Pantalla nueva para ADMIN/SUPERVISOR: **INVENTARIO → Stock de Sucursales**
+(`/branch-stock`). Lista el stock de **la sucursal del selector**, paginado y
+con busqueda, agrupado por producto. Una sola accion por fila: **Ajustar**
+(sobrante de conteo).
 
-Se resolvio en **Bodega Central → Stock**, con un boton por fila (icono `+`)
-que abre el modal que ya existia (`PositiveAdjustmentModal`, reutilizado desde
-`products/add/components`).
+Reemplaza el apaño anterior: el boton de ajuste que vivia en Bodega Central
+(se quito) operaba sobre una tienda mientras la tabla mostraba el stock de la
+**bodega**. Bodega Central volvio a ser solo la bodega.
 
-Flujo real: el cajero cuenta y encuentra prendas de mas, llama al admin, y el
-admin elige esa sucursal en el selector de la navbar y registra el sobrante.
-Es el mismo selector que ya dice "Enviar a X", asi que significa lo mismo: la
-tienda con la que se esta operando. Sin sucursal elegida el boton se deshabilita.
+Por que una pantalla propia y no abrirle Inventario al admin: Inventario
+arrastra recepciones, despachos y entregas —tareas de mostrador—; por eso el
+menu se la esconde (ver el comentario en `menuPermissions.ts`).
 
-**La limitacion asumida**: la tabla muestra el stock de la **bodega**, no el de
-la tienda, asi que el ajuste se hace a ciegas. Para no agravarlo, el modal
-**no muestra los numeros de referencia** cuando se abre desde aca (son
-opcionales en sus props): poner el stock de la bodega al lado de un ajuste a
-una tienda seria mentir. El modal si nombra la sucursal en su aviso y la prenda
-en el titulo.
+No hizo falta backend nuevo: `GET /variants?branchId=&page=&limit=&search=`
+ya existia y ya estaba en `useVariants`.
 
-Recordatorio del back: `positive-adjustment` exige una **tienda**; con la
-bodega principal da **403**. Un sobrante en la bodega misma no necesita este
-endpoint: es la columna "Ingresar" (`addstock` entra siempre a la bodega).
+### El detalle de los dos numeros
 
-Sigue pendiente **dar de baja stock de una tienda** desde el panel del admin.
+El listado trae `availableStock` **neto de reservas** (piso − ventas en curso −
+apartado por pedidos). Para contar hace falta el **fisico**. Por eso la tabla
+no le pasa sus numeros al modal: el modal consulta `branch-stock?branchId=` y
+muestra `salesFloor`, `warehouse` y lo apartado en tres celdas.
+
+Si le pasara los de la fila, el cajero contaria 12 prendas colgadas, la
+pantalla diria 10, y registraria un sobrante de 2 que no existe.
+
+Sigue pendiente **dar de baja stock de una tienda** desde el panel del admin:
+esta pantalla es ahora el lugar natural (un segundo boton por fila).
+
+## Reposiciones: ingreso en linea y aviso en el menu (20/10/2026)
+
+**Ingresar stock sin salir de la pantalla.** En *Atender reposicion*, la
+columna "En bodega central" tiene ahora un `+` por fila: se escribe la cantidad
+y se ingresa ahi mismo (`POST /variants/addstock`). Antes, si faltaba stock
+para atender, habia que ir a Bodega Central, cargarlo y volver.
+
+La celda se actualiza sola: `addstock` invalida `['variant']` (ver
+`CLAVES_STOCK`) y el detalle del stock se consulta con
+`['variant', productColorId, destinationBranchId]`, que coincide por prefijo.
+
+`addstock` entra **siempre** a la bodega principal —ignora `branchId`, doc 06—
+asi que no se le manda ninguna sucursal.
+
+**Aviso en el sidebar.** El menu *Reposiciones* muestra un chip con
+`replenishmentsPending` (las que las tiendas pidieron y la central no atendio),
+igual que *Bodega Central* con `pendingReview`.
+
+Los avisos se declaran en un mapa `href → aviso` en `VerticalMenu`, en vez de
+un `if` por menu: sumar un tercero es una entrada mas.
+
+> **Son dos llamadas a `pending-count`, no una.** Con `?branchId=<bodega>` el
+> endpoint responde "envios que salen de la bodega" (de ahi `pendingReview`);
+> `replenishmentsPending` solo cuenta cuantas **tiendas** esperan ser atendidas
+> cuando se pide **sin** `branchId` (doc 15 §3: "Central (sin branchId)"). Con
+> una sola llamada el chip de Reposiciones quedaba siempre en cero.
+
+## Reposiciones: filtro por el selector global (20/10/2026)
+
+Las dos tablas (*Por atender* e *Historial*) tenian su propio desplegable
+"Tienda" con opcion "Todas". Se reemplazo por un **switch "Todas las
+sucursales", encendido por defecto**: apagado, filtran por la sucursal del
+**selector de la navbar** —el estado global— y se muestra su chip al lado.
+
+`/replenishments` paso de GENERALES a **CON_SUCURSAL** en `branchScope.ts`.
+Era imprescindible: clasificada como general, el selector no se dibuja, y con
+el switch apagado no habria forma de elegir la sucursal.
+
+Efecto lateral asumido: con el switch encendido (todas), la navbar igual
+muestra una sucursal. El switch manda sobre la tabla; el selector solo dice
+cual se usaria al apagarlo.
 
 ## Pendientes de esta tanda
 

@@ -3,6 +3,9 @@
 import { useState } from 'react'
 
 import Card from '@mui/material/Card'
+import Chip from '@mui/material/Chip'
+import Switch from '@mui/material/Switch'
+import FormControlLabel from '@mui/material/FormControlLabel'
 import CardHeader from '@mui/material/CardHeader'
 import Box from '@mui/material/Box'
 import Divider from '@mui/material/Divider'
@@ -42,10 +45,10 @@ const ReplenishmentHistoryTable = ({ isCentral }: { isCentral: boolean }) => {
   const [page, setPage] = useState(1)
   const [pageSize, setPageSize] = useState(10)
   const [status, setStatus] = useState<BranchTransferStatus | 'all'>('all')
-  const [branchId, setBranchId] = useState<number | 'all'>('all')
+  const [todasLasSucursales, setTodasLasSucursales] = useState(true)
   const [details, setDetails] = useState<BranchTransfer | null>(null)
 
-  const { branches } = useBranchContext()
+  const { selectedBranchId, selectedBranch } = useBranchContext()
 
   // La tienda no manda branchId: el back resuelve la suya
   const { data, isLoading, isError } = useBranchTransfers({
@@ -53,7 +56,7 @@ const ReplenishmentHistoryTable = ({ isCentral }: { isCentral: boolean }) => {
     limit: pageSize,
     replenishment: true,
     ...(status !== 'all' && { status }),
-    ...(isCentral && branchId !== 'all' && { branchId })
+    ...(isCentral && !todasLasSucursales && selectedBranchId ? { branchId: selectedBranchId } : {})
   })
 
   const transfers = data?.data || []
@@ -73,23 +76,29 @@ const ReplenishmentHistoryTable = ({ isCentral }: { isCentral: boolean }) => {
 
         <Box className='flex flex-wrap items-center justify-end gap-4 px-6 pb-4'>
           {isCentral && (
-            <CustomTextField
-              select
-              label='Tienda'
-              value={branchId}
-              onChange={e => {
-                setBranchId(e.target.value === 'all' ? 'all' : Number(e.target.value))
-                setPage(1)
-              }}
-              className='max-sm:is-full sm:is-[220px]'
-            >
-              <MenuItem value='all'>Todas</MenuItem>
-              {branches.map(branch => (
-                <MenuItem key={branch.id} value={branch.id}>
-                  {branch.name}
-                </MenuItem>
-              ))}
-            </CustomTextField>
+            <>
+          {/* Por defecto se ven todas; al apagarlo manda la sucursal del
+              selector de la navbar, que es el estado global de la app */}
+          <FormControlLabel
+            label='Todas las sucursales'
+            control={
+              <Switch
+                checked={todasLasSucursales}
+                onChange={e => {
+                  setTodasLasSucursales(e.target.checked)
+                  setPage(1)
+                }}
+              />
+            }
+          />
+          {!todasLasSucursales && (
+            <Chip
+              label={selectedBranch?.name || 'Sin sucursal'}
+              color={selectedBranch ? 'primary' : 'default'}
+              size='small'
+            />
+          )}
+            </>
           )}
 
           <CustomTextField

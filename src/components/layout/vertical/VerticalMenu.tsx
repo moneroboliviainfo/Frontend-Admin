@@ -16,7 +16,7 @@ import { Menu } from '@menu/vertical-menu'
 // Hook Imports
 import useVerticalNav from '@menu/hooks/useVerticalNav'
 import { useUserRole } from '@/hooks/useUserRole'
-import { pendingReviewHint, useCentralWarehouseAlerts } from '@/hooks/useCentralWarehouseAlerts'
+import { pendingReviewHint, replenishmentsHint, useCentralWarehouseAlerts } from '@/hooks/useCentralWarehouseAlerts'
 
 // Component Imports
 import CustomChip from '@core/components/mui/Chip'
@@ -57,20 +57,30 @@ const VerticalMenu = ({ scrollMenu }: Props) => {
   const ScrollWrapper = isBreakpointReached ? 'div' : PerfectScrollbar
 
   // Avisos al lado del nombre del menu: solo lo que espera una accion de quien mira
-  const { pendingReview } = useCentralWarehouseAlerts()
+  const { pendingReview, replenishmentsPending } = useCentralWarehouseAlerts()
 
-  const menuData = verticalMenuData(role).map(item =>
-    'href' in item && item.href === '/central-warehouse' && pendingReview > 0
-      ? {
-          ...item,
-          suffix: (
-            <Tooltip title={pendingReviewHint(pendingReview)} placement='right' arrow>
-              <CustomChip label={pendingReview} size='small' round='true' variant='tonal' color='warning' />
-            </Tooltip>
-          )
-        }
-      : item
-  )
+  // Un aviso por menu. Todos en ambar: significan lo mismo —algo espera una
+  // accion del admin— y el color de la marca cambia con la sucursal elegida,
+  // asi que el chip se veria distinto segun donde estuviera parado.
+  const avisos: Record<string, { count: number; hint: string }> = {
+    '/central-warehouse': { count: pendingReview, hint: pendingReviewHint(pendingReview) },
+    '/replenishments': { count: replenishmentsPending, hint: replenishmentsHint(replenishmentsPending) }
+  }
+
+  const menuData = verticalMenuData(role).map(item => {
+    const aviso = 'href' in item && item.href ? avisos[item.href] : undefined
+
+    if (!aviso || aviso.count === 0) return item
+
+    return {
+      ...item,
+      suffix: (
+        <Tooltip title={aviso.hint} placement='right' arrow>
+          <CustomChip label={aviso.count} size='small' round='true' variant='tonal' color='warning' />
+        </Tooltip>
+      )
+    }
+  })
 
   return (
     // eslint-disable-next-line lines-around-comment

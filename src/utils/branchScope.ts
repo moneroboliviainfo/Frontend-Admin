@@ -17,6 +17,8 @@
 const CON_SUCURSAL = [
   '/sales', // ventas y caja de esa sucursal
   '/cash', // historial de caja
+  '/branch-stock', // el stock listado es el de la sucursal elegida
+  '/replenishments', // con el switch "Todas" apagado, las tablas filtran por la del selector
   '/central-warehouse', // a qué sucursal se despacha (salvo la pestaña Retiros)
   '/siat/eventos', // evento significativo del punto de venta de la sucursal
   '/siat/facturacion' // facturas emitidas por esa sucursal
@@ -33,7 +35,6 @@ const GENERALES = [
   '/settings',
   '/category',
   '/receptions',
-  '/replenishments', // la central ve todas las tiendas; filtra por tienda adentro
   '/branch-requests', // un pedido es entre dos tiendas: el filtro de sucursal va adentro
   '/discounts',
   '/outfits',

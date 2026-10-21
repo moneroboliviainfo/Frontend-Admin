@@ -261,14 +261,6 @@ const ProductCatalog: React.FC<ProductCatalogProps> = ({
                         size='small'
                         color={item.stock > 10 ? 'success' : item.stock > 0 ? 'warning' : 'error'}
                       />
-                      {item.inTransitStock > 0 && (
-                        <Chip
-                          label={`${item.inTransitStock} en camino`}
-                          size='small'
-                          variant='tonal'
-                          color='primary'
-                        />
-                      )}
                       {item.warehouseStock > 0 && (
                         <>
                           <Typography

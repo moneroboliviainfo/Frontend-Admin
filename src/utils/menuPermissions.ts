@@ -35,6 +35,7 @@ export const filterMenuByRole = (
       'Sucursales',
       'Plazos de Pedidos',
       'Bodega Central',
+      'Stock de Sucursales',
       'CLIENTES',
       'Clientes',
       'CATÁLOGO',

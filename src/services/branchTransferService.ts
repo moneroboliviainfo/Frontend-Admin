@@ -71,8 +71,10 @@ class BranchTransferServiceClass {
   }
 
   // Disponibilidad de una talla en cada tienda, para pedirle a otra sucursal
-  async getBranchStock(variantId: number): Promise<BranchStockItem[]> {
-    const response = await apiClient.get<BranchStockItem[]>(`/api/variants/branch-stock/${variantId}`)
+  async getBranchStock(variantId: number, branchId?: number): Promise<BranchStockItem[]> {
+    const response = await apiClient.get<BranchStockItem[]>(`/api/variants/branch-stock/${variantId}`, {
+      params: branchId ? { branchId } : undefined
+    })
 
     return response.data
   }

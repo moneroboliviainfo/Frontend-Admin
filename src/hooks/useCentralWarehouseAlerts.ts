@@ -11,12 +11,27 @@ export const useCentralWarehouseAlerts = () => {
   const { isAdminLike } = useUserRole()
 
   const { data: warehouse } = useCentralWarehouse(isAdminLike)
-  const { data: pending } = usePendingCount(warehouse?.id, isAdminLike && !!warehouse?.id)
 
-  return { pendingReview: pending?.pendingReview || 0 }
+  // Son dos preguntas distintas al mismo endpoint, no se pueden unir:
+  //
+  //   con ?branchId=<bodega> → "envios que salen de la bodega": de ahi sale
+  //     pendingReview (los que llegaron con faltantes sin revisar)
+  //   sin branchId           → la vista de la central: ahi
+  //     replenishmentsPending cuenta cuantas TIENDAS esperan ser atendidas
+  //     (con branchId, ese campo responde otra cosa: doc 15 §3)
+  const { data: deLaBodega } = usePendingCount(warehouse?.id, isAdminLike && !!warehouse?.id)
+  const { data: deLaCentral } = usePendingCount(undefined, isAdminLike)
+
+  return {
+    pendingReview: deLaBodega?.pendingReview || 0,
+    replenishmentsPending: deLaCentral?.replenishmentsPending || 0
+  }
 }
 
 // Un envio de la central solo puede tener faltantes una vez recibido (lo que no salio de la
 // bodega no es faltante, doc 11 §6), por eso la indicacion apunta a "Recibidos"
 export const pendingReviewHint = (count: number) =>
   `${count === 1 ? '1 envío llegó' : `${count} envíos llegaron`} con faltantes. Revíselos en Envíos.`
+
+export const replenishmentsHint = (count: number) =>
+  `${count === 1 ? '1 tienda pidió' : `${count} tiendas pidieron`} reposición. Aténdalas en Reposiciones.`

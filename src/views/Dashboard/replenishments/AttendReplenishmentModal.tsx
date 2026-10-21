@@ -14,10 +14,13 @@ import Box from '@mui/material/Box'
 import Skeleton from '@mui/material/Skeleton'
 import Typography from '@mui/material/Typography'
 import CircularProgress from '@mui/material/CircularProgress'
+import IconButton from '@mui/material/IconButton'
+import Tooltip from '@mui/material/Tooltip'
 
 import CustomTextField from '@core/components/mui/TextField'
 import tableStyles from '@core/styles/table.module.css'
 import { useAttendReplenishment, useBranchTransfer } from '@/hooks/useBranchTransfers'
+import { useAddStock } from '@/hooks/useVariants'
 import { variantService } from '@/services/variantService'
 import type { VariantSize } from '@/types/api/variants'
 import { itemLabel } from '@/views/Dashboard/central-warehouse/transfers'
@@ -35,6 +38,13 @@ const AttendReplenishmentModal = ({ transferId, onClose, showMessage }: Props) =
   const [note, setNote] = useState('')
 
   const attend = useAttendReplenishment()
+
+  // Ingresar a la bodega sin salir de acá: si falta stock para atender, el
+  // admin lo carga en la misma fila en vez de ir a Bodega Central y volver.
+  // `addstock` entra SIEMPRE a la bodega principal (ignora branchId, doc 06).
+  const addStock = useAddStock()
+  const [ingresando, setIngresando] = useState<number | null>(null)
+  const [aIngresar, setAIngresar] = useState('')
 
   // Detalle fresco: la tienda puede haber agregado o quitado variantes desde que se listo
   const { data: transfer, isLoading: isLoadingTransfer, refetch } = useBranchTransfer(transferId)
@@ -75,6 +85,8 @@ const AttendReplenishmentModal = ({ transferId, onClose, showMessage }: Props) =
   useEffect(() => {
     setQuantities({})
     setNote('')
+    setIngresando(null)
+    setAIngresar('')
   }, [transferId])
 
   if (!transferId) return null
@@ -88,6 +100,21 @@ const AttendReplenishmentModal = ({ transferId, onClose, showMessage }: Props) =
   // Todo en 0 = rechazo, y ahi el back exige nota
   const isRejection = totalToSend === 0
   const isValid = !overStock && (!isRejection || !!note.trim())
+
+  const handleIngresar = async (variantId: number) => {
+    const quantity = parseInt(aIngresar, 10)
+
+    if (!quantity || quantity <= 0) return
+
+    try {
+      await addStock.mutateAsync({ variantId, quantity })
+      showMessage(`Ingresaron ${quantity} unidades a la bodega`, 'success')
+      setIngresando(null)
+      setAIngresar('')
+    } catch {
+      showMessage('No se pudo ingresar el stock', 'error')
+    }
+  }
 
   const handleConfirm = async () => {
     if (!transfer) return
@@ -177,7 +204,54 @@ const AttendReplenishmentModal = ({ transferId, onClose, showMessage }: Props) =
                         <Typography variant='body2'>{itemLabel(item)}</Typography>
                       </td>
                       <td>
-                        <StockStatusCell stock={max} />
+                        <Box className='flex items-center gap-2'>
+                          <StockStatusCell stock={max} />
+                          {ingresando === item.id ? (
+                            <>
+                              <CustomTextField
+                                autoFocus
+                                type='number'
+                                size='small'
+                                placeholder='0'
+                                value={aIngresar}
+                                onChange={e => setAIngresar(e.target.value)}
+                                sx={{ width: '90px' }}
+                                inputProps={{ min: 1 }}
+                              />
+                              <Tooltip title='Ingresar a la bodega'>
+                                <span>
+                                  <IconButton
+                                    size='small'
+                                    color='success'
+                                    disabled={!parseInt(aIngresar, 10) || addStock.isPending}
+                                    onClick={() => handleIngresar(item.variantId)}
+                                  >
+                                    {addStock.isPending ? (
+                                      <CircularProgress size={16} />
+                                    ) : (
+                                      <i className='tabler-check' />
+                                    )}
+                                  </IconButton>
+                                </span>
+                              </Tooltip>
+                              <IconButton size='small' onClick={() => setIngresando(null)}>
+                                <i className='tabler-x' />
+                              </IconButton>
+                            </>
+                          ) : (
+                            <Tooltip title='Ingresar stock a la bodega central'>
+                              <IconButton
+                                size='small'
+                                onClick={() => {
+                                  setIngresando(item.id)
+                                  setAIngresar('')
+                                }}
+                              >
+                                <i className='tabler-plus' />
+                              </IconButton>
+                            </Tooltip>
+                          )}
+                        </Box>
                       </td>
                       <td>
                         <Typography variant='body2'>

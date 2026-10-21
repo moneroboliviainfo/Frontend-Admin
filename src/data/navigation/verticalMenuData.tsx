@@ -97,6 +97,11 @@ const getFullMenuData = (): VerticalMenuDataType[] => [
     href: '/central-warehouse'
   },
   {
+    label: 'Stock de Sucursales',
+    icon: 'tabler-building-store',
+    href: '/branch-stock'
+  },
+  {
     label: 'Inventario',
     icon: 'tabler-package-import',
     href: '/receptions'

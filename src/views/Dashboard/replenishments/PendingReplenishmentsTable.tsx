@@ -3,18 +3,19 @@
 import { useState } from 'react'
 
 import Card from '@mui/material/Card'
+import Chip from '@mui/material/Chip'
+import Switch from '@mui/material/Switch'
+import FormControlLabel from '@mui/material/FormControlLabel'
 import CardHeader from '@mui/material/CardHeader'
 import Box from '@mui/material/Box'
 import Button from '@mui/material/Button'
 import Divider from '@mui/material/Divider'
 import Typography from '@mui/material/Typography'
-import MenuItem from '@mui/material/MenuItem'
 import TablePagination from '@mui/material/TablePagination'
 import Skeleton from '@mui/material/Skeleton'
 import Alert from '@mui/material/Alert'
 import Snackbar from '@mui/material/Snackbar'
 
-import CustomTextField from '@core/components/mui/TextField'
 import tableStyles from '@core/styles/table.module.css'
 import { useBranchContext } from '@/contexts/BranchContext'
 import { useBranchTransfers } from '@/hooks/useBranchTransfers'
@@ -30,19 +31,19 @@ const formatDate = (value: string | null) => (value ? new Date(value).toLocaleSt
 const PendingReplenishmentsTable = () => {
   const [page, setPage] = useState(1)
   const [pageSize, setPageSize] = useState(10)
-  const [branchId, setBranchId] = useState<number | 'all'>('all')
+  const [todasLasSucursales, setTodasLasSucursales] = useState(true)
   const [attendId, setAttendId] = useState<number | null>(null)
   const [toCancel, setToCancel] = useState<BranchTransfer | null>(null)
   const [snackbar, setSnackbar] = useState<{ message: string; severity: 'success' | 'error' } | null>(null)
 
-  const { branches } = useBranchContext()
+  const { selectedBranchId, selectedBranch } = useBranchContext()
 
   const { data, isLoading, isError } = useBranchTransfers({
     page,
     limit: pageSize,
     replenishment: true,
     status: 'pending_dispatch',
-    ...(branchId !== 'all' && { branchId })
+    ...(!todasLasSucursales && selectedBranchId ? { branchId: selectedBranchId } : {})
   })
 
   const transfers = data?.data || []
@@ -59,23 +60,27 @@ const PendingReplenishmentsTable = () => {
         />
 
         <Box className='flex flex-wrap items-center justify-end gap-4 px-6 pb-4'>
-          <CustomTextField
-            select
-            label='Tienda'
-            value={branchId}
-            onChange={e => {
-              setBranchId(e.target.value === 'all' ? 'all' : Number(e.target.value))
-              setPage(1)
-            }}
-            className='max-sm:is-full sm:is-[220px]'
-          >
-            <MenuItem value='all'>Todas</MenuItem>
-            {branches.map(branch => (
-              <MenuItem key={branch.id} value={branch.id}>
-                {branch.name}
-              </MenuItem>
-            ))}
-          </CustomTextField>
+          {/* Por defecto se ven todas; al apagarlo manda la sucursal del
+              selector de la navbar, que es el estado global de la app */}
+          <FormControlLabel
+            label='Todas las sucursales'
+            control={
+              <Switch
+                checked={todasLasSucursales}
+                onChange={e => {
+                  setTodasLasSucursales(e.target.checked)
+                  setPage(1)
+                }}
+              />
+            }
+          />
+          {!todasLasSucursales && (
+            <Chip
+              label={selectedBranch?.name || 'Sin sucursal'}
+              color={selectedBranch ? 'primary' : 'default'}
+              size='small'
+            />
+          )}
         </Box>
 
         <Divider />

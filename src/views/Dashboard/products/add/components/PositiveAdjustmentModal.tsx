@@ -8,9 +8,7 @@ import DialogContent from '@mui/material/DialogContent'
 import DialogActions from '@mui/material/DialogActions'
 import Button from '@mui/material/Button'
 import Box from '@mui/material/Box'
-import Alert from '@mui/material/Alert'
 import Typography from '@mui/material/Typography'
-import Chip from '@mui/material/Chip'
 import ToggleButton from '@mui/material/ToggleButton'
 import ToggleButtonGroup from '@mui/material/ToggleButtonGroup'
 import CircularProgress from '@mui/material/CircularProgress'
@@ -34,25 +32,24 @@ type Props = {
     warehouseStock?: number
   }>
 
-  // Que prenda se esta ajustando, cuando el modal se abre desde una lista
-  contextLabel?: string
   showMessage: (message: string, severity: 'success' | 'error' | 'info' | 'warning') => void
 }
 
-const PositiveAdjustmentModal = ({ open, onClose, variants, contextLabel, showMessage }: Props) => {
-  const [location, setLocation] = useState<StockLocation>('sales_floor')
+const PositiveAdjustmentModal = ({ open, onClose, variants, showMessage }: Props) => {
+  // Por defecto la bodega: lo que aparece contando suele estar guardado
+  const [location, setLocation] = useState<StockLocation>('warehouse')
   const [quantities, setQuantities] = useState<Record<number, number>>({})
   const [note, setNote] = useState('')
 
   const adjust = usePositiveAdjustment()
 
   // Solo el ADMIN manda branchId; la bodega central no acepta este endpoint (403)
-  const { selectedBranchId, isAdmin, selectedBranch } = useBranchContext()
+  const { selectedBranchId, isAdmin } = useBranchContext()
   const branchId = isAdmin ? (selectedBranchId ?? undefined) : undefined
 
   useEffect(() => {
     if (!open) {
-      setLocation('sales_floor')
+      setLocation('warehouse')
       setQuantities({})
       setNote('')
     }
@@ -92,35 +89,9 @@ const PositiveAdjustmentModal = ({ open, onClose, variants, contextLabel, showMe
 
   return (
     <Dialog open={open} onClose={onClose} maxWidth='sm' fullWidth>
-      <DialogTitle>
-        Registrar sobrante
-        {contextLabel && (
-          <Typography variant='body2' color='text.secondary' sx={{ mt: 1 }}>
-            {contextLabel}
-          </Typography>
-        )}
-      </DialogTitle>
+      <DialogTitle>Ajuste de stock</DialogTitle>
 
       <DialogContent>
-        {/* El ajuste es a ciegas: la tabla de atrás muestra el stock de la
-            bodega, no el de la tienda. Por eso la sucursal va destacada y no
-            perdida dentro del texto del aviso. */}
-        <Box className='flex items-center gap-3' sx={{ mb: 3 }}>
-          <Typography variant='body2' color='text.secondary'>
-            Se suma a la sucursal
-          </Typography>
-          <Chip
-            label={selectedBranch?.name || 'Ninguna seleccionada'}
-            color={selectedBranch ? 'primary' : 'default'}
-            sx={{ blockSize: 34, fontSize: '1rem', fontWeight: 700 }}
-          />
-        </Box>
-
-        <Alert severity='info' sx={{ mb: 4 }}>
-          El conteo indica <strong>más unidades de las que figuran</strong>. Esta acción suma la diferencia. La
-          mercadería nueva no se registra aquí: ingresa por la Bodega Central.
-        </Alert>
-
         <ToggleButtonGroup
           exclusive
           fullWidth
@@ -130,22 +101,22 @@ const PositiveAdjustmentModal = ({ open, onClose, variants, contextLabel, showMe
           sx={{
             mb: 4,
 
-            // Color entero en el elegido: con el tintado por defecto costaba
-            // ver cuál de los dos estaba activo.
+            // Color entero en el elegido, en el color de la sucursal: con el
+            // tintado por defecto costaba ver cuál de los dos estaba activo.
             '& .MuiToggleButton-root': {
               textTransform: 'none',
               fontWeight: 600,
               paddingBlock: '10px',
               '&.Mui-selected': {
-                backgroundColor: 'success.main',
-                color: 'success.contrastText',
-                '&:hover': { backgroundColor: 'success.dark' }
+                backgroundColor: 'primary.main',
+                color: 'primary.contrastText',
+                '&:hover': { backgroundColor: 'primary.dark' }
               }
             }
           }}
         >
+          <ToggleButton value='warehouse'>Ingresar en bodega</ToggleButton>
           <ToggleButton value='sales_floor'>Ingresar en tienda</ToggleButton>
-          <ToggleButton value='warehouse'>Ingresar en depósito</ToggleButton>
         </ToggleButtonGroup>
 
         <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
@@ -177,9 +148,7 @@ const PositiveAdjustmentModal = ({ open, onClose, variants, contextLabel, showMe
                 size='small'
                 placeholder='0'
                 value={quantities[variant.id] || ''}
-                onChange={e =>
-                  setQuantities(prev => ({ ...prev, [variant.id]: parseInt(e.target.value, 10) || 0 }))
-                }
+                onChange={e => setQuantities(prev => ({ ...prev, [variant.id]: parseInt(e.target.value, 10) || 0 }))}
                 sx={{ width: '100px' }}
                 inputProps={{ min: 0 }}
               />
