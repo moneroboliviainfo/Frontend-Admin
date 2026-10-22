@@ -113,7 +113,7 @@ A = ADMIN, S = SUPERVISOR, M = MANAGER, C = CASHIER.
 | `GET /variants/:id` 🏭 | A, S, M, C | detalle con stock |
 | `GET /variants/stock/:id` 🏭 | A, S, M, C | solo el número de stock vendible |
 | `GET /variants/:id/movements` 🏭 | A, S, M, C | kardex de una variante |
-| `GET /variants/branch-stock/:variantId` | A, S, M, C | disponibilidad en cada tienda (para pedir) |
+| `GET /variants/branch-stock/:variantId` | A, S, M, C | disponibilidad en cada tienda (para pedir); `?branchId=` opcional = solo esa tienda, cualquier rol puede pasar cualquiera |
 | `GET /variants/branch-stock/product-color/:id` | A, S, M, C | ídem, todas las tallas |
 | `POST /variants/addstock` | A, S | ingresa stock **al depósito de la bodega principal** (sin sucursal) |
 | `POST /variants/subtractstock` 🏭 | A, S, M | baja de stock |

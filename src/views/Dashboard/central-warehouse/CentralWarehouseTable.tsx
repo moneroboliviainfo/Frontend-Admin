@@ -32,6 +32,8 @@ import type { Variant, VariantSize } from '@/types/api/variants'
 import { prendas, variantes } from './units'
 import ConfirmWarehouseChangesModal from './ConfirmWarehouseChangesModal'
 import ExportMenu from './ExportMenu'
+import ExcelImportModal from './ExcelImportModal'
+import type { ImportMode } from './ExcelImportModal'
 import LowStockPanel from './LowStockPanel'
 import MovementsModal from './MovementsModal'
 import type { MovementsTarget } from './MovementsModal'
@@ -110,6 +112,10 @@ const CentralWarehouseTable = () => {
   const [labels, setLabels] = useState<Record<number, string>>({})
   const [confirmOpen, setConfirmOpen] = useState(false)
   const [renameOpen, setRenameOpen] = useState(false)
+
+  // Las dos importaciones viven acá porque son la version masiva de las dos
+  // columnas de esta tabla: Ingresar y Enviar a <tienda>.
+  const [importMode, setImportMode] = useState<ImportMode | null>(null)
   const [subtractTarget, setSubtractTarget] = useState<SubtractTarget | null>(null)
   const [movementsTarget, setMovementsTarget] = useState<MovementsTarget | null>(null)
 
@@ -330,6 +336,27 @@ const CentralWarehouseTable = () => {
               warehouseId={warehouse?.id}
               showMessage={(message, severity) => setSnackbar({ message, severity })}
             />
+            <Button
+              size='small'
+              variant='outlined'
+              startIcon={<i className='tabler-file-spreadsheet' />}
+              onClick={() => setImportMode('stock')}
+            >
+              Ingresar por Excel
+            </Button>
+            <Tooltip title={selectedBranch ? '' : 'Seleccione una sucursal en la barra superior'}>
+              <span>
+                <Button
+                  size='small'
+                  variant='outlined'
+                  disabled={!selectedBranch}
+                  startIcon={<i className='tabler-file-spreadsheet' />}
+                  onClick={() => setImportMode('dispatch')}
+                >
+                  Enviar por Excel
+                </Button>
+              </span>
+            </Tooltip>
             <LowStockPanel warehouseId={warehouse?.id} onPick={setSearchInput} />
             {incomingEntries.length > 0 && (
               <Chip label={`+${prendas(incomingUnits)} a bodega`} color='success' variant='tonal' size='small' />
@@ -592,6 +619,13 @@ const CentralWarehouseTable = () => {
       </Card>
 
       <MovementsModal target={movementsTarget} warehouseId={warehouse?.id} onClose={() => setMovementsTarget(null)} />
+
+      <ExcelImportModal
+        mode={importMode}
+        destinationBranch={selectedBranch}
+        onClose={() => setImportMode(null)}
+        showMessage={(message, severity) => setSnackbar({ message, severity })}
+      />
 
       <RenameWarehouseModal
         open={renameOpen}

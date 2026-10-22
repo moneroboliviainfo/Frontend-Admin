@@ -239,7 +239,12 @@ abrir todavía; para B es simplemente "apartada".
 | Anular un pedido QR que no se pagó | nada |
 
 - Valor = **precio congelado** de cada prenda (mismo redondeo que la venta).
-- El backend lo calcula solo y **solo puede subir**: nunca se devuelve de más.
+- El backend lo calcula solo; nunca se devuelve de más.
+- **Puede bajar** en un solo caso: la revisión del faltante dice que la
+  prenda **apareció en A** (`found_at_destination`) mientras el pedido
+  todavía espera al cliente. La prenda vuelve al pedido (apartada, a precio
+  congelado) y ya no se debe su valor. Si esa plata **ya se devolvió**, la
+  prenda queda como stock de A y no cambia nada (ver 11 §4).
 - El cliente **no** puede rechazar un pedido incompleto: sigue con lo que
   llegó y se le devuelve el resto.
 
@@ -328,11 +333,12 @@ POST /orders/in-store  { "items": "<jwt>", "payment_type": "cash" | "card" | "qr
 
 - **Factura** por `totalPrice` (todo).
 - **Caja**: el cajero cobra `totalPrice − advanceApplied`.
-- **QR**: `POST /payments/generate-qr` genera el QR **solo por el saldo**. Si
-  el saldo es 0 (solo se lleva lo pagado):
-  `400 La orden N no tiene saldo por cobrar (ya se pagó con el anticipo del pedido): confírmala en efectivo`
-  → confirmala con `POST /orders/confirm/:id` y `payment_type: "cash"`.
-  Mejor: si `amountDue` es `"0.00"`, creá la venta directamente con `cash`.
+- **QR**: `POST /payments/generate-qr` genera el QR **solo por el saldo**.
+- **Saldo 0** (solo se lleva lo pagado): la venta **no se puede crear con
+  `qr`**:
+  `400 La venta no tiene saldo por cobrar (ya se pagó con el anticipo del pedido): créala en efectivo`.
+  Si `amountDue` es `"0.00"`, forzá `cash` en el POS (no ofrezcas QR) y
+  confirmala con `POST /orders/confirm/:id`.
 - **Tarjeta online**: `400 Una venta con anticipo no se cobra con tarjeta online`.
 
 ### 6.3 Cancelar o editar la venta de retiro

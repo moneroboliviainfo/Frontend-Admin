@@ -611,6 +611,129 @@ Saquela de la percha antes de despachar."*
 Sin esto el cajero busca la prenda en la bodega, no la encuentra y da el pedido
 por perdido, cuando en realidad esta colgada en el salon.
 
+## Reglas nuevas del back del 20/10/2026 (aplicadas el 21/10)
+
+| Cambio del back | Que se hizo |
+| --- | --- |
+| Venta de retiro **sin saldo** no se puede crear con `qr` (quedaba `PENDING` sin forma de confirmarla) | El POS ofrece **solo efectivo** cuando `amountDue` es `"0.00"`, con un aviso que lo explica |
+| **Anular desde la central** exige nota | `TransferActionsModal`: la nota de *cancel* paso a obligatoria |
+| **"No retirado"** en un pedido cobrado exige nota | El dialogo la pide y no deja confirmar sin ella, solo cuando el cliente pierde el anticipo |
+| La central **ya no anula** una reposicion pendiente (la rechaza al atenderla) | El boton ya no aparecia porque `allowedActions` no trae `cancel`; se bajo el fallback de `canDo(..., 'cancel', true)` a **`false`** para que no pueda aparecer sin autorizacion del back |
+
+El cuarto confirmo que respetar `allowedActions` fue la decision correcta: el
+back cambio una regla y la pantalla se adapto sin tocar nada. Solo quedaba el
+fallback, que es lo que se corrigio.
+
+### Conteo fisico y apartados (21/10/2026)
+
+**El campo contra el que se cuenta no era el correcto.** `availableStock` es lo
+VENDIBLE del piso: ya resta los carritos del POS y lo apartado por pedidos, que
+siguen colgados. Contra ese numero el conteo siempre da de mas.
+
+El back agrego **`salesFloorStock`** (piso fisico). Lo esperado en un conteo:
+
+| Ubicacion | Esperado |
+| --- | --- |
+| Piso | `salesFloorStock + pendingDispatchSalesFloor` |
+| Deposito | `warehouseStock + pendingDispatchWarehouse` (`warehouseStock` si es fisico) |
+
+*Stock de Sucursales* muestra ahora lo fisico y, debajo, **"+N por despachar"**
+en ambar — **por ubicacion**: un pedido sale primero del deposito y solo lo que
+falta del piso, asi que el aviso no siempre va en el piso. El modal de ajuste
+repite el aviso de la ubicacion elegida.
+
+**`heldInWarehouse`** (del deposito, apartado por pedidos con QR sin pagar) se
+muestra en Inventario como *"N apartadas"*, y el campo **Pasar a tienda** quedo
+topado en `warehouseStock - heldInWarehouse`. Antes dejaba escribir de mas y el
+back respondia `400 Stock insuficiente en bodega... (apartada para el pedido
+#N)`, que parecia un bug. Si esta todo apartado, el tooltip lo dice.
+
+> `availableWarehouse` y `availableSalesFloor` **solo** vienen en
+> `GET /variants/branch-stock/:variantId`. En `GET /variants?branchId=` hay que
+> calcularlo a mano, que es lo que hace `movibleDesdeBodega`.
+
+## Importaciones por Excel (21/10/2026)
+
+Dos botones en **Bodega Central → Stock**, al lado de Exportar: **Ingresar por
+Excel** y **Enviar por Excel**. Van ahi porque son la version masiva de las dos
+columnas de esa tabla (*Ingresar* y *Enviar a X*), y porque los dos endpoints
+son ADMIN/SUPERVISOR — en Inventario los verian justo los roles que reciben
+`403`.
+
+Un solo componente para los dos (`ExcelImportModal`, `mode: 'stock' |
+'dispatch'`): cambian los endpoints y una nota opcional en el envio. Lo
+delicado —plantilla, vista previa, errores por fila— es identico, y duplicarlo
+era garantizar que se desincronizaran.
+
+Flujo: **Descargar plantilla → Elegir archivo → Ver que se va a grabar
+(`dryRun=true`) → Confirmar (`dryRun=false`)**.
+
+Detalles que impone el back y que estan contemplados:
+
+- `dryRun` se manda **siempre explicito** (`'true'` / `'false'`): omitirlo
+  importa de verdad y cualquier otro valor es `400`.
+- Las plantillas **requieren token**: se piden como `blob` y se disparan con un
+  `<a download>` temporal. Un enlace directo no funciona.
+- El `400` con filas trae `errors: [{ row, message }]` y se muestra como tabla;
+  los demas (`413`, encabezado equivocado, limite de 300) traen solo `message`.
+- **Subir dos veces duplica** (el back no detecta repetidos): el boton se
+  bloquea durante la request y al confirmar se cierra el modal.
+- El envio usa la sucursal del selector; sin sucursal elegida el boton se
+  deshabilita, igual que la columna.
+
+Como los services se llaman directo (sin `useMutation`), la invalidacion de
+cache va a mano dentro del modal: sin eso la tabla seguia mostrando el stock
+viejo despues de importar.
+
+### Pendiente
+
+- `onDispatchCreated` esta cableado pero nadie navega al envio creado: falta
+  abrir su detalle tras confirmar.
+
+## Comprobante de recepcion (21/10/2026)
+
+En el modal de **Recibir traslado**, dos botones nuevos: **Imprimir** (hoja) y
+**Termica** (bluetooth, solo si el navegador lo soporta). `receptionReceipt.ts`
+tiene los dos generadores.
+
+Se imprime **antes de confirmar**: los datos ya estan en el modal y el papel se
+firma con las dos personas frente al paquete.
+
+Lleva traslado, origen, destino, **a donde ingresa** (bodega o tienda), el
+detalle con *despachado vs recibido* (los faltantes en negrita), la nota, y al
+pie **dos lineas en blanco para firmar a mano**: *Entrega* con el nombre de la
+sucursal de origen, y *Recibe* con el del usuario logueado.
+
+No se reusaron los printers de factura: estan tipados contra `Factura` y esto
+no es un documento fiscal. Lo que si se reuso es lo de bajo nivel del termico
+—`ESC_POS`, `writeToprinter`, `printLine`, que pasaron a exportarse— para no
+duplicar la logica ESC/POS.
+
+## Etiqueta de variante (22/10/2026)
+
+En el modal del **QR de la variante**, dos botones: **Imprimir etiqueta**
+(hoja) y **Termica** (bluetooth). Los dos abren un menu con las cuatro medidas
+de rollo: **30x20, 40x40, 50x50 y 50x25 mm**. `variantLabel.ts` tiene los dos
+generadores y `LABEL_SIZES`.
+
+La etiqueta lleva QR, producto, **TALLA**, **COLOR** e id.
+
+El alto decide el armado: en **20-25 mm** el QR va **al lado** del texto (no
+entra apilado) y las tipografias bajan; de 40 mm para arriba va arriba y el
+texto centrado debajo. El nombre del producto se corta con ellipsis en una
+linea: si parte, rompe la etiqueta entera.
+
+Dos decisiones tecnicas:
+
+- **Hoja**: el QR se pasa de SVG a PNG en un canvas antes de imprimir. El SVG
+  de pantalla no se imprime de forma confiable.
+- **Termica**: se usa el **QR nativo de ESC/POS** (`GS ( k`), que lo dibuja la
+  impresora. Mandarlo como imagen raster sale borroso en etiquetas chicas. El
+  tamaño de modulo baja de 6 a 4 en los rollos de 20-25 mm.
+
+Probado contra el formato de facturacion (mismo patron de ventana de impresion
+y mismos helpers ESC/POS exportados desde `bluetoothPrinter.ts`).
+
 ## Pendientes de esta tanda
 
 - [x] **Prendas pagadas protegidas en el carrito** (18/10/2026): con un pedido

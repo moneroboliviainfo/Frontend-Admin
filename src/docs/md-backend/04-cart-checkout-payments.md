@@ -185,8 +185,9 @@ BNB no está autenticado (BNB no firma el payload); es un riesgo aceptado a
 propósito, no un bug a reportar.
 
 - **Venta de retiro de un pedido cobrado**: el QR va **solo por el saldo**
-  (`totalPrice − advanceApplied`). Si el saldo es 0 →
-  `400 La orden N no tiene saldo por cobrar (ya se pagó con el anticipo del pedido): confírmala en efectivo`.
+  (`totalPrice − advanceApplied`). Si el saldo es 0, la venta ni siquiera se
+  crea con `qr` (`400 La venta no tiene saldo por cobrar…: créala en efectivo`):
+  usá `cash` y `POST /orders/confirm/:id`.
 - **Anticipo de un pedido entre sucursales** (no es una orden): se usa
   `POST /payments/generate-qr/request/:id` (MANAGER/CASHIER) y el pago se
   detecta polleando `GET /branch-transfers/:id`. Ver

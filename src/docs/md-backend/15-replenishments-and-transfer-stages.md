@@ -104,7 +104,9 @@ Respuesta (la tienda la ve así mientras espera):
 ```
 
 La central ve **la misma** reposición con `stage: "to_attend"`,
-`stageLabel: "Por atender"` y `allowedActions: ["attend", "cancel"]`.
+`stageLabel: "Por atender"` y `allowedActions: ["attend"]` — la central no
+la anula: si no la va a mandar, la **rechaza** al atenderla (todo en 0, ver
+§1.4 y §1.5).
 
 ### 1.3 Quitar una variante
 
@@ -177,12 +179,16 @@ Errores:
 
 | Estado | La tienda que la pidió (M/C) | ADMIN / SUPERVISOR |
 |---|---|---|
-| `pending_dispatch` | ✅ (no mueve stock) | ✅ (no mueve stock) |
-| `in_transit` | ❌ `409` | ✅ vuelve a la bodega **lo que se despachó** |
+| `pending_dispatch` | ✅ (no mueve stock) | ❌ `409` — se **rechaza** al atenderla |
+| `in_transit` | ❌ `409` | ✅ vuelve a la bodega **lo que se despachó** (nota obligatoria) |
 
 Para **rechazar** una reposición, la central usa `dispatch` con todo en 0
-(queda `not_found` = "Rechazada"), **no** `cancel`. Así el front distingue
-"la central la rechazó" de "la tienda la anuló".
+(queda `not_found` = "Rechazada", nota obligatoria) — `cancel` sobre una
+reposición pendiente da `409`. Así "la central la rechazó" y "la tienda la
+anuló" nunca se confunden.
+
+Si la tienda se **desactivó** mientras la reposición esperaba, atenderla
+mandando algo da `409 ... está inactiva`: se rechaza (todo en 0).
 
 ### 1.6 Recibir, perdido, faltantes
 
@@ -353,7 +359,7 @@ backend igual valida cada acción (si la pantalla quedó vieja, responde
 
 | `status` | Tienda que la pidió | Central |
 |---|---|---|
-| `pending_dispatch` | `awaiting_central` · Esperando a la central · `[addVariants, removeVariant, cancel]` | `to_attend` · Por atender · `[attend, cancel]` |
+| `pending_dispatch` | `awaiting_central` · Esperando a la central · `[addVariants, removeVariant, cancel]` | `to_attend` · Por atender · `[attend]` |
 | `in_transit` | `to_receive` · Por recibir · `[receive]` | `in_transit` · En camino · `[cancel, markLost]` |
 | `not_found` | `rejected` · Rechazada | ídem |
 | `received` / `cancelled` / `lost` | como el envío | ídem |

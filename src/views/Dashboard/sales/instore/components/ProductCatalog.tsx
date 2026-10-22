@@ -326,7 +326,10 @@ const ProductCatalog: React.FC<ProductCatalogProps> = ({
                               onClick={e => {
                                 e.stopPropagation()
 
-                                if (orders.length === 1) onToggleLink?.(orders[0].id)
+                                // Activar abre el dialogo con los datos del cliente: entregarle
+                                // a la persona equivocada es lo unico que no se puede deshacer.
+                                // Quitar el enlace si va de un clic, que es deshacer.
+                                if (linked && orders.length === 1) onToggleLink?.(orders[0].id)
                                 else setPickupChoices(orders)
                               }}
                               startIcon={
@@ -440,9 +443,11 @@ const ProductCatalog: React.FC<ProductCatalogProps> = ({
       {/* Cada pedido tiene su propia unidad apartada: se entrega el del cliente presente */}
       <Dialog open={!!pickupChoices} onClose={() => setPickupChoices(null)} maxWidth='xs' fullWidth>
         <DialogTitle>
-          ¿De qué cliente es el pedido?
+          {pickupChoices && pickupChoices.length > 1 ? '¿De qué cliente es el pedido?' : 'Confirme a quién le entrega'}
           <Typography variant='body2' color='text.secondary' sx={{ mt: 1 }}>
-            Hay varios pedidos esperando esta prenda. Verifique el documento del cliente y elija el suyo.
+            {pickupChoices && pickupChoices.length > 1
+              ? 'Hay varios pedidos esperando esta prenda. Verifique el documento del cliente y elija el suyo.'
+              : 'Verifique el documento del cliente contra estos datos antes de entregarle la prenda.'}
           </Typography>
         </DialogTitle>
 

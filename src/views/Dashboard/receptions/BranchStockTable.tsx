@@ -39,6 +39,9 @@ type SizeRow = {
   sizeName: string
   availableStock: number
   warehouseStock: number
+
+  // Del deposito, apartado por pedidos con QR sin pagar: NO se puede pasar al piso
+  heldInWarehouse: number
   inTransitStock: number
   centralWarehouseStock: number
   pendingReplenishment: boolean
@@ -71,6 +74,7 @@ const groupByProduct = (variants: Variant[]): ProductGroup[] => {
       sizeName: typeof size.size === 'object' ? size.size.name : String(size.size ?? ''),
       availableStock: size.availableStock || 0,
       warehouseStock: size.warehouseStock || 0,
+      heldInWarehouse: size.heldInWarehouse || 0,
       inTransitStock: size.inTransitStock || 0,
       centralWarehouseStock: size.centralWarehouseStock || 0,
       pendingReplenishment: !!size.pendingReplenishment
@@ -96,6 +100,11 @@ const groupByProduct = (variants: Variant[]): ProductGroup[] => {
 
   return [...groups.values()]
 }
+
+// Lo que realmente se puede pasar al piso: el deposito menos lo apartado por
+// pedidos con QR sin pagar. Sin esto el campo deja escribir de mas y el back
+// responde "Stock insuficiente en bodega... (apartada para el pedido #N)".
+const movibleDesdeBodega = (size: SizeRow) => size.warehouseStock - size.heldInWarehouse
 
 const BranchStockTable = () => {
   const queryClient = useQueryClient()
@@ -170,7 +179,10 @@ const BranchStockTable = () => {
   const toWarehouseUnits = toWarehouseEntries.reduce((sum, [, quantity]) => sum + quantity, 0)
 
   const overStock =
-    toFloorEntries.some(([id, qty]) => qty > (stockById[Number(id)]?.warehouseStock ?? 0)) ||
+    toFloorEntries.some(
+      ([id, qty]) =>
+        qty > (stockById[Number(id)]?.warehouseStock ?? 0) - (stockById[Number(id)]?.heldInWarehouse ?? 0)
+    ) ||
     toWarehouseEntries.some(([id, qty]) => qty > (stockById[Number(id)]?.availableStock ?? 0))
 
   const total = data?.meta?.total || 0
@@ -402,13 +414,21 @@ const BranchStockTable = () => {
                                   </td>
                                   <td>
                                     <StockStatusCell stock={size.warehouseStock} />
+                                    {/* Lo apartado sigue en el deposito pero no se puede mover */}
+                                    {size.heldInWarehouse > 0 && (
+                                      <Typography variant='caption' color='text.secondary' display='block'>
+                                        {size.heldInWarehouse} apartadas
+                                      </Typography>
+                                    )}
                                   </td>
                                   <td>
                                     <Tooltip
                                       title={
-                                        size.warehouseStock === 0
-                                          ? 'Sin stock en la bodega'
-                                          : `Hasta ${size.warehouseStock}`
+                                        movibleDesdeBodega(size) === 0
+                                          ? size.heldInWarehouse > 0
+                                            ? 'Todo lo de bodega está apartado para un pedido'
+                                            : 'Sin stock en la bodega'
+                                          : `Hasta ${movibleDesdeBodega(size)}`
                                       }
                                     >
                                       <span>
@@ -416,12 +436,12 @@ const BranchStockTable = () => {
                                           type='number'
                                           size='small'
                                           placeholder='0'
-                                          disabled={size.warehouseStock === 0}
-                                          error={(toFloor[size.variantSizeId] || 0) > size.warehouseStock}
+                                          disabled={movibleDesdeBodega(size) === 0}
+                                          error={(toFloor[size.variantSizeId] || 0) > movibleDesdeBodega(size)}
                                           value={toFloor[size.variantSizeId] || ''}
                                           onChange={e => setQuantity(setToFloor, size.variantSizeId, e.target.value)}
                                           sx={{ width: '100px' }}
-                                          inputProps={{ min: 0, max: size.warehouseStock }}
+                                          inputProps={{ min: 0, max: movibleDesdeBodega(size) }}
                                         />
                                       </span>
                                     </Tooltip>

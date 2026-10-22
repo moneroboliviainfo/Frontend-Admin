@@ -1,4 +1,5 @@
 import { apiClient } from '@/libs/axios'
+import type { ImportStockResponse } from '@/types/api/variants'
 import type {
   BranchStockItem,
   BranchTransfer,
@@ -158,6 +159,41 @@ class BranchTransferServiceClass {
 
   async getTransfer(transferId: number): Promise<BranchTransfer> {
     const response = await apiClient.get<BranchTransfer>(`/api/branch-transfers/${transferId}`)
+
+    return response.data
+  }
+
+  // --- Envio a una tienda por Excel: una tienda por archivo ---
+
+  async getDispatchImportTemplate(destinationBranchId: number): Promise<Blob> {
+    const response = await apiClient.get('/api/branch-transfers/central-dispatch/import/template', {
+      responseType: 'blob',
+      params: { destinationBranchId }
+    })
+
+    return response.data
+  }
+
+  async importCentralDispatch(
+    file: File,
+    destinationBranchId: number,
+    dryRun: boolean,
+    note?: string
+  ): Promise<ImportStockResponse> {
+    const form = new FormData()
+
+    form.append('file', file)
+    if (note?.trim()) form.append('note', note.trim())
+
+    const response = await apiClient.post<ImportStockResponse>(
+      '/api/branch-transfers/central-dispatch/import',
+      form,
+      {
+        // Sin pisar el application/json del apiClient no se arma el boundary
+        headers: { 'Content-Type': 'multipart/form-data' },
+        params: { destinationBranchId, dryRun: dryRun ? 'true' : 'false' }
+      }
+    )
 
     return response.data
   }

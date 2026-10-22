@@ -82,7 +82,7 @@ const ESC = 0x1b
 const GS = 0x1d
 const LF = 0x0a
 
-const ESC_POS = {
+export const ESC_POS = {
   INIT: new Uint8Array([ESC, 0x40]),
 
   // Font B: fuente condensada del propio hardware — reduce el tamaño de letra
@@ -215,7 +215,7 @@ export const isBluetoothConnected = (): boolean => {
   return bluetoothDevice?.gatt?.connected ?? false
 }
 
-const writeToprinter = async (data: Uint8Array): Promise<void> => {
+export const writeToprinter = async (data: Uint8Array): Promise<void> => {
   if (!printerCharacteristic) {
     throw new Error('Impresora no conectada')
   }
@@ -256,7 +256,7 @@ const textToBytes = (text: string): Uint8Array => {
   return encoder.encode(cleanText)
 }
 
-const printLine = async (text: string): Promise<void> => {
+export const printLine = async (text: string): Promise<void> => {
   const textBytes = textToBytes(text)
   const lineBytes = new Uint8Array([...textBytes, LF])
 

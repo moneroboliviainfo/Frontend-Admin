@@ -6,6 +6,7 @@ import Dialog from '@mui/material/Dialog'
 import DialogTitle from '@mui/material/DialogTitle'
 import DialogContent from '@mui/material/DialogContent'
 import DialogActions from '@mui/material/DialogActions'
+import Box from '@mui/material/Box'
 import Button from '@mui/material/Button'
 import Alert from '@mui/material/Alert'
 import Typography from '@mui/material/Typography'
@@ -17,6 +18,9 @@ import CircularProgress from '@mui/material/CircularProgress'
 import CustomTextField from '@core/components/mui/TextField'
 import tableStyles from '@core/styles/table.module.css'
 import { useReceiveTransfer } from '@/hooks/useBranchTransfers'
+import { useAuthContext } from '@/contexts/AuthContext'
+import { printReceptionReceipt, printReceptionReceiptBluetooth } from '@/utils/receptionReceipt'
+import { isBluetoothAvailable } from '@/utils/bluetoothPrinter'
 import type { BranchTransfer } from '@/types/api/branchTransfer'
 import { itemLabel } from '@/views/Dashboard/central-warehouse/transfers'
 import { prendas } from '@/views/Dashboard/central-warehouse/units'
@@ -37,6 +41,9 @@ const ReceiveTransferModal = ({ transfer, onClose, showMessage }: Props) => {
 
   const receive = useReceiveTransfer()
 
+  // Quien recibe firma el comprobante: su nombre va impreso bajo la linea
+  const { user } = useAuthContext()
+
   // Hay que mandar TODAS las lineas que salieron: una que falte da 400
   const dispatched = (transfer?.items || []).filter(item => (item.dispatchedQuantity ?? 0) > 0)
 
@@ -56,6 +63,22 @@ const ReceiveTransferModal = ({ transfer, onClose, showMessage }: Props) => {
   }, [transfer])
 
   if (!transfer) return null
+
+  // Se imprime ANTES de confirmar: el papel se firma con las dos personas
+  // frente al paquete, con las cantidades que el cajero acaba de contar.
+  const buildReceipt = () => ({
+    transferId: transfer.id,
+    origin: transfer.sourceBranch?.name || 'Bodega Central',
+    destination: transfer.destinationBranch?.name || 'esta sucursal',
+    location: location === 'warehouse' ? 'Bodega de la sucursal' : 'Tienda',
+    note: note.trim() || undefined,
+    receivedBy: user?.name || 'Cajero',
+    lines: dispatched.map(item => ({
+      label: itemLabel(item),
+      dispatched: item.dispatchedQuantity ?? 0,
+      received: received[item.id] ?? 0
+    }))
+  })
 
   const totalDispatched = dispatched.reduce((sum, item) => sum + (item.dispatchedQuantity ?? 0), 0)
   const totalReceived = dispatched.reduce((sum, item) => sum + (received[item.id] ?? 0), 0)
@@ -210,10 +233,32 @@ const ReceiveTransferModal = ({ transfer, onClose, showMessage }: Props) => {
         )}
       </DialogContent>
 
-      <DialogActions>
+      <DialogActions sx={{ gap: 1, flexWrap: 'wrap' }}>
         <Button onClick={onClose} color='secondary' disabled={receive.isPending}>
           Volver
         </Button>
+
+        <Box sx={{ flex: 1 }} />
+
+        <Button
+          variant='outlined'
+          startIcon={<i className='tabler-printer' />}
+          onClick={() => printReceptionReceipt(buildReceipt())}
+          disabled={receive.isPending}
+        >
+          Imprimir
+        </Button>
+
+        {isBluetoothAvailable() && (
+          <Button
+            variant='outlined'
+            startIcon={<i className='tabler-bluetooth' />}
+            onClick={() => printReceptionReceiptBluetooth(buildReceipt())}
+            disabled={receive.isPending}
+          >
+            Térmica
+          </Button>
+        )}
         <Button
           onClick={handleConfirm}
           variant='contained'

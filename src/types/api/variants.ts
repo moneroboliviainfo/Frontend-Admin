@@ -6,8 +6,28 @@ export interface VariantSize {
         name: string
       }
     | string
+
+  // OJO: `availableStock` es lo VENDIBLE del piso, no lo que hay fisicamente.
+  // Ya resta los carritos del POS y lo apartado por pedidos. Para contar
+  // prendas colgadas se usa `salesFloorStock`.
   availableStock?: number
+
+  // Piso fisico de la sucursal consultada: lo que el cajero ve colgado
+  salesFloorStock?: number
+
+  // Deposito de la sucursal. Este si es fisico.
   warehouseStock?: number
+
+  // Del deposito, lo apartado por pedidos con QR sin pagar: no se puede pasar
+  // al piso. Disponible para mover = warehouseStock - heldInWarehouse.
+  heldInWarehouse?: number
+
+  // Ya descontado por pedidos que esta sucursal tiene que despachar, pero
+  // todavia fisicamente en el local. En el conteo hay que sumarlo a lo
+  // esperado o se registran sobrantes falsos. Un pedido sale primero del
+  // deposito y solo lo que falta del piso: por eso van separados.
+  pendingDispatchSalesFloor?: number
+  pendingDispatchWarehouse?: number
 
   // Despachado desde la bodega central y todavia no recibido por esta sucursal
   inTransitStock?: number
@@ -185,4 +205,38 @@ export interface StockMovementsResponse {
     hasNextPage: boolean
     hasPreviousPage: boolean
   }
+}
+
+// --- Importacion por Excel (ADMIN, SUPERVISOR) ---
+
+export interface ImportLine {
+
+  // Filas del Excel que aportaron a esta linea (se suman si la variante se repite)
+  rows: number[]
+  variantId: number
+  product: string
+  color: string
+  size: string
+  quantity: number
+
+  // Solo en el envio: lo que hay en la bodega para esa variante
+  available?: number
+}
+
+export interface ImportStockResponse {
+  dryRun: boolean
+  totalUnits: number
+  lines: ImportLine[]
+  warnings?: string[]
+
+  // Solo en el envio: null con dryRun=true, el envio creado con dryRun=false
+  transfer?: { id: number } | null
+  destination?: { id: number; name: string }
+}
+
+// El 400 con filas mal trae `errors`; los demas (archivo invalido, limite de
+// 300, encabezados) traen solo `message`.
+export interface ImportRowError {
+  row: number
+  message: string
 }

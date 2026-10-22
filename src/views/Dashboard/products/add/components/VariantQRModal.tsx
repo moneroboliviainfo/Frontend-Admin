@@ -1,6 +1,6 @@
 'use client'
 
-import { useRef } from 'react'
+import { useRef, useState } from 'react'
 
 import Dialog from '@mui/material/Dialog'
 import DialogTitle from '@mui/material/DialogTitle'
@@ -9,7 +9,14 @@ import DialogActions from '@mui/material/DialogActions'
 import Button from '@mui/material/Button'
 import Box from '@mui/material/Box'
 import Typography from '@mui/material/Typography'
+import MenuItem from '@mui/material/MenuItem'
+import Menu from '@mui/material/Menu'
+import Divider from '@mui/material/Divider'
 import { QRCodeSVG } from 'qrcode.react'
+
+import { isBluetoothAvailable } from '@/utils/bluetoothPrinter'
+import { LABEL_SIZES, printVariantLabel, printVariantLabelBluetooth } from '@/utils/variantLabel'
+import type { LabelSize } from '@/utils/variantLabel'
 
 interface VariantQRModalProps {
   open: boolean
@@ -24,6 +31,52 @@ const VariantQRModal = ({ open, onClose, variantId, colorName, sizeName, product
   const qrRef = useRef<HTMLDivElement>(null)
 
   const qrValue = `<qr>${variantId}</qr>`
+
+  // Menu de medidas: la misma etiqueta sale en cuatro tamaños de rollo
+  const [anchorEl, setAnchorEl] = useState<null | HTMLElement>(null)
+  const [viaBluetooth, setViaBluetooth] = useState(false)
+
+  // El QR va como PNG: el SVG de pantalla no se imprime de forma confiable
+  const qrToDataUrl = (): Promise<string> =>
+    new Promise(resolve => {
+      const svg = qrRef.current?.querySelector('svg')
+
+      if (!svg) return resolve('')
+
+      const canvas = document.createElement('canvas')
+      const ctx = canvas.getContext('2d')
+
+      if (!ctx) return resolve('')
+
+      const img = new Image()
+
+      img.onload = () => {
+        canvas.width = 512
+        canvas.height = 512
+        ctx.fillStyle = '#fff'
+        ctx.fillRect(0, 0, 512, 512)
+        ctx.drawImage(img, 0, 0, 512, 512)
+        resolve(canvas.toDataURL('image/png'))
+      }
+
+      img.src =
+        'data:image/svg+xml;base64,' +
+        btoa(unescape(encodeURIComponent(new XMLSerializer().serializeToString(svg))))
+    })
+
+  const handlePrint = async (size: LabelSize) => {
+    setAnchorEl(null)
+
+    const label = { variantId, productName, colorName, sizeName, qrDataUrl: '' }
+
+    if (viaBluetooth) {
+      await printVariantLabelBluetooth(label, size)
+
+      return
+    }
+
+    printVariantLabel({ ...label, qrDataUrl: await qrToDataUrl() }, size)
+  }
 
   const handleDownloadQR = () => {
     const svg = qrRef.current?.querySelector('svg')
@@ -166,10 +219,46 @@ const VariantQRModal = ({ open, onClose, variantId, colorName, sizeName, product
           </Box>
         </Box>
       </DialogContent>
-      <DialogActions>
+      <DialogActions sx={{ gap: 1, flexWrap: 'wrap' }}>
         <Button onClick={onClose} color='secondary'>
           Cerrar
         </Button>
+
+        <Button
+          variant='outlined'
+          startIcon={<i className='tabler-printer' />}
+          onClick={e => {
+            setViaBluetooth(false)
+            setAnchorEl(e.currentTarget)
+          }}
+        >
+          Imprimir etiqueta
+        </Button>
+
+        {isBluetoothAvailable() && (
+          <Button
+            variant='outlined'
+            startIcon={<i className='tabler-bluetooth' />}
+            onClick={e => {
+              setViaBluetooth(true)
+              setAnchorEl(e.currentTarget)
+            }}
+          >
+            Térmica
+          </Button>
+        )}
+
+        <Menu anchorEl={anchorEl} open={!!anchorEl} onClose={() => setAnchorEl(null)}>
+          <MenuItem disabled sx={{ opacity: '1 !important', fontSize: '0.75rem' }}>
+            Tamaño de la etiqueta
+          </MenuItem>
+          <Divider />
+          {LABEL_SIZES.map(size => (
+            <MenuItem key={size.id} onClick={() => handlePrint(size)}>
+              {size.label}
+            </MenuItem>
+          ))}
+        </Menu>
         <Button
           onClick={handleDownloadQR}
           color='primary'

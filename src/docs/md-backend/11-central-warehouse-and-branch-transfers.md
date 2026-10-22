@@ -138,6 +138,85 @@ Errores:
 - `400 Stock insuficiente en la bodega principal para la variante N: disponible D, solicitado Q` — no se hace parcial.
 - `400 La variante N está repetida: va una sola vez con la cantidad total`.
 
+### Crear el envío con un Excel (ADMIN, SUPERVISOR)
+
+Una tienda por archivo. El resultado es el **mismo envío** que el de arriba:
+nace `in_transit`, la tienda lo recibe con `receive` y los faltantes van a
+revisión. El Excel solo arma las líneas.
+
+```
+GET  /branch-transfers/central-dispatch/import/template?destinationBranchId=2
+→ plantilla-envio-stock.xlsx: una fila por variante
+  | ID variante | Producto | Color | Talla | Stock bodega principal | Stock <tienda> | En camino a <tienda> | Pedido por la tienda | Cantidad a enviar |
+  "Stock bodega principal" = lo que se puede enviar (depósito físico de la central)
+  "Stock <tienda>"         = depósito + piso de la tienda destino
+  "En camino a <tienda>"   = ya despachado hacia la tienda y sin recibir (cualquier traslado in_transit)
+  "Pedido por la tienda"   = "Sí" si la variante está en una reposición de la tienda sin atender
+                             (mejor atender la reposición: POST /branch-transfers/replenishments/:id/dispatch, doc 15 §1)
+  Las cuatro son referencia, para no mandar dos veces lo mismo. Orden: producto, color, talla (XXS…XXL).
+
+POST /branch-transfers/central-dispatch/import?destinationBranchId=2&dryRun=true|false
+multipart/form-data: file (.xlsx, máx. 5 MB), note? (texto)
+```
+
+- Mismas reglas que el ingreso por Excel ([06](06-inventory-and-warehouse.md),
+  "Ingreso masivo por Excel"): se leen `ID variante` y **`Cantidad a enviar`**
+  por encabezado, vacía o 0 = no va, las filas repetidas se suman (aviso en
+  `warnings`), **todo o nada**.
+- Una plantilla de **ingreso** (columna "Cantidad a ingresar") subida acá se
+  rechaza (`400`), y al revés también: no se puede mover stock con el archivo
+  equivocado.
+- **Además** se valida el stock de la bodega para **todas** las líneas a la
+  vez: el `400` lista todas las que no alcanzan (el envío manual corta en la
+  primera).
+- `dryRun=true`: vista previa, no crea nada. Con `dryRun=false` (u omitido)
+  crea el envío; sin `note` queda `"Envío importado desde Excel"`.
+- ⚠️ `dryRun` acepta **solo `true` o `false`**: otro valor (`1`, `TRUE`,
+  vacío…) es un `400`, nunca un envío real. `?branchId=` se ignora (el
+  destino es siempre `destinationBranchId`).
+- **Máximo 300 variantes con cantidad por archivo** (mientras se crea el envío
+  esas variantes quedan bloqueadas y ninguna tienda puede venderlas; un envío
+  más grande se divide en varios archivos).
+- ⚠️ Subir dos veces el mismo archivo (o un doble clic en "Confirmar") crea
+  **dos envíos**: el backend no detecta archivos repetidos. En el front:
+  deshabilitar "Confirmar" mientras la request está en curso y, tras crear el
+  envío, ir directo a su detalle (`transfer.id`) en vez de dejar la pantalla
+  de subida lista para reenviar. Si se mandó de más, se anula el envío en
+  camino (`POST /branch-transfers/cancel/:id`).
+- Si entre la vista previa y la confirmación alguien despachó y ya no
+  alcanza, la confirmación da el `400 Stock insuficiente…` normal (de una
+  línea).
+
+Respuesta `201`:
+
+```json
+{
+  "dryRun": false,
+  "destination": { "id": 2, "name": "Zarga" },
+  "totalUnits": 7,
+  "lines": [
+    { "rows": [2], "variantId": 10, "product": "Polera", "color": "Azul", "size": "M", "quantity": 4, "available": 5 },
+    { "rows": [3], "variantId": 11, "product": "Polera", "color": "Azul", "size": "L", "quantity": 3, "available": 20 }
+  ],
+  "warnings": [],
+  "transfer": { "id": 45, "status": "in_transit", "...": "el BranchTransfer completo, como POST /central-dispatch" }
+}
+```
+
+Con `dryRun=true`, `transfer` es `null`. `available` = stock de la bodega al
+validar.
+
+Errores (`400` salvo indicación):
+
+| Caso | Respuesta |
+|---|---|
+| Filas con errores o sin stock | `{ "statusCode": 400, "message": "El archivo tiene errores: no se envió nada", "errors": [{ "row": 2, "message": "Stock insuficiente en la bodega principal para la variante 10 (filas 2, 4): disponible 5, solicitado 6" }, { "row": 7, "message": "La variante 999 no existe" }] }` |
+| Tienda inválida o inactiva | `404 Sucursal destino ID N no encontrada o inactiva` (también en la plantilla) |
+| Sin archivo / no es `.xlsx` / faltan encabezados | Igual que el ingreso por Excel (el encabezado esperado es "Cantidad a enviar") |
+| Ninguna cantidad | `El archivo no tiene cantidades para enviar` |
+| Más de 300 variantes | `El archivo tiene N variantes con cantidad: el máximo por envío es 300. Divídelo en varios archivos` |
+| `dryRun` distinto de `true`/`false` | `400` de validación (`dryRun must be a boolean value`) |
+
 ### Anular un envío en camino
 
 ```
@@ -214,8 +293,8 @@ POST /branch-transfers/review/:id
 | `outcome` | Qué pasa con el faltante de esa línea |
 |---|---|
 | `lost` | Queda como pérdida. No mueve stock. |
-| `found_at_destination` | Suma en la tienda destino, **donde se recibió** el envío (`receivedLocation`; en pedidos y envíos viejos, el **depósito**). No se permite si la línea tiene unidades que **nunca salieron** del origen (`400 ... nunca salieron del origen, no pueden aparecer en el destino`). |
-| `found_at_origin` | Vuelve a donde salió: depósito de la bodega (envío) o **piso** de la tienda origen (pedido). |
+| `found_at_destination` | Suma en la tienda destino, **donde se recibió**: un pedido, en el **piso**; un envío, en `receivedLocation` (envíos viejos: el **depósito**). No se permite si la línea tiene unidades que **nunca salieron** del origen (`400 ... nunca salieron del origen, no pueden aparecer en el destino`). |
+| `found_at_origin` | Vuelve a donde salió: depósito de la bodega (envío); en un pedido, a la tienda origen — primero a su **depósito** (hasta `fromWarehouse`) y el resto a su **piso**. |
 
 - Cada línea se revisa **una sola vez**. Podés revisar algunas ahora y otras
   después; cuando no queda ninguna, el traslado pasa a `reviewed`.
@@ -223,6 +302,18 @@ POST /branch-transfers/review/:id
 - Sin faltantes pendientes → `409 El traslado #N no tiene faltantes por revisar`.
 - En un traslado `lost`, lo despachado ya se dio por perdido: solo queda por
   revisar lo que no se encontró (si hubo).
+- **Pedido que todavía espera a su cliente** (`received`, dentro de
+  `pickupDeadline`, sin venta de retiro vigente ni "no retirado"):
+  `found_at_destination` **devuelve la prenda al pedido** — sube
+  `receivedQuantity` de la línea, queda **apartada** para el cliente y el
+  pedido vuelve a "pedidos recibidos" (aunque hubiera llegado con 0). Si es
+  **cobrado**, baja `refundOwed` y en la venta de retiro sale al precio
+  congelado (ver 13 §5.1). Excepción: si al cliente **ya se le devolvió** la
+  plata de esa prenda, queda como stock de la tienda. Si el pedido ya no
+  espera (retirado, vencido, "no retirado"), también queda como stock de la
+  tienda.
+  ⚠️ Esa línea deja de mostrar el faltante (`receivedQuantity` ya lo
+  incluye): queda `reviewOutcome: "found_at_destination"`.
 
 ---
 
@@ -240,9 +331,13 @@ cliente → B **despacha** → A **recibe** → el cliente viene y A le hace una
   hay plata de por medio hasta el retiro. Con cobro (anticipo, devoluciones,
   QR, plazo con pérdida del anticipo) ver
   [13-prepaid-branch-requests.md](13-prepaid-branch-requests.md).
-- Desde que A pide, la prenda **deja de estar a la venta en B** (sale del
-  piso de B en el momento; con cobro por QR, queda apartada mientras se
-  paga).
+- Se le pide a B **lo que tiene en depósito y en piso**: el pedido saca
+  **primero del depósito** de B y lo que falta, de su piso (así el piso
+  queda para las ventas de B). Cada línea dice cuánto sale de cada lugar
+  (`items[].warehouseQuantity` = del depósito; el resto, del piso).
+- Desde que A pide, la prenda **deja de estar disponible en B** (sale en el
+  momento; con cobro por QR, queda apartada — en el depósito y/o el piso —
+  mientras se paga).
 - Cuando llega a A queda **reservada para ese cliente** unos días (ver 5.5):
   no se le puede vender a otro.
 
@@ -253,12 +348,16 @@ GET /variants/branch-stock/:variantId              (ADMIN, SUPERVISOR, MANAGER, 
 → [
     {
       "branch": { "id": 3, "name": "Tienda Sur" },
-      "salesFloor": 7,          // piso
-      "warehouse": 2,           // depósito (no se puede pedir)
-      "reserved": 1,            // apartado por ventas en curso
-      "heldForRequests": 0,     // apartado por pedidos: los que esperan a su cliente acá, y los
-                                //   pedidos a esta tienda que esperan el pago QR
-      "availableToRequest": 6,  // lo que se puede pedir: piso − reserved − heldForRequests
+      "salesFloor": 7,          // piso (físico)
+      "warehouse": 2,           // depósito (físico)
+      "reserved": 1,            // apartado en el piso por ventas en curso
+      "heldForRequests": 0,     // apartado en el piso por pedidos: los que esperan a su cliente
+                                //   acá, y la parte del piso de pedidos a esta tienda que esperan el pago QR
+      "heldInWarehouse": 0,     // apartado en el depósito: la parte del depósito de pedidos a
+                                //   esta tienda que esperan el pago QR
+      "availableSalesFloor": 6, // piso − reserved − heldForRequests
+      "availableWarehouse": 2,  // depósito − heldInWarehouse
+      "availableToRequest": 8,  // lo que se puede pedir: availableWarehouse + availableSalesFloor
       "inTransit": 0            // en camino hacia esa tienda
     }, ...
   ]
@@ -268,8 +367,14 @@ GET /variants/branch-stock/product-color/:id       (mismos roles) — todas las 
 ```
 
 Lista todas las **tiendas activas** (sin la bodega), **incluida la propia**:
-ocultala en la UI de "pedir a otra sucursal". Solo se puede pedir
-`availableToRequest` (lo del piso; el depósito de B no se pide).
+ocultala en la UI de "pedir a otra sucursal". Se puede pedir hasta
+`availableToRequest` (depósito + piso disponibles de B, el mismo cálculo
+que valida el backend al crear el pedido). **No** sumes `salesFloor +
+warehouse`: eso incluye lo reservado por ventas en curso y pedidos.
+
+Con `?branchId=` (opcional, ambos endpoints) devuelve solo esa tienda, en la
+misma forma de lista (un elemento, o `[]` si no es una tienda activa).
+Cualquier rol puede pasar cualquier tienda — no se fuerza la propia.
 
 ### 5.3 Flujo completo
 
@@ -277,7 +382,7 @@ ocultala en la UI de "pedir a otra sucursal". Solo se puede pedir
 TIENDA A (pide)                          TIENDA B (origen)
 POST /branch-transfers/requests
   → "pending_dispatch"
-  → sale del piso de B
+  → sale de B (depósito primero, después piso)
                                           ve "por despachar" (toDispatch)
                                           POST /branch-transfers/dispatch/:id
                                             → "in_transit"   (salió algo)
@@ -314,7 +419,7 @@ POST /branch-transfers/requests
 
 Errores: `400 No se puede pedir a la propia sucursal` ·
 `404 Sucursal ID N no encontrada o inactiva` (incluye la bodega) ·
-`400 Stock insuficiente en el piso de <B> para la variante N: disponible D, solicitado Q` ·
+`400 Stock insuficiente en <B> (depósito + piso) para la variante N: disponible D, solicitado Q` ·
 `400` variante repetida · `400 customerName should not be empty` (vacío o solo espacios).
 
 **Despachar** (MANAGER, CASHIER de B). B **acepta el pedido al despacharlo**:
@@ -328,7 +433,12 @@ POST /branch-transfers/dispatch/:id
 - `quantity` de `0` a lo pedido.
 - Si falta algo: **nota obligatoria**; queda como faltante de B "por revisar".
 - Si no sale nada: `status: "not_found"` → A tiene que avisarle al cliente.
-- **No mueve stock** (el stock ya salió del piso de B al pedir).
+- **No mueve stock** (el stock ya salió de B al pedir).
+- **Qué buscar y dónde**: cada línea trae `fromWarehouse` y
+  `fromSalesFloor` ya resueltos. En la pantalla de B, por línea: "Sacar
+  `fromWarehouse` del depósito y `fromSalesFloor` del piso" (un pedido de
+  antes del cambio viene con todo en `fromSalesFloor`). No los calcules con
+  `warehouseQuantity`. En envíos de la central vienen `null`.
 - Si A lo anuló mientras tanto → `409 No se puede despachar: el traslado #N fue anulado`.
   **Proceso**: B marca "despachado" en el sistema **antes** de entregar la
   prenda al transporte; si da 409, no la manda.
@@ -343,7 +453,7 @@ POST /branch-transfers/cancel/:id  { "note?": "El cliente ya no lo quiere" }
 - MANAGER/CASHIER: solo la **tienda que pidió** (A). B no anula: si no la
   encuentra, la marca al despachar (`403` si lo intenta).
 - ADMIN/SUPERVISOR: cualquiera.
-- La prenda vuelve al piso de B. Ya despachado → `409 ... ya fue despachado`:
+- La prenda vuelve a B, a donde salió (depósito y/o piso). Ya despachado → `409 ... ya fue despachado`:
   una vez despachado, llega a A igual.
 - Si el pedido se cobró, al anularlo **se debe devolver todo** (ver 13 §5).
 

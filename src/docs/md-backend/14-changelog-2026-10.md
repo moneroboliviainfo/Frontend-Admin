@@ -1,7 +1,9 @@
 # Cambios en `develop` — octubre de 2026
 
-Secciones: 9–10 de octubre (abajo), [18 de octubre](#actualización-18-de-octubre--stock-de-la-bodega-principal-separado)
-y [19 de octubre](#actualización-19-de-octubre--reposiciones-etapas-de-los-traslados-facturas-por-sucursal)
+Secciones: 9–10 de octubre (abajo), [18 de octubre](#actualización-18-de-octubre--stock-de-la-bodega-principal-separado),
+[19 de octubre](#actualización-19-de-octubre--reposiciones-etapas-de-los-traslados-facturas-por-sucursal)
+, [20 de octubre](#actualización-20-de-octubre--reglas-de-traslados-bajas-y-caja)
+y [21 de octubre](#actualización-21-de-octubre--ingreso-de-stock-por-excel)
 (al final).
 
 ## 9 y 10 de octubre
@@ -141,3 +143,85 @@ No rompe, pero conviene saber:
 - [ ] Pedidos recibidos: mostrar `holdUntil` ("apartado hasta") y `pickupDeadline` ("espera hasta").
 - [ ] Listado de facturas: `?branchId=` en vez de `codigoSucursal`.
 - [ ] Recibir envíos/reposiciones: elegir "Depósito" o "Piso" (`location`) para todo lo recibido; no mostrar la opción en pedidos entre sucursales.
+
+---
+
+## Actualización 20 de octubre — reglas de traslados, bajas y caja
+
+| # | Cambio | Impacto en el front | Detalle |
+|---|---|---|---|
+| 1 | **Bajas** (`POST /variants/subtractstock`): ya no pueden dejar el stock **físico** de la ubicación en negativo; `reason` obligatorio (no vacío) | Manejar el `400` y exigir el motivo | [06](06-inventory-and-warehouse.md) |
+| 2 | **La central ya no anula una reposición pendiente**: la rechaza al atenderla (todo en 0, con nota). `to_attend` → `allowedActions: ["attend"]` | Quitar "Anular" en "Por atender" | [15](15-replenishments-and-transfer-stages.md) §1.5 |
+| 3 | **ADMIN/SUPERVISOR anulan siempre con nota** (envío en camino, reposición en camino, pedido entre tiendas) | Nota obligatoria en el diálogo de anular de la central | [15](15-replenishments-and-transfer-stages.md) §1.5 |
+| 4 | **"No retirado" en un pedido cobrado exige nota** (el cliente pierde el anticipo) | Diálogo de confirmación con nota obligatoria | [13](13-prepaid-branch-requests.md) §7 |
+| 5 | **Cierre de caja**: anticipos y devoluciones se cuentan desde el **cierre anterior**, no desde la apertura | Nada (el desglose sigue igual); un QR pagado entre turnos aparece en el cierre siguiente | [07](07-branches-daily-cash-billing.md) |
+| 6 | Atender una reposición mandando algo a una **tienda inactiva** → `409` | Mostrar el error; rechazarla | [15](15-replenishments-and-transfer-stages.md) §1.5 |
+| 7 | `GET /branch-transfers/pickup-stats` ya no cuenta pedidos recibidos sin ninguna prenda | Nada (ahora cuadra con `awaitingPickup`) | — |
+| 8 | **`branch-stock` acepta `?branchId=` opcional** (`GET /variants/branch-stock/:variantId` y `.../product-color/:id`): devuelve solo esa tienda, **en la misma lista** (un elemento; `[]` si no es una tienda activa, p. ej. la bodega principal). Cualquier rol puede consultar cualquier tienda (no se fuerza la propia) | Nada si no se usa (sin `branchId` responde igual que antes). Opcional: usarlo para ver piso/depósito de una sola sucursal | [06](06-inventory-and-warehouse.md), [11](11-central-warehouse-and-branch-transfers.md) §5.2 |
+| 9 | **Venta de retiro sin saldo** (el anticipo cubre todo) ya **no se puede crear con `qr`**: antes quedaba `PENDING` sin forma de confirmarla (el QR la rechazaba y `confirm/:id` no confirma ventas QR) | Si `amountDue` es `"0.00"`, forzar `cash` en el POS | [13](13-prepaid-branch-requests.md) §6.2 |
+
+### Errores nuevos
+
+| Endpoint | Error |
+|---|---|
+| `POST /variants/subtractstock` | `400 Stock insuficiente en <bodega\|tienda\|la bodega principal> para la variante N: disponible X, solicitado Y` |
+| `POST /branch-transfers/cancel/:id` (central) | `400 Al anular desde la central la nota es obligatoria…` · `409 La reposición #N está por atender: la central la rechaza al atenderla…` |
+| `POST /branch-transfers/pickup/:id` (`not_picked_up`, pedido cobrado) | `400 … hace perder el anticipo, la nota es obligatoria` |
+| `POST /branch-transfers/replenishments/:id/dispatch` | `409 La tienda de la reposición #N está inactiva…` |
+| `POST /orders/in-store` (`qr`, venta de retiro sin saldo) | `400 La venta no tiene saldo por cobrar (ya se pagó con el anticipo del pedido): créala en efectivo` |
+
+### Checklist
+
+- [ ] Bajas: motivo obligatorio y mensaje del `400` de stock insuficiente.
+- [ ] Central – "Por atender": sin botón "Anular" (solo atender/rechazar).
+- [ ] Central – diálogo "Anular": nota obligatoria.
+- [ ] Tienda – "No retirado" en pedido cobrado: confirmación "el cliente pierde Bs `advanceAmount`" + nota obligatoria.
+- [ ] POS – venta de retiro con `amountDue` `"0.00"`: forzar `cash` (no ofrecer QR).
+- [ ] (Opcional) Stock de una sola sucursal: `branch-stock/...?branchId=` y leer `[0]` (puede venir `[]`).
+
+### Pedidos entre sucursales: también del depósito de B
+
+| Cambio | Impacto en el front |
+|---|---|
+| Un pedido ahora puede salir del **depósito y del piso** de B: el backend saca **primero del depósito** y completa con el piso | "Pedir a otra sucursal": el máximo es `availableToRequest` (ahora depósito + piso disponibles) |
+| `GET /variants/branch-stock/...`: campos nuevos `heldInWarehouse`, `availableSalesFloor`, `availableWarehouse`; ⚠️ **`availableToRequest` cambia de significado** (antes solo piso) | Mostrar "Depósito: N · Piso: M" si querés; no sumar `salesFloor + warehouse` a mano |
+| Cada línea del pedido trae **`fromWarehouse`** y **`fromSalesFloor`** (cuánto saca B de su depósito y de su piso, ya resuelto; `null` en envíos de la central). También viene la columna cruda `warehouseQuantity`: no la uses para calcular | Pantalla de despacho de B: "Sacar `fromWarehouse` del depósito y `fromSalesFloor` del piso" |
+| `POST /branch-transfers/requests/quote`: cada línea trae `availableWarehouse` y `availableSalesFloor`; `available` = la suma | Nada si ya usabas `available` |
+| Error de stock al pedir: `400 Stock insuficiente en <B> (depósito + piso) para la variante N…` (antes "en el piso de <B>") | Si se parseaba el texto, actualizar |
+| Anular / "apareció en el origen" devuelven la prenda a donde salió (primero al depósito de B, hasta lo que salió de ahí) | Nada |
+| `POST /stock-transfers` (depósito → piso) respeta la parte del depósito apartada por un pedido que espera el pago QR | Puede dar `400 Stock insuficiente en bodega` aunque el físico alcance (está apartado) |
+
+- [ ] Despacho de B: mostrar `fromWarehouse` / `fromSalesFloor` por línea.
+- [ ] Pedir a otra sucursal: tope `availableToRequest`; opcional desglose `availableWarehouse` / `availableSalesFloor`.
+
+#### Inventario de la tienda y revisión de faltantes
+
+| Cambio | Impacto en el front |
+|---|---|
+| Variantes con stock por sucursal (inventario, `GET /products/:id`, etc.): campos nuevos **`heldInWarehouse`** (de `warehouseStock`, lo apartado por pedidos QR sin pagar — no se puede pasar al piso), **`pendingDispatchWarehouse`** y **`pendingDispatchSalesFloor`** (pedidos que la tienda tiene que despachar: ya descontados pero todavía físicamente en el local) | Inventario: "Depósito: N (M apartadas)"; en el **conteo físico**, esperado = stock + `pendingDispatch…` de esa ubicación, para no registrar sobrantes falsos |
+| Errores de stock insuficiente que restan apartados (`POST /stock-transfers`) nombran el pedido: `… (apartada para el pedido #N)` | Mostrar el mensaje tal cual |
+| Revisión `found_at_destination` en un **pedido** suma en el **piso** de la tienda que pidió (antes, en su depósito) | Nada |
+| Revisión `found_at_destination` en un **pedido que todavía espera al cliente**: la prenda **vuelve al pedido** (sube `receivedQuantity`, queda apartada, el pedido reaparece en "pedidos recibidos"); si es cobrado, **baja `refundOwed`** y en la venta sale a precio congelado. No aplica si esa plata ya se devolvió o si el pedido ya no espera (retirado, vencido, "no retirado") | Refrescar el pedido tras revisar; la línea ya no muestra faltante (`reviewOutcome` lo dice). Ver [11](11-central-warehouse-and-branch-transfers.md) §4 y [13](13-prepaid-branch-requests.md) §5.1 |
+
+- [ ] Inventario de la tienda: mostrar `heldInWarehouse` y "por despachar" (`pendingDispatchWarehouse` / `pendingDispatchSalesFloor`).
+- [ ] Pantalla de conteo / ajuste positivo: avisar si la variante tiene unidades "por despachar" en esa ubicación.
+- [ ] Revisión de faltantes de un pedido: tras `found_at_destination`, releer el pedido (puede volver a "pedidos recibidos" y cambiar `refundOwed`).
+
+## Actualización 21 de octubre — ingreso de stock por Excel
+
+Nada se rompe: son endpoints nuevos (ADMIN, SUPERVISOR). Detalle en
+[06](06-inventory-and-warehouse.md) ("Ingreso masivo por Excel") y
+[11](11-central-warehouse-and-branch-transfers.md) §2 ("Crear el envío con un Excel").
+
+| Cambio | Impacto en el front |
+|---|---|
+| `GET /variants/import-stock/template`: descarga la plantilla `.xlsx` (una fila por variante con `ID variante`, producto, color, talla, stock actual de la bodega principal y la columna a llenar `Cantidad a ingresar`) | Botón "Descargar plantilla" en la pantalla de ingreso de stock |
+| `POST /variants/import-stock` (`multipart/form-data`, campo `file`): ingresa todo al **depósito de la bodega principal**, como `addstock`. **Todo o nada**: si hay un error no se graba nada y el `400` trae `errors: [{ row, message }]` con todas las filas mal. `?dryRun=true` valida y devuelve el mismo resumen sin grabar | Subir → vista previa (`dryRun=true`) → confirmar (mismo archivo con `dryRun=false`). Mostrar `errors` en una tabla por fila y `warnings` (variantes repetidas que se suman) |
+| `GET /branch-transfers/central-dispatch/import/template?destinationBranchId=` + `POST /branch-transfers/central-dispatch/import?destinationBranchId=&dryRun=`: **envío a una tienda por Excel** (una tienda por archivo; columna `Cantidad a enviar`; de referencia, el stock de la bodega y de la tienda, lo que ya va **en camino** a la tienda y si la tienda ya lo **pidió** en una reposición). Crea un envío normal `in_transit` (`transfer` en la respuesta); el `400` lista **todas** las líneas sin stock en la bodega. **Máximo 300 variantes** por archivo | En "Nuevo envío": opción "Desde Excel" con el mismo flujo plantilla → vista previa → confirmar; tras confirmar, abrir el envío creado (`transfer.id`) |
+| ⚠️ En las dos importaciones `dryRun` acepta **solo `true`/`false`**: otro valor (`1`, `TRUE`, vacío) es un `400`, nunca una importación real. `?branchId=` se ignora | Mandar exactamente `dryRun=true` / `dryRun=false` |
+| ⚠️ El backend **no detecta archivos repetidos**: subir dos veces (o doble clic en "Confirmar") duplica el ingreso o crea dos envíos | Deshabilitar "Confirmar" durante la request; tras confirmar, salir de la pantalla de subida (envío: ir a su detalle) |
+
+- [ ] Pantalla de ingreso de stock: descargar plantilla, subir con `dryRun=true`, mostrar vista previa/errores, confirmar con `dryRun=false`.
+- [ ] "Nuevo envío" desde Excel: elegir tienda → plantilla → vista previa (`dryRun=true`) → confirmar → ir al envío creado. Un archivo de ingreso subido acá da `400` (encabezado distinto).
+- [ ] En las dos: botón "Confirmar" deshabilitado mientras la request está en curso, y aviso antes de volver a subir un archivo ya importado (duplica).
+- [ ] Mostrar el `400` de "máximo 300 variantes" tal cual (pide dividir el archivo).

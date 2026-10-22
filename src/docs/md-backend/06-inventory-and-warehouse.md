@@ -109,12 +109,13 @@ sumes al stock de X; con `X = bodega` es el mismo número que
 ```
 GET /variants/stock/:id?branchId=                    (A,S,M,C) → número, solo lo vendible
 GET /variants/:id/movements?branchId=                (A,S,M,C) → kardex paginado
-GET /variants/branch-stock/:variantId                (A,S,M,C) → disponibilidad en cada tienda
-GET /variants/branch-stock/product-color/:id         (A,S,M,C) → ídem, todas las tallas
+GET /variants/branch-stock/:variantId?branchId=      (A,S,M,C) → disponibilidad en cada tienda (o solo en branchId)
+GET /variants/branch-stock/product-color/:id?branchId= (A,S,M,C) → ídem, todas las tallas
 ```
 
 **Kardex** — cada fila trae: `quantity`, `location`, `type`, `user` (nombre
-de quién lo hizo, o `null`), `orderId`, `stockTransferId`, `branchTransferId`,
+de quién lo hizo — en una `venta`, quien creó la orden en tienda; `null` en
+ventas web y acciones del sistema), `orderId`, `stockTransferId`, `branchTransferId`,
 `counterpartBranch` (`{ id, name }`, la otra sucursal de un traslado),
 `reason`.
 
@@ -132,6 +133,13 @@ activa (sin la bodega, **incluida la propia**): `salesFloor`, `warehouse`,
 a esa tienda), `inTransit` y `pendingReplenishment` (esa tienda pidió la
 variante a la bodega y la central no la atendió). Es lo que usa el POS para
 "buscar en otras sucursales".
+
+`?branchId=` (opcional) filtra a una sola tienda: misma lista, con un solo
+elemento (`[]` si no es una tienda activa — p. ej. la bodega principal o una
+inactiva). A diferencia del resto de endpoints, **no** se fuerza la sucursal
+del usuario: un MANAGER/CASHIER puede consultar cualquier tienda. Sirve para
+ver piso (`salesFloor`) y depósito (`warehouse`) de una variante en una
+sucursal concreta.
 
 ## Ingresar / dar de baja / ajustar stock
 
@@ -154,6 +162,67 @@ POST /variants/positive-adjustment?branchId=<tienda>        (ADMIN, SUPERVISOR)
   envíos desde la bodega.
 - `branchId` **no va en el body** — se resuelve solo (sucursal del manager, o
   `?branchId=` si sos ADMIN/SUPERVISOR).
+
+### Ingreso masivo por Excel (ADMIN, SUPERVISOR)
+
+Mismo efecto que muchos `addstock` juntos: todo entra al **depósito de la
+bodega principal** (en el kardex/Excel sale como "Ingreso").
+
+```
+GET  /variants/import-stock/template
+→ plantilla-ingreso-stock.xlsx: una fila por variante
+  | ID variante | Producto | Color | Talla | Stock bodega principal | Cantidad a ingresar |
+  (solo se llena la última; vacía o 0 = no se ingresa)
+  ordenada por producto, color y talla (XXS…XXL; las numéricas al final)
+  "Stock bodega principal" = depósito físico de la central (igual que en la plantilla de envío)
+
+POST /variants/import-stock?dryRun=true|false     multipart/form-data, campo "file" (.xlsx, máx. 5 MB)
+```
+
+- Se leen solo las columnas **`ID variante`** y **`Cantidad a ingresar`**,
+  buscadas por su encabezado en la fila 1 (las demás se pueden borrar o
+  reordenar). Se lee la primera hoja.
+- **Todo o nada**: con un solo error no se graba nada.
+- `dryRun=true` valida y devuelve el resumen **sin grabar** (vista previa).
+  Para confirmar se reenvía el mismo archivo con `dryRun=false` (u omitido).
+- ⚠️ `dryRun` acepta **solo `true` o `false`**: cualquier otro valor (`1`,
+  `TRUE`, `yes`, vacío) es un `400` — así una vista previa mal armada nunca
+  graba de verdad.
+- `?branchId=` se **ignora** (como en `addstock`): no hace falta quitarlo si
+  el front lo agrega con el selector de sucursal.
+- Una variante repetida en varias filas se **suma** (y sale en `warnings`).
+- ⚠️ Importar dos veces el mismo archivo **duplica** el stock: el backend no
+  detecta archivos repetidos. En el front: **deshabilitar "Confirmar"**
+  mientras la request está en curso (un doble clic son dos ingresos) y, tras
+  un ingreso exitoso, **pedir confirmación** antes de volver a subir un
+  archivo con el mismo nombre.
+
+Respuesta `201`:
+
+```json
+{
+  "dryRun": false,
+  "totalUnits": 9,
+  "lines": [
+    { "rows": [2, 3], "variantId": 10, "product": "Polera", "color": "Azul", "size": "M", "quantity": 7 },
+    { "rows": [4], "variantId": 11, "product": "Polera", "color": "Azul", "size": "L", "quantity": 2 }
+  ],
+  "warnings": ["La variante 10 está en las filas 2, 3: se suman (7)"]
+}
+```
+
+Errores (`400`):
+
+| Caso | Respuesta |
+|---|---|
+| Filas con errores | `{ "statusCode": 400, "message": "El archivo tiene errores: no se ingresó nada", "errors": [{ "row": 5, "message": "Falta el ID de variante" }, { "row": 7, "message": "Cantidad inválida: \"1.5\" (debe ser un número entero positivo)" }, { "row": 9, "message": "La variante 999 no existe" }] }` |
+| Sin archivo | `Falta el archivo Excel (campo "file")` |
+| No es un `.xlsx` | `El archivo no es un Excel (.xlsx) válido` |
+| Faltan los encabezados | `La primera fila debe tener las columnas "ID variante" y "Cantidad a ingresar" (usa la plantilla correspondiente)` (también si se sube acá una plantilla de envío) |
+| Ninguna cantidad | `El archivo no tiene cantidades para ingresar` |
+| `dryRun` distinto de `true`/`false` | `400` de validación (`dryRun must be a boolean value`) |
+
+Un archivo de más de 5 MB devuelve `413`.
 
 ## Traspasos depósito ↔ piso (ADMIN, SUPERVISOR, MANAGER, CASHIER)
 

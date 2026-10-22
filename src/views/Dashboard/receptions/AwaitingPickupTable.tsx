@@ -66,6 +66,10 @@ const AwaitingPickupTable = () => {
     }
   }
 
+  // El back exige el motivo cuando marcarlo le hace perder el anticipo al
+  // cliente: queda como constancia de por que se perdio esa plata.
+  const notaObligatoria = !!target?.advancePaidAt && !target?.advanceForfeited
+
   return (
     <>
       <Card>
@@ -192,7 +196,7 @@ const AwaitingPickupTable = () => {
           </Alert>
 
           {/* Si pago un anticipo y todavia no lo perdio, marcarlo aca se lo hace perder */}
-          {target?.advancePaidAt && !target?.advanceForfeited && (
+          {notaObligatoria && (
             <Alert severity='error' sx={{ mb: 4 }}>
               El cliente <strong>pierde los {money(target.advanceAmount)}</strong> que pagó al encargar el pedido.
               Confírmelo con él antes de marcarlo.
@@ -203,10 +207,12 @@ const AwaitingPickupTable = () => {
             fullWidth
             multiline
             rows={2}
-            label='Motivo (opcional)'
+            label={notaObligatoria ? 'Motivo' : 'Motivo (opcional)'}
             placeholder='El cliente desistió del pedido'
             value={note}
             onChange={e => setNote(e.target.value)}
+            error={notaObligatoria && !note.trim()}
+            helperText={notaObligatoria && !note.trim() ? 'Queda como constancia de que perdió lo que pagó' : ''}
           />
         </DialogContent>
 
@@ -218,7 +224,7 @@ const AwaitingPickupTable = () => {
             onClick={handleNotPickedUp}
             variant='contained'
             color='error'
-            disabled={markPickup.isPending}
+            disabled={markPickup.isPending || (notaObligatoria && !note.trim())}
             startIcon={markPickup.isPending ? <CircularProgress size={16} /> : undefined}
           >
             {markPickup.isPending ? 'Marcando...' : 'Confirmar'}

@@ -254,6 +254,11 @@ const PaymentDialog: React.FC<PaymentDialogProps> = ({
   // Anticipo ya pagado al encargar el pedido (0 en una venta normal)
   const advanceApplied = parseFloat(repriceData?.advanceApplied || '0') || 0
 
+  // Si el anticipo cubrio todo no queda nada por cobrar, y el back rechaza esa
+  // venta con QR: quedaba PENDING sin forma de confirmarla. Solo efectivo.
+  const sinSaldo = !!repriceData?.amountDue && parseFloat(repriceData.amountDue) === 0
+  const metodosDisponibles = sinSaldo ? paymentMethods.filter(method => method.id === 'cash') : paymentMethods
+
   const totalToPay = useMemo(() => {
     // amountDue = total - anticipo. Cobrar el total le cobraria dos veces el anticipo.
     if (repriceData?.amountDue) {
@@ -288,11 +293,8 @@ const PaymentDialog: React.FC<PaymentDialogProps> = ({
   const formatCurrency = (amount: number | string) => {
     const numAmount = typeof amount === 'string' ? parseFloat(amount) : amount
 
-    return new Intl.NumberFormat('es-CO', {
-      style: 'currency',
-      currency: 'COP',
-      minimumFractionDigits: 0
-    }).format(numAmount)
+    // Bolivianos: la plantilla venia con pesos colombianos y mostraba "$ 858"
+    return `Bs ${(numAmount || 0).toFixed(2)}`
   }
 
   const formatTime = (seconds: number) => {
@@ -577,8 +579,14 @@ const PaymentDialog: React.FC<PaymentDialogProps> = ({
             <Typography variant='subtitle2' fontWeight='bold' sx={{ mb: 2 }}>
               Seleccione Método de Pago
             </Typography>
+
+            {sinSaldo && (
+              <Alert severity='info' sx={{ mb: 3 }}>
+                El anticipo cubre toda la venta: no hay nada que cobrar. Confirme en efectivo.
+              </Alert>
+            )}
             <Grid container spacing={2}>
-              {paymentMethods.map(method => (
+              {metodosDisponibles.map(method => (
                 <Grid size={{ xs: 6 }} key={method.id}>
                   <Card
                     sx={{
@@ -656,8 +664,10 @@ const PaymentDialog: React.FC<PaymentDialogProps> = ({
                 <Typography variant='h6' sx={{ mt: 2, mb: 1, fontWeight: 'bold' }}>
                   Escanea para pagar
                 </Typography>
+                {/* Lo que se COBRA, no el total: con un anticipo aplicado el
+                    total incluye plata que el cliente ya pago */}
                 <Typography variant='h5' color='primary' fontWeight='bold'>
-                  {orderData && formatCurrency(orderData.totalPrice)}
+                  {formatCurrency(totalToPay)}
                 </Typography>
 
                 <Box sx={{ mt: 2 }}>

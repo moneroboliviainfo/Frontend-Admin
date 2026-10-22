@@ -1,5 +1,6 @@
 import { apiClient } from '@/libs/axios'
 import type {
+  ImportStockResponse,
   Variant,
   CreateVariantDto,
   UpdateVariantDto,
@@ -181,6 +182,31 @@ class VariantServiceClass {
     const response = await apiClient.get<StockMovementsResponse>(
       `/api/variants/${variantId}/movements?${params.toString()}`
     )
+
+    return response.data
+  }
+
+  // --- Ingreso masivo por Excel: todo entra al deposito de la bodega principal ---
+
+  async getImportStockTemplate(): Promise<Blob> {
+    const response = await apiClient.get('/api/variants/import-stock/template', { responseType: 'blob' })
+
+    return response.data
+  }
+
+  // dryRun SIEMPRE explicito: omitirlo importa de verdad, y cualquier valor que
+  // no sea true/false literal es un 400
+  async importStock(file: File, dryRun: boolean): Promise<ImportStockResponse> {
+    const form = new FormData()
+
+    form.append('file', file)
+
+    const response = await apiClient.post<ImportStockResponse>('/api/variants/import-stock', form, {
+      // El apiClient fuerza application/json: sin pisarlo, el boundary del
+      // multipart no se arma y el back responde "Falta el archivo Excel"
+      headers: { 'Content-Type': 'multipart/form-data' },
+      params: { dryRun: dryRun ? 'true' : 'false' }
+    })
 
     return response.data
   }

@@ -27,8 +27,15 @@ import type { Variant, VariantSize } from '@/types/api/variants'
 type SizeRow = {
   variantSizeId: number
   sizeName: string
-  availableStock: number
+
+  // Lo FISICO de cada ubicacion, que es contra lo que se cuenta. `availableStock`
+  // (lo vendible) no sirve acá: ya resta carritos y apartados que siguen colgados.
+  salesFloorStock: number
   warehouseStock: number
+
+  // Ya descontado por pedidos sin despachar, pero todavia en el local
+  pendingDispatchSalesFloor: number
+  pendingDispatchWarehouse: number
 }
 
 type ColorGroup = {
@@ -56,8 +63,10 @@ const groupByProduct = (variants: Variant[]): ProductGroup[] => {
     const sizes: SizeRow[] = (variant.variants || []).map((size: VariantSize) => ({
       variantSizeId: Number(size.id),
       sizeName: typeof size.size === 'object' ? size.size.name : String(size.size ?? ''),
-      availableStock: size.availableStock || 0,
-      warehouseStock: size.warehouseStock || 0
+      salesFloorStock: size.salesFloorStock ?? size.availableStock ?? 0,
+      warehouseStock: size.warehouseStock || 0,
+      pendingDispatchSalesFloor: size.pendingDispatchSalesFloor || 0,
+      pendingDispatchWarehouse: size.pendingDispatchWarehouse || 0
     }))
 
     const color: ColorGroup = {
@@ -68,7 +77,7 @@ const groupByProduct = (variants: Variant[]): ProductGroup[] => {
     }
 
     const existing = groups.get(productKey)
-    const onFloor = sizes.reduce((sum, size) => sum + size.availableStock, 0)
+    const onFloor = sizes.reduce((sum, size) => sum + size.salesFloorStock, 0)
 
     if (existing) {
       existing.colors.push(color)
@@ -91,6 +100,8 @@ const BranchStockAdminTable = () => {
   const [adjustTarget, setAdjustTarget] = useState<{
     variantSizeId: number
     sizeName: string
+    pendingDispatchSalesFloor: number
+    pendingDispatchWarehouse: number
   } | null>(null)
 
   // Toda la pantalla cuelga del selector de la navbar: sin sucursal no hay nada
@@ -213,14 +224,26 @@ const BranchStockAdminTable = () => {
                                 </td>
                                 <td>
                                   <Typography variant='body2'>{size.warehouseStock}</Typography>
+                                  {/* Ya descontadas pero todavia en el local: al contar
+                                      aparecen, y sin este aviso se registran de mas */}
+                                  {size.pendingDispatchWarehouse > 0 && (
+                                    <Typography variant='caption' color='warning.main' display='block'>
+                                      +{size.pendingDispatchWarehouse} por despachar
+                                    </Typography>
+                                  )}
                                 </td>
                                 <td>
                                   <Chip
-                                    label={size.availableStock}
+                                    label={size.salesFloorStock}
                                     size='small'
                                     variant='tonal'
-                                    color={size.availableStock > 0 ? 'success' : 'default'}
+                                    color={size.salesFloorStock > 0 ? 'success' : 'default'}
                                   />
+                                  {size.pendingDispatchSalesFloor > 0 && (
+                                    <Typography variant='caption' color='warning.main' display='block'>
+                                      +{size.pendingDispatchSalesFloor} por despachar
+                                    </Typography>
+                                  )}
                                 </td>
                                 <td>
                                   <Button
@@ -230,7 +253,9 @@ const BranchStockAdminTable = () => {
                                     onClick={() =>
                                       setAdjustTarget({
                                         variantSizeId: size.variantSizeId,
-                                        sizeName: size.sizeName
+                                        sizeName: size.sizeName,
+                                        pendingDispatchSalesFloor: size.pendingDispatchSalesFloor,
+                                        pendingDispatchWarehouse: size.pendingDispatchWarehouse
                                       })
                                     }
                                   >
@@ -274,6 +299,8 @@ const BranchStockAdminTable = () => {
         open={!!adjustTarget}
         onClose={() => setAdjustTarget(null)}
         variants={adjustTarget ? [{ id: adjustTarget.variantSizeId, size: { name: adjustTarget.sizeName } }] : []}
+        pendingDispatchSalesFloor={adjustTarget?.pendingDispatchSalesFloor}
+        pendingDispatchWarehouse={adjustTarget?.pendingDispatchWarehouse}
         showMessage={(message, severity) =>
           setSnackbar({ message, severity: severity === 'info' ? 'warning' : severity })
         }

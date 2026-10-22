@@ -152,7 +152,10 @@ const PendingReplenishmentsTable = () => {
                             Atender
                           </Button>
                         )}
-                        {canDo(transfer, 'cancel', true) && (
+                        {/* La central ya no anula una reposicion pendiente: la rechaza
+                            al atenderla (todo en 0 con nota). Sin allowedActions el
+                            fallback es `false` para que no aparezca nunca por defecto. */}
+                        {canDo(transfer, 'cancel', false) && (
                           <Button size='small' color='secondary' onClick={() => setToCancel(transfer)}>
                             Anular
                           </Button>

@@ -34,11 +34,12 @@ const nounOf = (transfer: BranchTransfer) =>
 const copy = (
   noun: string
 ): Record<ActionKind, { title: string; confirm: string; noteLabel: string; noteRequired: boolean }> => ({
+  // La central anula siempre con nota (el back la exige desde el 20/10/2026)
   cancel: {
     title: `Anular ${noun}`,
     confirm: `Anular ${noun}`,
-    noteLabel: 'Motivo (opcional)',
-    noteRequired: false
+    noteLabel: 'Motivo',
+    noteRequired: true
   },
   'mark-lost': {
     title: `Marcar ${noun} como perdido`,

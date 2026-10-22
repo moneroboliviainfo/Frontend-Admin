@@ -8,6 +8,7 @@ import DialogContent from '@mui/material/DialogContent'
 import DialogActions from '@mui/material/DialogActions'
 import Button from '@mui/material/Button'
 import Box from '@mui/material/Box'
+import Alert from '@mui/material/Alert'
 import Typography from '@mui/material/Typography'
 import ToggleButton from '@mui/material/ToggleButton'
 import ToggleButtonGroup from '@mui/material/ToggleButtonGroup'
@@ -32,10 +33,22 @@ type Props = {
     warehouseStock?: number
   }>
 
+  // Unidades ya descontadas por pedidos sin despachar que siguen en el local:
+  // al contar aparecen, asi que lo esperado es stock + esto. Sin el aviso el
+  // cajero las toma por sobrante y se infla el stock.
+  pendingDispatchSalesFloor?: number
+  pendingDispatchWarehouse?: number
   showMessage: (message: string, severity: 'success' | 'error' | 'info' | 'warning') => void
 }
 
-const PositiveAdjustmentModal = ({ open, onClose, variants, showMessage }: Props) => {
+const PositiveAdjustmentModal = ({
+  open,
+  onClose,
+  variants,
+  pendingDispatchSalesFloor = 0,
+  pendingDispatchWarehouse = 0,
+  showMessage
+}: Props) => {
   // Por defecto la bodega: lo que aparece contando suele estar guardado
   const [location, setLocation] = useState<StockLocation>('warehouse')
   const [quantities, setQuantities] = useState<Record<number, number>>({})
@@ -92,6 +105,18 @@ const PositiveAdjustmentModal = ({ open, onClose, variants, showMessage }: Props
       <DialogTitle>Ajuste de stock</DialogTitle>
 
       <DialogContent>
+        {/* El pedido sale primero del deposito y solo lo que falta del piso:
+            por eso el aviso es por ubicacion, no uno solo. */}
+        {(location === 'warehouse' ? pendingDispatchWarehouse : pendingDispatchSalesFloor) > 0 && (
+          <Alert severity='warning' sx={{ mb: 4 }}>
+            <strong>
+              {location === 'warehouse' ? pendingDispatchWarehouse : pendingDispatchSalesFloor} por despachar
+            </strong>{' '}
+            siguen en el local: ya se descontaron del stock pero no se enviaron. Súmelas a lo que espera contar
+            antes de registrar un sobrante.
+          </Alert>
+        )}
+
         <ToggleButtonGroup
           exclusive
           fullWidth

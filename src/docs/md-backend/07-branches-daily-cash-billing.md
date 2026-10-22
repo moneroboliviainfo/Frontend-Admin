@@ -55,8 +55,8 @@ hasta ahora), no es un contador que el frontend tenga que llevar:
 | Campo | Qué suma |
 |---|---|
 | `salesAmount` | ventas in-store vigentes del turno, por lo **cobrado en caja**: en la venta de retiro de un pedido cobrado, sin la parte del anticipo |
-| `advancesAmount` | anticipos de pedidos entre sucursales cobrados en el turno (no son ventas; un anticipo QR cuenta cuando BNB confirma) |
-| `refundsAmount` | devoluciones de anticipos pagadas en el turno (siempre en efectivo) |
+| `advancesAmount` | anticipos de pedidos entre sucursales cobrados **desde el cierre anterior** de la tienda (no son ventas; un anticipo QR cuenta cuando BNB confirma — si confirmó con la caja cerrada, entre dos turnos, entra en el cierre siguiente) |
+| `refundsAmount` | devoluciones de anticipos pagadas desde el cierre anterior (siempre en efectivo, con caja abierta: en la práctica, las del turno) |
 
 Comparalo contra `closingAmount` para mostrar sobrantes/faltantes, y mostrá
 el desglose. En cajas cerradas antes de este cambio los tres campos vienen
