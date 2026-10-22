@@ -12,6 +12,9 @@ import Typography from '@mui/material/Typography'
 import MenuItem from '@mui/material/MenuItem'
 import Menu from '@mui/material/Menu'
 import Divider from '@mui/material/Divider'
+import CircularProgress from '@mui/material/CircularProgress'
+import Snackbar from '@mui/material/Snackbar'
+import Alert from '@mui/material/Alert'
 import { QRCodeSVG } from 'qrcode.react'
 
 import { isBluetoothAvailable } from '@/utils/bluetoothPrinter'
@@ -35,6 +38,8 @@ const VariantQRModal = ({ open, onClose, variantId, colorName, sizeName, product
   // Menu de medidas: la misma etiqueta sale en cuatro tamaños de rollo
   const [anchorEl, setAnchorEl] = useState<null | HTMLElement>(null)
   const [viaBluetooth, setViaBluetooth] = useState(false)
+  const [isPrinting, setIsPrinting] = useState(false)
+  const [snackbar, setSnackbar] = useState<{ message: string; severity: 'success' | 'error' } | null>(null)
 
   // El QR va como PNG: el SVG de pantalla no se imprime de forma confiable
   const qrToDataUrl = (): Promise<string> =>
@@ -67,15 +72,27 @@ const VariantQRModal = ({ open, onClose, variantId, colorName, sizeName, product
   const handlePrint = async (size: LabelSize) => {
     setAnchorEl(null)
 
-    const label = { variantId, productName, colorName, sizeName, qrDataUrl: '' }
+    // Las dos salidas usan el mismo diseño y el mismo QR: la termica dibuja la
+    // etiqueta como imagen (formato POS), asi sale igual que desde la PC
+    const label = { variantId, productName, colorName, sizeName, qrDataUrl: await qrToDataUrl() }
 
-    if (viaBluetooth) {
-      await printVariantLabelBluetooth(label, size)
+    if (!viaBluetooth) {
+      printVariantLabel(label, size)
 
       return
     }
 
-    printVariantLabel({ ...label, qrDataUrl: await qrToDataUrl() }, size)
+    setIsPrinting(true)
+
+    try {
+      await printVariantLabelBluetooth(label, size)
+      setSnackbar({ message: `Etiqueta ${size.label} enviada a la impresora`, severity: 'success' })
+    } catch (error: any) {
+      // Cerrar el selector de dispositivos sin elegir uno tambien llega aca
+      setSnackbar({ message: error?.message || 'No se pudo imprimir por Bluetooth', severity: 'error' })
+    } finally {
+      setIsPrinting(false)
+    }
   }
 
   const handleDownloadQR = () => {
@@ -238,13 +255,14 @@ const VariantQRModal = ({ open, onClose, variantId, colorName, sizeName, product
         {isBluetoothAvailable() && (
           <Button
             variant='outlined'
-            startIcon={<i className='tabler-bluetooth' />}
+            disabled={isPrinting}
+            startIcon={isPrinting ? <CircularProgress size={16} /> : <i className='tabler-bluetooth' />}
             onClick={e => {
               setViaBluetooth(true)
               setAnchorEl(e.currentTarget)
             }}
           >
-            Térmica
+            {isPrinting ? 'Imprimiendo...' : 'Térmica'}
           </Button>
         )}
 
@@ -268,6 +286,17 @@ const VariantQRModal = ({ open, onClose, variantId, colorName, sizeName, product
           Descargar QR
         </Button>
       </DialogActions>
+
+      <Snackbar
+        open={!!snackbar}
+        autoHideDuration={5000}
+        onClose={() => setSnackbar(null)}
+        anchorOrigin={{ vertical: 'bottom', horizontal: 'right' }}
+      >
+        <Alert severity={snackbar?.severity} onClose={() => setSnackbar(null)} variant='filled'>
+          {snackbar?.message}
+        </Alert>
+      </Snackbar>
     </Dialog>
   )
 }

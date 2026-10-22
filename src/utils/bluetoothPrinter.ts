@@ -215,7 +215,9 @@ export const isBluetoothConnected = (): boolean => {
   return bluetoothDevice?.gatt?.connected ?? false
 }
 
-export const writeToprinter = async (data: Uint8Array): Promise<void> => {
+// pauseMs: espera entre paquetes de 20 bytes para no desbordar a la impresora.
+// La factura usa 20 ms; la etiqueta, que manda una imagen, una mas corta
+export const writeToprinter = async (data: Uint8Array, pauseMs = 20): Promise<void> => {
   if (!printerCharacteristic) {
     throw new Error('Impresora no conectada')
   }
@@ -231,7 +233,7 @@ export const writeToprinter = async (data: Uint8Array): Promise<void> => {
       await printerCharacteristic.writeValue(chunk)
     }
 
-    await new Promise(resolve => setTimeout(resolve, 20))
+    await new Promise(resolve => setTimeout(resolve, pauseMs))
   }
 }
 

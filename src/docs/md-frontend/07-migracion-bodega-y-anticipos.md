@@ -716,7 +716,13 @@ En el modal del **QR de la variante**, dos botones: **Imprimir etiqueta**
 de rollo: **30x20, 40x40, 50x50 y 50x25 mm**. `variantLabel.ts` tiene los dos
 generadores y `LABEL_SIZES`.
 
-La etiqueta lleva QR, producto, **TALLA**, **COLOR** e id.
+La etiqueta lleva QR, producto, **TALLA**, **COLOR** e id. Jerarquia (22/10): el
+producto **completo** en renglones, talla y color chicos (tambien completos), y
+el id **grande y sin rotulo** (solo el numero). Nombre y color en minuscula con
+mayuscula inicial; la talla va tal cual (XL, M). En **30x20 y 50x25** el nombre
+va arriba a todo el ancho y debajo talla/color/id a la izquierda con el QR
+pegado a la derecha, ocupando el alto que deja el nombre. Cada medida tiene que
+existir tambien como tamaño de papel en el driver de la impresora.
 
 El alto decide el armado: en **20-25 mm** el QR va **al lado** del texto (no
 entra apilado) y las tipografias bajan; de 40 mm para arriba va arriba y el
@@ -727,9 +733,17 @@ Dos decisiones tecnicas:
 
 - **Hoja**: el QR se pasa de SVG a PNG en un canvas antes de imprimir. El SVG
   de pantalla no se imprime de forma confiable.
-- **Termica**: se usa el **QR nativo de ESC/POS** (`GS ( k`), que lo dibuja la
-  impresora. Mandarlo como imagen raster sale borroso en etiquetas chicas. El
-  tamaño de modulo baja de 6 a 4 en los rollos de 20-25 mm.
+- **Termica (formato POS, 22/10)**: misma conexion y protocolo que la factura
+  (ESC/POS por `bluetoothPrinter.ts`), pero la etiqueta **no** se arma con
+  renglones de texto: asi no se puede poner el QR al costado ni usar las
+  tipografias de cada medida. Se dibuja el **mismo diseño de la hoja**
+  (`labelParts`, compartido) dentro de un SVG `foreignObject`, se pasa a un
+  canvas a 203 dpi (8 puntos/mm), se convierte a blanco y negro (corte en 170
+  para que la negrita no salga finita) y se manda como imagen raster
+  `GS v 0` en franjas de 48 filas, y despues `GS FF` (avanzar a la etiqueta
+  siguiente). Sin librerias nuevas. Pausa entre paquetes de 6 ms
+  (`RASTER_PAUSE_MS`); la factura sigue con 20. Antes se usaba el QR nativo
+  `GS ( k` + texto, que salia siempre vertical y sin respetar la medida.
 
 Probado contra el formato de facturacion (mismo patron de ventana de impresion
 y mismos helpers ESC/POS exportados desde `bluetoothPrinter.ts`).
