@@ -509,7 +509,6 @@ const OrderDetailsModal = ({ open, onClose, order: orderProp }: OrderDetailsModa
 
   // Handlers de facturación
   const getFacturaBaseData = () => ({
-    branchId: selectedBranchId as number,
     tipoFacturaDocumento: 1,
     codigoDocumentoSector: 1,
     codigoMoneda: 1,

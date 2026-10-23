@@ -242,9 +242,10 @@ const PaymentDialog: React.FC<PaymentDialogProps> = ({
     setSearchCi('')
   }
 
-  // TEMPORAL: en false no se exigen los datos de facturación para elegir método de
-  // pago, para poder probar ventas en efectivo. Volver a true cuando SIAT esté listo.
-  const REQUIRE_BILLING = false
+  // Sin datos de facturación el back rechaza la venta: se exigen antes de
+  // elegir el método de pago, que es cuando el cajero todavía tiene al cliente
+  // enfrente para pedírselos.
+  const REQUIRE_BILLING = true
 
   // Validación completa del billing
   const isBillingValid =

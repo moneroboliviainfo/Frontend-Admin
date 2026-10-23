@@ -520,7 +520,9 @@ export interface Branch {
 
 // Tipos para facturación
 export interface FacturarRequest {
-  branchId: number
+
+  // Sin branchId: el back resuelve la sucursal de la sesion y rechaza la orden
+  // si no es de la tuya (doc 07, "no es de tu sucursal")
   tipoFacturaDocumento: number
   codigoDocumentoSector: number
   codigoMoneda: number

@@ -748,6 +748,25 @@ Dos decisiones tecnicas:
 Probado contra el formato de facturacion (mismo patron de ventana de impresion
 y mismos helpers ESC/POS exportados desde `bluetoothPrinter.ts`).
 
+## Facturacion: billing obligatorio y sin sucursal (23/10/2026)
+
+**`REQUIRE_BILLING` volvio a `true`** en `PaymentDialog`. Estaba en `false`
+como temporal para probar ventas en efectivo sin SIAT. Ahora los datos de
+facturacion se exigen antes de elegir el metodo de pago, que es cuando el
+cajero todavia tiene al cliente enfrente.
+
+**`branchId` salio de `FacturarRequest`** y de los dos bodies que lo armaban
+(`SuccessDialog` y `SaleDetailsModal`). El back resuelve la sucursal de la
+sesion: doc 07 dice que facturar falla si la orden *"no es de tu sucursal"*,
+asi que mandarlo era redundante y podia contradecir a la sesion.
+
+`FacturarContingenciaRequest` hereda de `FacturarRequest`, asi que quedo
+arreglado solo.
+
+> Queda vestigial el **selector de sucursal** del dialogo de facturacion
+> (`needsBranchSelector`, solo ADMIN). Ya no decide donde se factura; si no
+> sirve para otra cosa, se puede sacar.
+
 ## Pendientes de esta tanda
 
 - [x] **Prendas pagadas protegidas en el carrito** (18/10/2026): con un pedido

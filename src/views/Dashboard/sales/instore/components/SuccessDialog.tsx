@@ -132,7 +132,6 @@ const SuccessDialog: React.FC<SuccessDialogProps> = ({
 
   // Datos base para facturación (usados en normal y contingencia)
   const getFacturaBaseData = () => ({
-    branchId: selectedBranchId as number,
     tipoFacturaDocumento: 1,
     codigoDocumentoSector: 1,
     codigoMoneda: 1,
