@@ -19,7 +19,8 @@ import {
   DialogTitle,
   DialogContent,
   DialogActions,
-  Button
+  Button,
+  Alert
 } from '@mui/material'
 
 import { toast } from 'react-toastify'
@@ -84,6 +85,7 @@ const ProductCatalog: React.FC<ProductCatalogProps> = ({
   // Varios pedidos de la misma talla: el cajero elige el del cliente que tiene enfrente
   const [pickupChoices, setPickupChoices] = useState<PickupOrder[] | null>(null)
   const [transferQty, setTransferQty] = useState<string>('')
+  const [transferError, setTransferError] = useState<string | null>(null)
   const transferStock = useTransferStock()
 
   // Solo aplica si algún día un ADMIN entra al POS; MANAGER/CASHIER se resuelven solos
@@ -99,28 +101,33 @@ const ProductCatalog: React.FC<ProductCatalogProps> = ({
   const handleCloseTransfer = () => {
     setTransferTarget(null)
     setTransferQty('')
+    setTransferError(null)
   }
 
+  // Lo que se puede traer: el deposito menos lo apartado por pedidos con QR
+  const transferMax = transferTarget?.movableWarehouseStock ?? 0
+  const transferQuantity = parseInt(transferQty, 10) || 0
+
+  // Antes se recortaba en silencio al maximo y se mandaba igual: ahora se avisa y no deja confirmar
+  const transferOverMax = transferQuantity > transferMax
+  const canTransfer = transferQuantity > 0 && !transferOverMax
+
   const handleConfirmTransfer = async () => {
-    const quantity = Math.min(parseInt(transferQty) || 0, transferTarget?.warehouseStock || 0)
+    if (!transferTarget || !canTransfer) return
 
-    if (!transferTarget || quantity <= 0) {
-      toast.warning('Ingresa una cantidad mayor a 0')
-
-      return
-    }
+    setTransferError(null)
 
     try {
       await transferStock.mutateAsync({
         variantId: transferTarget.variantSizeId,
-        quantity,
+        quantity: transferQuantity,
         direction: 'warehouse_to_floor',
         branchId
       })
-      toast.success('Stock enviado a tienda exitosamente')
       handleCloseTransfer()
     } catch (error: any) {
-      toast.error(error?.response?.data?.message || 'Error al enviar stock a tienda')
+      // El error queda en el modal: los toast no tienen contenedor montado y no se ven
+      setTransferError(error?.response?.data?.message || 'No se pudo traer el stock a la tienda')
     }
   }
 
@@ -283,12 +290,14 @@ const ProductCatalog: React.FC<ProductCatalogProps> = ({
                             color='text.secondary'
                             sx={{ fontSize: '0.68rem', lineHeight: 1.2 }}
                           >
-                            Depósito: {item.warehouseStock} disp.
+                            Depósito: {item.movableWarehouseStock} disp.
+                            {item.heldInWarehouse > 0 && ` (${item.heldInWarehouse} apartada)`}
                           </Typography>
                           <Button
                             size='small'
                             variant='outlined'
                             color='info'
+                            disabled={item.movableWarehouseStock === 0}
                             onClick={e => handleOpenTransfer(e, item)}
                             startIcon={<i className='tabler-transfer' style={{ fontSize: '12px' }} />}
                             sx={{ fontSize: '0.68rem', lineHeight: 1.2, py: 0.25, px: 1, minWidth: 0 }}
@@ -395,19 +404,42 @@ const ProductCatalog: React.FC<ProductCatalogProps> = ({
           <Typography variant='body2' color='text.secondary' sx={{ mb: 1 }}>
             {transferTarget?.displayName} · {transferTarget?.color?.name} · Talla {transferTarget?.size}
           </Typography>
-          <Typography variant='body2' sx={{ mb: 2 }}>
-            Disponible en el depósito: {transferTarget?.warehouseStock}
+          <Typography variant='body2' sx={{ mb: transferTarget?.heldInWarehouse > 0 ? 0.5 : 2 }}>
+            Disponible en el depósito: <strong>{transferMax}</strong>
           </Typography>
+          {transferTarget?.heldInWarehouse > 0 && (
+            <Typography variant='caption' color='text.secondary' sx={{ display: 'block', mb: 2 }}>
+              {transferTarget.heldInWarehouse} apartada(s) por pedidos con QR sin pagar: no se pueden traer.
+            </Typography>
+          )}
           <TextField
             fullWidth
+            autoFocus
             type='number'
             size='small'
             label='Cantidad a traer'
             placeholder='0'
             value={transferQty}
-            onChange={e => setTransferQty(e.target.value)}
-            inputProps={{ max: transferTarget?.warehouseStock || 0, min: 0 }}
+            onChange={e => {
+              setTransferQty(e.target.value)
+              setTransferError(null)
+            }}
+            onKeyDown={e => {
+              if (e.key === 'Enter') handleConfirmTransfer()
+            }}
+            error={transferOverMax}
+            helperText={
+              transferOverMax
+                ? `Solo hay ${transferMax} disponible(s) en el depósito`
+                : `Máximo ${transferMax}`
+            }
+            inputProps={{ max: transferMax, min: 1 }}
           />
+          {transferError && (
+            <Alert severity='error' sx={{ mt: 3 }}>
+              {transferError}
+            </Alert>
+          )}
         </DialogContent>
         <DialogActions>
           <Button onClick={handleCloseTransfer} color='secondary' disabled={transferStock.isPending}>
@@ -416,7 +448,7 @@ const ProductCatalog: React.FC<ProductCatalogProps> = ({
           <Button
             onClick={handleConfirmTransfer}
             variant='contained'
-            disabled={transferStock.isPending}
+            disabled={!canTransfer || transferStock.isPending}
             startIcon={transferStock.isPending ? <CircularProgress size={16} /> : <i className='tabler-check' />}
           >
             {transferStock.isPending ? 'Enviando...' : 'Confirmar'}

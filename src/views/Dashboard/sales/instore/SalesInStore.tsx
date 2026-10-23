@@ -277,6 +277,11 @@ const PointOfSale: React.FC = () => {
           size: typeof size.size === 'string' ? size.size : size.size?.name,
           stock: size.availableStock || size.quantity || 0,
           warehouseStock: size.warehouseStock || 0,
+
+          // Lo apartado por pedidos con QR sin pagar esta en el deposito pero no se
+          // puede pasar a la tienda: lo que se puede traer es el resto
+          heldInWarehouse: size.heldInWarehouse || 0,
+          movableWarehouseStock: Math.max(0, (size.warehouseStock || 0) - (size.heldInWarehouse || 0)),
           inTransitStock: size.inTransitStock || 0,
           multimedia: variant.multimedia,
           product: variant.product,
