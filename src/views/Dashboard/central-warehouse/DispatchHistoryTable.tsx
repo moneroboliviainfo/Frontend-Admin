@@ -22,9 +22,11 @@ import Tooltip from '@mui/material/Tooltip'
 import CustomTextField from '@core/components/mui/TextField'
 import tableStyles from '@core/styles/table.module.css'
 import TransferActionsModal from './TransferActionsModal'
+import { isBluetoothAvailable } from '@/utils/bluetoothPrinter'
+import { printDispatchNote, printDispatchNoteBluetooth } from '@/utils/receptionReceipt'
 import TransferDetailsModal from './TransferDetailsModal'
 import StageChip, { PendingReviewChip } from './StageChip'
-import { canDo, hasPendingReview, transferUnits } from './transfers'
+import { canDo, hasPendingReview, itemLabel, transferUnits } from './transfers'
 import { prendas, variantes } from './units'
 import { useBranchContext } from '@/contexts/BranchContext'
 import { useDeclareBranchScope } from '@/contexts/BranchScopeContext'
@@ -45,6 +47,18 @@ const DispatchHistoryTable = () => {
   const [page, setPage] = useState(1)
   const [pageSize, setPageSize] = useState(10)
   const [status, setStatus] = useState<DispatchStatus>('in_transit')
+
+  // Reimprimir el remito de un envio en camino: el papel se pierde, el envio no
+  const noteOf = (transfer: BranchTransfer) => ({
+    transferId: transfer.id,
+    destination: transfer.destinationBranch?.name || 'la sucursal',
+    dispatchedBy: transfer.dispatchedBy?.name || 'Bodega Central',
+    lines: transfer.items.map(item => ({
+      label: itemLabel(item),
+      quantity: item.dispatchedQuantity ?? item.quantity ?? 0
+    }))
+  })
+
   const [showAll, setShowAll] = useState(false)
   const [details, setDetails] = useState<BranchTransfer | null>(null)
   const [action, setAction] = useState<{ kind: ActionKind; transfer: BranchTransfer } | null>(null)
@@ -251,6 +265,21 @@ const DispatchHistoryTable = () => {
                               <i className='tabler-eye' />
                             </IconButton>
                           </Tooltip>
+
+                          {inTransit && (
+                            <Tooltip title='Imprimir el remito que acompaña al paquete'>
+                              <IconButton size='small' onClick={() => printDispatchNote(noteOf(transfer))}>
+                                <i className='tabler-printer' />
+                              </IconButton>
+                            </Tooltip>
+                          )}
+                          {inTransit && isBluetoothAvailable() && (
+                            <Tooltip title='Remito por impresora térmica'>
+                              <IconButton size='small' onClick={() => printDispatchNoteBluetooth(noteOf(transfer))}>
+                                <i className='tabler-bluetooth' />
+                              </IconButton>
+                            </Tooltip>
+                          )}
 
                           {canDo(transfer, 'cancel', inTransit) && (
                             <Tooltip title='Anular: volvió a la bodega'>

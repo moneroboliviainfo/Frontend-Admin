@@ -63,18 +63,63 @@ POST /stock-transfers (warehouse_to_floor)     → piso de la tienda (recién ah
 
 ```
 POST  /variants         (A,S)     crear color+tallas de un producto, stock inicial → bodega principal
-GET   /variants          (A,S,M,C) listar (con stock)
+GET   /variants          (A,S,M,C) listar (con stock), paginado por COLOR — POS
+GET   /variants/products (A,S,M,C) listar (con stock), paginado por PRODUCTO — bodega principal
 GET   /variants/:id      (A,S,M,C) detalle
 PATCH /variants/:id      (A,S)     editar (tallas nuevas → también a la bodega principal)
 ```
 (A = ADMIN, S = SUPERVISOR, M = MANAGER, C = CASHIER; ver [02](02-roles-and-permissions.md).)
 
+**Dos listados, misma info, distinta página:**
+
+| | `GET /variants` | `GET /variants/products` |
+|---|---|---|
+| Cada elemento de `data` | un **color** de un producto (`product`, `color`, `variants[]`) | un **producto** (`subcategory.category`, `discount`, `productColors[]` → `color`, `variants[]`) |
+| `limit=10` | 10 colores (un producto con 4 colores ocupa 4) | 10 productos, cada uno con **todos** sus colores |
+| `meta.total` | cantidad de colores | cantidad de productos |
+| `search` | producto, color, talla, `<qr>id</qr>` | producto, subcategoría, categoría, color, talla, `<qr>id</qr>` |
+| Con `<qr>id</qr>` | **solo ese color y solo esa variante** | el **producto completo** (todos sus colores y tallas): resaltar la variante buscada |
+| Orden | colores por `id`; variantes sin orden fijo | productos, colores y variantes por `id` |
+| Uso | POS (el cajero agrega un color) | listado de la bodega principal / inventario por producto |
+
+Los dos aceptan `page`, `limit`, `search` y `?branchId=` (también la bodega
+principal), ordenan por `id` y traen en cada variante los mismos campos de
+stock (abajo). En `/variants/products` la búsqueda filtra **productos**:
+buscar "rojo" trae el producto con todos sus colores, no solo el rojo. Solo
+lista productos con al menos un color. `discount` viene `null` si no está
+vigente.
+
+Con `limit=10` llegan 10 productos, que pueden ser 10 filas o 40 según
+cuántos colores tenga cada uno. Para reutilizar la tabla "una fila por color"
+de `GET /variants`, basta con aplanar la respuesta (cada fila queda con la
+misma forma que el `data` de `GET /variants`, más `subcategory.category`
+dentro de `product`):
+
+```ts
+const rows = res.data.flatMap((product) =>
+  product.productColors.map((productColor) => ({ ...productColor, product })),
+);
+```
+
 El `branchId` del body de `POST /variants` está **deprecado e ignorado**: el
 stock inicial entra siempre a la bodega principal.
 
 Las respuestas de listado/detalle traen, por variante:
-- `availableStock`: vendible (piso − reservas de venta − reservas de pedidos);
-- `warehouseStock`: en depósito (todavía no vendible);
+- `availableStock`: vendible (piso − reservas de venta − reservas de pedidos)
+  — **neto**, no es lo que hay físicamente en el piso;
+- `salesFloorStock`: piso **físico** (sin restar reservas ni apartados, que
+  también están en el local) — para el conteo, ver "Conteo físico" abajo;
+- `warehouseStock`: en depósito, físico (todavía no vendible);
+- `heldInWarehouse`: de `warehouseStock`, lo apartado por pedidos QR sin
+  pagar — no se puede pasar al piso. Lo que sí se puede mover =
+  `warehouseStock − heldInWarehouse` (en este endpoint no viene
+  `availableWarehouse`: ese campo es de `GET /variants/branch-stock/...`);
+- `pendingDispatchWarehouse` / `pendingDispatchSalesFloor`: pedidos de otras
+  tiendas que esta tiene que despachar — ya descontados de su stock, pero
+  **físicamente todavía en el local** (salen primero del depósito);
+- `pendingShipmentSalesFloor`: ventas **online pagadas** (`paid`) de esta
+  tienda que todavía no se enviaron — se descontaron del piso al pagarse,
+  pero la prenda sigue en el local hasta el envío (`sent`);
 - `inTransitStock`: en camino hacia la sucursal;
 - `centralWarehouseStock`: en la bodega principal (ver abajo);
 - `pendingReplenishment` (sí/no): la sucursal ya la pidió a la bodega y la
@@ -99,10 +144,37 @@ sumes al stock de X; con `X = bodega` es el mismo número que
 | Campo | Vista general | Con `?branchId=X` (`/variants`) |
 |---|---|---|
 | `availableStock` | piso de todas las tiendas − reservas | piso de X − reservas |
+| `salesFloorStock` | piso físico de todas las tiendas | piso físico de X (bodega: 0) |
+| `pendingShipmentSalesFloor` | ventas online pagadas sin enviar, todas las tiendas | las de X |
 | `warehouseStock` | depósitos de las **tiendas** (sin la bodega principal) | depósito de X (si X es la bodega: su stock) |
 | `centralWarehouseStock` | **solo** la bodega principal | **igual**: la bodega principal (no depende de X) |
-| `inTransitStock` | en camino hacia cualquier tienda | en camino hacia X |
+| `inTransitStock` | en camino hacia cualquier sucursal (tiendas y, por devoluciones, la bodega) | en camino hacia X (bodega: devoluciones de las tiendas) |
 | `pendingReplenishment` | alguna tienda la pidió y la central no la atendió | X la pidió y la central no la atendió |
+
+### Conteo físico (inventario de una tienda)
+
+Lo que **debería encontrar** quien cuenta, por ubicación, con
+`GET /variants?branchId=X` (todo en la misma respuesta):
+
+| Ubicación | Esperado en el conteo |
+|---|---|
+| Piso | `salesFloorStock + pendingDispatchSalesFloor + pendingShipmentSalesFloor` |
+| Depósito | `warehouseStock + pendingDispatchWarehouse` |
+
+- **Nunca** contar contra `availableStock`: ya resta las ventas en curso del
+  POS y las prendas apartadas para pedidos (QR sin pagar, pedidos recibidos
+  que esperan al cliente), que siguen en el local. Cada conteo contra ese
+  número registraría un sobrante falso.
+- Los dos `pending…` son prendas **ya descontadas que siguen en el local**:
+  - `pendingDispatch…` = pedidos de otras tiendas que esta tiene que
+    despachar;
+  - `pendingShipmentSalesFloor` = ventas online pagadas que todavía no se
+    enviaron.
+  Mostrarlos aparte ("Piso: 9 (+3 por despachar, +1 por enviar)") y en el
+  modal de ajuste avisar: "4 unidades ya vendidas o pedidas siguen en el
+  local: deberías contar 13".
+- Diferencia = contado − esperado. Positiva → `POST /variants/positive-adjustment`
+  (solo ADMIN/SUPERVISOR); negativa → `POST /variants/subtractstock`.
 
 ## Consultar stock
 
@@ -125,7 +197,7 @@ ventas web y acciones del sistema), `orderId`, `stockTransferId`, `branchTransfe
 | `venta` | venta confirmada |
 | `ajuste` | baja (cantidad negativa) o ajuste positivo (positiva), con `reason` |
 | `traspaso` | depósito ↔ piso dentro de la tienda |
-| `envio_bodega`, `salida_pedido`, `envio_anulado`, `pedido_anulado`, `recepcion`, `aparecio_en_destino`, `aparecio_en_origen` | traslados entre sucursales (ver [11 §8](11-central-warehouse-and-branch-transfers.md)) |
+| `envio_bodega`, `salida_pedido`, `devolucion_bodega`, `envio_anulado`, `pedido_anulado`, `devolucion_anulada`, `recepcion`, `aparecio_en_destino`, `aparecio_en_origen` | traslados entre sucursales (ver [11 §8](11-central-warehouse-and-branch-transfers.md)) |
 
 **Disponibilidad por sucursal** (`branch-stock`) — una fila por tienda
 activa (sin la bodega, **incluida la propia**): `salesFloor`, `warehouse`,
@@ -171,17 +243,23 @@ bodega principal** (en el kardex/Excel sale como "Ingreso").
 ```
 GET  /variants/import-stock/template
 → plantilla-ingreso-stock.xlsx: una fila por variante
+  fila 1: el encabezado (fija al hacer scroll)
   | ID variante | Producto | Color | Talla | Stock bodega principal | Cantidad a ingresar |
   (solo se llena la última; vacía o 0 = no se ingresa)
-  ordenada por producto, color y talla (XXS…XXL; las numéricas al final)
+  en bloques: una franja por categoría › subcategoría (orden del catálogo,
+  "Sin categoría" al final), un título por producto ("#12 · Polera básica") y
+  sus variantes por color y talla (XXS…XXL; las numéricas al final), con una
+  fila vacía entre productos. Franjas y títulos no tienen ID: se ignoran al subir
   "Stock bodega principal" = depósito físico de la central (igual que en la plantilla de envío)
 
 POST /variants/import-stock?dryRun=true|false     multipart/form-data, campo "file" (.xlsx, máx. 5 MB)
 ```
 
 - Se leen solo las columnas **`ID variante`** y **`Cantidad a ingresar`**,
-  buscadas por su encabezado en la fila 1 (las demás se pueden borrar o
-  reordenar). Se lee la primera hoja.
+  buscadas por su encabezado (en las primeras 10 filas: la plantilla lo
+  tiene en la 1; las descargadas antes del 23/10, que traían buscador, en
+  la 3 — se siguen pudiendo subir). Las demás se
+  pueden borrar o reordenar. Se lee la primera hoja.
 - **Todo o nada**: con un solo error no se graba nada.
 - `dryRun=true` valida y devuelve el resumen **sin grabar** (vista previa).
   Para confirmar se reenvía el mismo archivo con `dryRun=false` (u omitido).
@@ -218,7 +296,7 @@ Errores (`400`):
 | Filas con errores | `{ "statusCode": 400, "message": "El archivo tiene errores: no se ingresó nada", "errors": [{ "row": 5, "message": "Falta el ID de variante" }, { "row": 7, "message": "Cantidad inválida: \"1.5\" (debe ser un número entero positivo)" }, { "row": 9, "message": "La variante 999 no existe" }] }` |
 | Sin archivo | `Falta el archivo Excel (campo "file")` |
 | No es un `.xlsx` | `El archivo no es un Excel (.xlsx) válido` |
-| Faltan los encabezados | `La primera fila debe tener las columnas "ID variante" y "Cantidad a ingresar" (usa la plantilla correspondiente)` (también si se sube acá una plantilla de envío) |
+| Faltan los encabezados | `La planilla debe tener un encabezado con las columnas "ID variante" y "Cantidad a ingresar" (usa la plantilla correspondiente)` (también si se sube acá una plantilla de envío) |
 | Ninguna cantidad | `El archivo no tiene cantidades para ingresar` |
 | `dryRun` distinto de `true`/`false` | `400` de validación (`dryRun must be a boolean value`) |
 

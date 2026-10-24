@@ -2,8 +2,9 @@
 
 Secciones: 9–10 de octubre (abajo), [18 de octubre](#actualización-18-de-octubre--stock-de-la-bodega-principal-separado),
 [19 de octubre](#actualización-19-de-octubre--reposiciones-etapas-de-los-traslados-facturas-por-sucursal)
-, [20 de octubre](#actualización-20-de-octubre--reglas-de-traslados-bajas-y-caja)
-y [21 de octubre](#actualización-21-de-octubre--ingreso-de-stock-por-excel)
+, [20 de octubre](#actualización-20-de-octubre--reglas-de-traslados-bajas-y-caja),
+[21 de octubre](#actualización-21-de-octubre--ingreso-de-stock-por-excel)
+y [23 de octubre](#actualización-23-de-octubre--editar-sucursal)
 (al final).
 
 ## 9 y 10 de octubre
@@ -198,7 +199,7 @@ No rompe, pero conviene saber:
 
 | Cambio | Impacto en el front |
 |---|---|
-| Variantes con stock por sucursal (inventario, `GET /products/:id`, etc.): campos nuevos **`heldInWarehouse`** (de `warehouseStock`, lo apartado por pedidos QR sin pagar — no se puede pasar al piso), **`pendingDispatchWarehouse`** y **`pendingDispatchSalesFloor`** (pedidos que la tienda tiene que despachar: ya descontados pero todavía físicamente en el local) | Inventario: "Depósito: N (M apartadas)"; en el **conteo físico**, esperado = stock + `pendingDispatch…` de esa ubicación, para no registrar sobrantes falsos |
+| Variantes con stock por sucursal (inventario, `GET /products/:id`, etc.): campos nuevos **`heldInWarehouse`** (de `warehouseStock`, lo apartado por pedidos QR sin pagar — no se puede pasar al piso), **`pendingDispatchWarehouse`** y **`pendingDispatchSalesFloor`** (pedidos que la tienda tiene que despachar: ya descontados pero todavía físicamente en el local) | Inventario: "Depósito: N (M apartadas)"; en el **conteo físico**, esperado: piso = `salesFloorStock + pendingDispatchSalesFloor + pendingShipmentSalesFloor`, depósito = `warehouseStock + pendingDispatchWarehouse` (⚠️ corregido el 21/10: **no** usar `availableStock`, ver abajo) |
 | Errores de stock insuficiente que restan apartados (`POST /stock-transfers`) nombran el pedido: `… (apartada para el pedido #N)` | Mostrar el mensaje tal cual |
 | Revisión `found_at_destination` en un **pedido** suma en el **piso** de la tienda que pidió (antes, en su depósito) | Nada |
 | Revisión `found_at_destination` en un **pedido que todavía espera al cliente**: la prenda **vuelve al pedido** (sube `receivedQuantity`, queda apartada, el pedido reaparece en "pedidos recibidos"); si es cobrado, **baja `refundOwed`** y en la venta sale a precio congelado. No aplica si esa plata ya se devolvió o si el pedido ya no espera (retirado, vencido, "no retirado") | Refrescar el pedido tras revisar; la línea ya no muestra faltante (`reviewOutcome` lo dice). Ver [11](11-central-warehouse-and-branch-transfers.md) §4 y [13](13-prepaid-branch-requests.md) §5.1 |
@@ -209,9 +210,29 @@ No rompe, pero conviene saber:
 
 ## Actualización 21 de octubre — ingreso de stock por Excel
 
-Nada se rompe: son endpoints nuevos (ADMIN, SUPERVISOR). Detalle en
-[06](06-inventory-and-warehouse.md) ("Ingreso masivo por Excel") y
-[11](11-central-warehouse-and-branch-transfers.md) §2 ("Crear el envío con un Excel").
+Nada se rompe: son endpoints nuevos (ADMIN, SUPERVISOR) y un campo nuevo.
+Detalle en [06](06-inventory-and-warehouse.md) ("Ingreso masivo por Excel" y
+"Conteo físico") y [11](11-central-warehouse-and-branch-transfers.md) §2
+("Crear el envío con un Excel").
+
+### ⚠️ Corrección: el esperado del conteo físico en el piso
+
+La regla del 20/10 ("esperado = stock + `pendingDispatch…`") era ambigua en
+el piso: el único stock de piso que traía `GET /variants` era
+`availableStock`, que es **neto** (resta ventas en curso y prendas apartadas
+para pedidos, que siguen en el local). Contar contra eso sigue registrando
+sobrantes falsos.
+
+| Cambio | Impacto en el front |
+|---|---|
+| Campo nuevo **`salesFloorStock`** en cada variante de `GET /variants`, `GET /variants/:id`, `GET /products/:id` (admin) y `GET /outfits/:id` (admin): piso **físico**, sin restar reservas ni apartados | Conteo físico: esperado piso = `salesFloorStock + pendingDispatchSalesFloor + pendingShipmentSalesFloor`; depósito = `warehouseStock + pendingDispatchWarehouse`. **Nunca** `availableStock` |
+| Campo nuevo **`pendingShipmentSalesFloor`** (mismos endpoints): ventas **online pagadas** (`paid`) de la tienda que todavía no se enviaron — ya descontadas del piso, pero la prenda sigue en el local | Sumarlo al esperado del piso y mostrarlo aparte ("+N por enviar") |
+| `pendingDispatch…` sale **primero del depósito** de la tienda que despacha | Mostrar el "+N por despachar" en la ubicación que corresponde, no siempre en el piso |
+| En `GET /variants` **no** viene `availableWarehouse` (es de `GET /variants/branch-stock/...`) | Tope de "Pasar a tienda" = `warehouseStock − heldInWarehouse`; de "Pasar a bodega" = `availableStock` |
+
+- [ ] Stock de sucursales / modal de ajuste: esperado con `salesFloorStock` (no `availableStock`) + `pendingDispatch…` por ubicación + `pendingShipmentSalesFloor` en el piso.
+
+### Importaciones por Excel
 
 | Cambio | Impacto en el front |
 |---|---|
@@ -219,9 +240,26 @@ Nada se rompe: son endpoints nuevos (ADMIN, SUPERVISOR). Detalle en
 | `POST /variants/import-stock` (`multipart/form-data`, campo `file`): ingresa todo al **depósito de la bodega principal**, como `addstock`. **Todo o nada**: si hay un error no se graba nada y el `400` trae `errors: [{ row, message }]` con todas las filas mal. `?dryRun=true` valida y devuelve el mismo resumen sin grabar | Subir → vista previa (`dryRun=true`) → confirmar (mismo archivo con `dryRun=false`). Mostrar `errors` en una tabla por fila y `warnings` (variantes repetidas que se suman) |
 | `GET /branch-transfers/central-dispatch/import/template?destinationBranchId=` + `POST /branch-transfers/central-dispatch/import?destinationBranchId=&dryRun=`: **envío a una tienda por Excel** (una tienda por archivo; columna `Cantidad a enviar`; de referencia, el stock de la bodega y de la tienda, lo que ya va **en camino** a la tienda y si la tienda ya lo **pidió** en una reposición). Crea un envío normal `in_transit` (`transfer` en la respuesta); el `400` lista **todas** las líneas sin stock en la bodega. **Máximo 300 variantes** por archivo | En "Nuevo envío": opción "Desde Excel" con el mismo flujo plantilla → vista previa → confirmar; tras confirmar, abrir el envío creado (`transfer.id`) |
 | ⚠️ En las dos importaciones `dryRun` acepta **solo `true`/`false`**: otro valor (`1`, `TRUE`, vacío) es un `400`, nunca una importación real. `?branchId=` se ignora | Mandar exactamente `dryRun=true` / `dryRun=false` |
+| ~~Las dos plantillas traen un **buscador** en la fila 1 y el encabezado en la fila 3~~ — **quitado el 23/10**: el encabezado vuelve a la **fila 1**, sin buscador (las plantillas descargadas con buscador se siguen pudiendo subir). El error de encabezado ahora dice `La planilla debe tener un encabezado con las columnas …` (antes "La primera fila debe tener…") | Si se mostraba el texto del error tal cual, nada; si se comparaba el texto, actualizarlo |
+| Las dos plantillas vienen **en bloques**: franja por categoría › subcategoría (orden del catálogo), título por producto (`#id · nombre`) y sus variantes por color y talla (XXS…XXL). Las franjas y títulos no tienen ID ni cantidad y se ignoran al subir; una cantidad escrita ahí da `Falta el ID de variante` en esa fila | Nada (el archivo lo arma el backend); si se muestra una vista previa del Excel, respetar los bloques |
 | ⚠️ El backend **no detecta archivos repetidos**: subir dos veces (o doble clic en "Confirmar") duplica el ingreso o crea dos envíos | Deshabilitar "Confirmar" durante la request; tras confirmar, salir de la pantalla de subida (envío: ir a su detalle) |
 
 - [ ] Pantalla de ingreso de stock: descargar plantilla, subir con `dryRun=true`, mostrar vista previa/errores, confirmar con `dryRun=false`.
 - [ ] "Nuevo envío" desde Excel: elegir tienda → plantilla → vista previa (`dryRun=true`) → confirmar → ir al envío creado. Un archivo de ingreso subido acá da `400` (encabezado distinto).
 - [ ] En las dos: botón "Confirmar" deshabilitado mientras la request está en curso, y aviso antes de volver a subir un archivo ya importado (duplica).
 - [ ] Mostrar el `400` de "máximo 300 variantes" tal cual (pide dividir el archivo).
+
+## Actualización 23 de octubre — editar sucursal
+
+| Cambio | Impacto en el front |
+|---|---|
+| `PATCH /branches/:id`: el bloque `siatBranch` acepta **solo los campos editables**. Reenviar el objeto del `GET` con `id`/`createdAt` da `400 siatBranch.property id should not exist` (no es un cambio del backend: siempre fue así, ahora está documentado) | Quitar `id` y `createdAt` antes de enviar — ver [07](07-branches-daily-cash-billing.md) |
+| `POST /orders/:id/facturar` y `/facturar-contingencia`: **solo ventas cobradas** (en tienda `sent`, online `paid`/`sent`; si no → `400`), una **edición** no se factura si la original (u otra edición) ya tiene factura vigente (`400`, anular primero), y `usuario` / `descuentoAdicional` / `montoGiftCard` del body **se ignoran** (figura el usuario logueado; el monto es lo cobrado) | Ocultar "Facturar" en órdenes no cobradas y en ediciones de una venta ya facturada; dejar de mandar esos tres campos — ver [07](07-branches-daily-cash-billing.md) |
+| Plantillas Excel de ingreso de stock y de envío: **sin buscador**, encabezado en la **fila 1** (antes buscador en la 1 y encabezado en la 3). Las plantillas ya descargadas con buscador se siguen pudiendo subir | Nada, salvo que se mostrara o explicara el buscador |
+| Sucursales **"solo facturación"** (`type: "billing_only"`, hoy DASH 21 y ZARGA 701, convertidas por SQL): no aparecen en `GET /branches` (el admin las lista con `?type=billing_only`; `GET`/`PATCH /branches/:id` sí las aceptan), pueden tener MANAGER/CASHIER, y su staff solo usa los endpoints SIAT — stock, ventas, caja y traslados → `403 Esta sucursal es solo de facturación…`. El login trae `branch.type` | Con `branch.type === "billing_only"` mostrar solo el menú de facturación; en la gestión de sucursales, una pestaña/filtro con `?type=billing_only`; el selector de sucursal al crear/editar usuarios tiene que cargar también `?type=billing_only` (si no, no se les puede asignar cajeros) — ver [07](07-branches-daily-cash-billing.md) |
+| La factura de una venta muestra la sucursal como **`<siatBranch.name> <codigoSucursal>`** (ej. `COMERCIAL 3`), ya no con el nombre operativo de la sucursal | Nada |
+| Factura manual (`/facturacion/facturacion/online`, `/offline`, `/contingencia`): `razonSocialEmisor`, `municipio`, `telefono` y `nombreSucursal` **pasan a ser opcionales y se ignoran**: salen de los datos SIAT de la sucursal del `codigoSucursal` (igual que en las facturas de venta) | Se pueden dejar de mandar; si se mandan no pasa nada |
+| Facturar con una sucursal SIAT **desactivada** (`siatBranch.active = false`) da `400 La sucursal SIAT N está desactivada para facturar` (antes facturaba igual); sucursal SIAT inexistente → `404`. Aplica también a facturar una venta (`/orders/:id/facturar`) | Mostrar el error |
+| Endpoint nuevo **`GET /variants/products`** (A, S, M, C; `page`, `limit`, `search`, `?branchId=`, acepta la bodega principal): igual que `GET /variants` pero **paginado por producto** — cada elemento es un producto con `productColors[]` → `variants[]` y los mismos campos de stock. `search` busca también por subcategoría y categoría. `GET /variants` no cambia (sigue paginado por color, para el POS) | Listado de la **bodega principal**: cambiar `GET /variants?branchId=<bodega>` por `GET /variants/products?branchId=<bodega>` y dibujar producto › colores › tallas — ver [06](06-inventory-and-warehouse.md) |
+| **Devoluciones a la bodega principal** (tipo nuevo `type: "central_return"`): la tienda devuelve stock con `POST /branch-transfers/returns` (M, C; sale del depósito o, con `location: "sales_floor"`, del piso; nace `in_transit`) y la central la recibe con **`POST /branch-transfers/returns/:id/receive`** (A, S; entra al depósito de la bodega). Anular: la tienda o la central (con nota), solo en camino. `pending-count` trae `returnsToReceive`; kardex con tipos nuevos `devolucion_bodega` / `devolucion_anulada` | Un `switch` sobre `type` sin `default` rompe. Pantallas nuevas "Devolver a bodega" (tienda) y "Devoluciones por recibir" (central); la acción `receive` de una devolución va a `returns/:id/receive` — ver [16](16-central-returns.md) |
+| `/facturacion` y `/paquetes` ahora aceptan **MANAGER y CASHIER** (antes `403 Special permits required : admin, supervisor`). Ven y operan **solo su sucursal SIAT**: el `codigoSucursal` de la query se reemplaza por el suyo, y una factura / paquete / evento de otra sucursal da `404`. `POST /paquetes` de un M/C envía solo las facturas offline de su sucursal. Todo `/catalogos` (`sincronizacion`, `parametricas`, `listas`, `fecha-hora`) y `POST /codigos/verificar-nit` también se abren a M/C, **sin** límite por sucursal (se usa el `codigoSucursal` + `codigoPuntoVenta` de la query, igual que para un admin). `GET /cafc` y `GET /cafc/:id` también se abren a M/C (los necesitan para elegir el `cafc` al facturar en contingencia), y los **eventos significativos** de `/operaciones` (registrar, listar, consultar) también, limitados a su sucursal SIAT; crear/editar CAFC, el resto de `/codigos` (CUIS/CUFD) y los puntos de venta de `/operaciones` siguen siendo ADMIN + SUPERVISOR | Mostrar las pantallas de facturas (lista, PDF, verificar, anular/revertir, paquetes, verificar NIT) al cajero y al encargado; no hace falta mandarles `codigoSucursal` distinto — ver [02](02-roles-and-permissions.md) |

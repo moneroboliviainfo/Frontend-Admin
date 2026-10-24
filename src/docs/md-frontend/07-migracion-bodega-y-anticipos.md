@@ -767,6 +767,30 @@ arreglado solo.
 > (`needsBranchSelector`, solo ADMIN). Ya no decide donde se factura; si no
 > sirve para otra cosa, se puede sacar.
 
+## Remito de envio (23/10/2026)
+
+El papel que acompaña la mercaderia al salir de la bodega. Mismo formato que el
+comprobante de recepcion (80mm, bloque de pagina ya calibrado) pero **sin
+firmas**: nadie firma al despachar, se firma al recibir del otro lado.
+
+Lleva traslado (si ya existe), **Sale de / Va a / Despacha**, el detalle con una
+casilla para tildar mientras se arma el paquete, y el total.
+
+Dos lugares:
+
+- **Bodega Central → Stock**, en un modal chico que se abre **despues** de
+  confirmar (`DispatchCreatedModal`): *"Envio #46 creado"* con los dos botones.
+  Asi el remito lleva el numero real y refleja lo que quedo registrado, no lo
+  que se iba a mandar. (`transferId` quedo opcional en `DispatchNote` por si
+  alguna vez se imprime antes.)
+- **Bodega Central → Envios**, en las acciones de cada fila, **solo cuando esta
+  en camino**: reimprime el remito de un envio ya creado. El papel se pierde, el
+  envio no.
+
+Tambien se sumo, en el modal de recibir, una columna **Etiqueta** (primera) con
+el QR de la variante: reutiliza `VariantQRModal`, asi se imprimen las etiquetas
+de lo que acaba de llegar sin salir de la pantalla.
+
 ## Pendientes de esta tanda
 
 - [x] **Prendas pagadas protegidas en el carrito** (18/10/2026): con un pedido

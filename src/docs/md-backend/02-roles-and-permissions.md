@@ -71,6 +71,13 @@ ignora o directamente el endpoint no le da la opción).
 `403 La bodega principal no opera como sucursal: esta acción no está disponible para ella`.
 Solo la aceptan los de stock marcados con 🏭 en la matriz de abajo.
 
+**Las sucursales "solo facturación"** (`type: "billing_only"`, ver
+[07](07-branches-daily-cash-billing.md)) tampoco operan como sucursal: su
+staff (y un admin con `?branchId=` de una de ellas) recibe
+`403 Esta sucursal es solo de facturación: esta acción no está disponible para ella`
+en todo lo de stock, ventas, caja y traslados. Solo usan los endpoints SIAT
+(`GET /facturacion/facturacion` sí las acepta).
+
 Para las acciones de venta por `:id` (confirmar, cancelar, editar una orden,
 cerrar caja, facturar), el backend además **valida que ese recurso pertenezca
 a la sucursal del usuario** — si un cajero intenta operar sobre una orden de
@@ -109,7 +116,8 @@ A = ADMIN, S = SUPERVISOR, M = MANAGER, C = CASHIER.
 |---|---|---|
 | `POST /variants` | A, S | alta de catálogo (color+tallas), stock inicial → bodega principal |
 | `PATCH /variants/:id` | A, S | editar variante (tallas nuevas → bodega principal) |
-| `GET /variants` 🏭 | A, S, M, C | listar (con stock) |
+| `GET /variants` 🏭 | A, S, M, C | listar (con stock), paginado por color (POS) |
+| `GET /variants/products` 🏭 | A, S, M, C | listar (con stock), paginado por producto (bodega principal) |
 | `GET /variants/:id` 🏭 | A, S, M, C | detalle con stock |
 | `GET /variants/stock/:id` 🏭 | A, S, M, C | solo el número de stock vendible |
 | `GET /variants/:id/movements` 🏭 | A, S, M, C | kardex de una variante |
@@ -135,13 +143,15 @@ A = ADMIN, S = SUPERVISOR, M = MANAGER, C = CASHIER.
 | `POST /branch-transfers/replenishments` | M, C | pedir variantes a la bodega (reposición; agrega a la abierta de la tienda) |
 | `DELETE /branch-transfers/replenishments/:id/items/:itemId` | M, C | quitar una variante de la reposición pendiente de su tienda |
 | `POST /branch-transfers/replenishments/:id/dispatch` | A, S | atender (elegir cantidades) o rechazar (todo en 0) una reposición |
+| `POST /branch-transfers/returns` | M, C | devolver stock de mi tienda a la bodega (depósito o piso, nace en camino — ver [16](16-central-returns.md)) |
+| `POST /branch-transfers/returns/:id/receive` | A, S | la central recibe una devolución (entra al depósito de la bodega) |
 | `POST /branch-transfers/requests` | M, C | pedido de mi tienda a otra (con o sin cobro) |
 | `POST /branch-transfers/requests/quote` | M, C | cotizar un pedido cobrado (no guarda nada) |
 | `POST /branch-transfers/requests/:id/refund` | M, C | devolver al cliente lo pendiente del anticipo (caja abierta) |
 | `POST /payments/generate-qr/request/:id` | M, C | QR del anticipo de un pedido de mi tienda |
 | `POST /branch-transfers/dispatch/:id` | M, C | la tienda origen despacha un pedido |
-| `POST /branch-transfers/receive/:id` | M, C | la tienda destino recibe |
-| `POST /branch-transfers/cancel/:id` | A, S, M, C | M/C: solo pedidos de su tienda antes del despacho, o su reposición pendiente |
+| `POST /branch-transfers/receive/:id` | M, C | la tienda destino recibe (las devoluciones a la bodega, no: `returns/:id/receive`) |
+| `POST /branch-transfers/cancel/:id` | A, S, M, C | M/C: solo pedidos de su tienda antes del despacho, su reposición pendiente o su devolución en camino |
 | `POST /branch-transfers/mark-lost/:id` | A, S | no llegó nada |
 | `POST /branch-transfers/review/:id` | A, S | resolver faltantes |
 | `POST /branch-transfers/pickup/:id` | M, C | retiro manual / "no retirado" |
@@ -169,7 +179,12 @@ hacer ahora (ya filtradas por rol y sucursal).
 |---|---|---|
 | `GET /billing/:ci` | M, C | lookup por CI para autocompletar en el POS |
 | `POST /billing` | M, C | crear/actualizar registro de facturación |
-| SIAT (`/facturacion`, `/cafc`, `/catalogos`, `/codigos`, `/paquetes`, `/operaciones`) | A, S | todo lo de bajo nivel SIAT |
+| SIAT de facturas (`/facturacion`, `/paquetes`) | A, S, M, C | M/C solo su sucursal SIAT (ver abajo) |
+| `/catalogos` (todo: `sincronizacion`, `parametricas`, `listas`, `fecha-hora`) | A, S, M, C | para armar la factura; sin límite por sucursal (los catálogos son de todo el NIT) |
+| `POST /codigos/verificar-nit` | A, S, M, C | validar el NIT del cliente; sin límite por sucursal |
+| `GET /cafc`, `GET /cafc/:id` | A, S, M, C | elegir el `cafc` al facturar en contingencia; sin límite por sucursal (los CAFC son de toda la empresa) |
+| `/operaciones/evento-significativo` (registrar, listar, consultar) | A, S, M, C | contingencia; M/C solo su sucursal SIAT |
+| `POST /cafc`, `PATCH /cafc/:id`, resto de `/codigos` (CUIS/CUFD), `/operaciones/punto-venta*` | A, S | |
 
 ### Catálogo / configuración — ADMIN + SUPERVISOR
 
@@ -195,11 +210,26 @@ Excepciones dentro de ese bloque que **no** son de admin:
   `GET /advertisements`, `GET /shipments`, `GET /multimedia/upload/:file` —
   público, sin `@Auth`.
 
-### SIAT de bajo nivel — ADMIN + SUPERVISOR
+### SIAT de bajo nivel
 
-`catalogos`, `codigos`, `operaciones`, `paquetes`, `cafc`, `facturacion`
-(los endpoints directos contra el SIN, no `/orders/:id/facturar`). Ver
+Los endpoints directos contra el SIN (no `/orders/:id/facturar`). Ver
 [10-siat-low-level.md](10-siat-low-level.md).
+
+- `facturacion`, `paquetes` → **todos los roles**. MANAGER/CASHIER
+  quedan limitados al `codigoSucursal` SIAT de su sucursal, con la misma regla
+  que `@GetBranchId()`: el `codigoSucursal` que manden en la query **se
+  reemplaza por el suyo**, y una factura / paquete / evento de otra sucursal
+  da `404`. Si su sucursal no tiene datos SIAT → `403`.
+- `catalogos` (incluida `sincronizacion`) y `POST /codigos/verificar-nit` →
+  **todos los roles**, **sin** límite por sucursal (los catálogos del SIN son
+  los mismos para todo el NIT: se usa el `codigoSucursal` + `codigoPuntoVenta`
+  que mande el front, igual que un admin).
+- `GET /cafc` y `GET /cafc/:id` → **todos los roles** (leer el `cafc` para
+  facturar en contingencia).
+- `operaciones/evento-significativo` (registrar, listar, consultar) →
+  **todos los roles**, M/C limitados a su sucursal SIAT como `facturacion`.
+- Crear/editar CAFC, el resto de `codigos` (CUIS/CUFD) y los puntos de venta
+  de `operaciones` → **ADMIN + SUPERVISOR**.
 
 ### Storefront público (sin rol)
 

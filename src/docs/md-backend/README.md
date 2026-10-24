@@ -33,7 +33,9 @@ caja), qué se rompe y el checklist del front; después, la actualización
 del 18 de octubre (stock de la bodega principal separado en
 `centralWarehouseStock`, storefront solo con `availableStock`) y la del
 **19 de octubre** (reposiciones, `stage`/`allowedActions` en los traslados,
-listado de facturas por sucursal). Los anteriores, del 28 al 30
+listado de facturas por sucursal), hasta la del **23 de octubre** (entre
+otras cosas, devoluciones de las tiendas a la bodega:
+[16-central-returns.md](16-central-returns.md)). Los anteriores, del 28 al 30
 de septiembre (rol supervisor, bodega principal, envíos y pedidos entre
 sucursales, facturas), están en [12-changelog-2026-09.md](12-changelog-2026-09.md).
 
@@ -56,6 +58,7 @@ sucursales, facturas), están en [12-changelog-2026-09.md](12-changelog-2026-09.
 | [13-prepaid-branch-requests.md](13-prepaid-branch-requests.md) | Pedidos entre sucursales cobrados al pedir: configuración de plazos, cotizar y cobrar (efectivo, tarjeta, QR), devoluciones, venta de retiro con anticipo, anticipo perdido, caja |
 | [14-changelog-2026-10.md](14-changelog-2026-10.md) | Qué cambió (9–10/10, 18/10 y 19/10/2026), qué rompe y checklist del front |
 | [15-replenishments-and-transfer-stages.md](15-replenishments-and-transfer-stages.md) | Reposiciones (la tienda pide a la bodega, la central atiende), marca `pendingReplenishment`, y `stage`/`stageLabel`/`allowedActions` de todos los traslados; pantallas sugeridas en dos menús |
+| [16-central-returns.md](16-central-returns.md) | Devoluciones de una tienda a la bodega principal (`central_return`): crear (depósito o piso), recibir en la central, anular, kardex, `returnsToReceive` |
 
 Este índice cubre **todos** los controllers del backend — si un endpoint no
 aparece en ninguno de estos archivos, no existe (o es nuevo y este doc

@@ -279,7 +279,8 @@ awaitingPickup + pendingRefunds`. **No** sumes `inTransit` (informativo) ni
 `pendingReview` (solo lo resuelve la central). `replenishmentsPending` en la
 tienda tampoco es una acción (espera a la central): mostralo como estado.
 
-**Contador de la central**: `replenishmentsPending + pendingReview`.
+**Contador de la central**: `replenishmentsPending + pendingReview` (+
+`returnsToReceive` desde el 23/10, ver [16](16-central-returns.md)).
 
 ### Forma: lo que cambia en cada traslado
 
@@ -334,7 +335,7 @@ backend igual valida cada acción (si la pantalla quedó vieja, responde
 |---|---|
 | `dispatch` | `POST /branch-transfers/dispatch/:id` |
 | `attend` | `POST /branch-transfers/replenishments/:id/dispatch` (atender o rechazar) |
-| `receive` | `POST /branch-transfers/receive/:id` |
+| `receive` | `POST /branch-transfers/receive/:id` — en una devolución (`type: "central_return"`, la ve la central): `POST /branch-transfers/returns/:id/receive` |
 | `cancel` | `POST /branch-transfers/cancel/:id` |
 | `markLost` | `POST /branch-transfers/mark-lost/:id` |
 | `review` | `POST /branch-transfers/review/:id` |
@@ -394,6 +395,16 @@ enlazar el pedido.
 "Esperando al cliente" usa la misma regla que el filtro `awaitingPickup`: la
 lista y la etiqueta nunca se contradicen.
 
+### 4.4 bis Devolución a la bodega (`central_return`, desde el 23/10)
+
+Ver [16-central-returns.md](16-central-returns.md).
+
+| `status` | Tienda que devuelve (origen) | Central |
+|---|---|---|
+| `in_transit` | `in_transit` · En camino · `[cancel]` | `to_receive` · Por recibir · `[receive, cancel, markLost]` |
+| `received` | `received` · Recibido | `received` · Recibido |
+| `cancelled` / `lost` | `cancelled` · Anulado / `lost` · Perdido | ídem |
+
 ### 4.5 Acciones que se suman a cualquier etapa
 
 | Acción | Cuándo | Quién |
@@ -428,6 +439,8 @@ Organizá por **propósito**, no por endpoint: dos menús.
 | Reposición | Tienda | `replenishment=true&status=pending_dispatch` → editar su "carrito" (`addVariants`/`removeVariant`), anular; historial con `replenishment=true` |
 | Envíos de la central | Tienda | `type=central_dispatch` (envíos + reposiciones atendidas) → `receive` |
 | Bodega ↔ Tienda | Tienda | `/stock-transfers` (ver [06](06-inventory-and-warehouse.md)) |
+| Devoluciones a la bodega | Tienda | `type=central_return` → "Devolver a bodega" (`POST /branch-transfers/returns`), `cancel` mientras va en camino (ver [16](16-central-returns.md)) |
+| Devoluciones por recibir | Central | `type=central_return&status=in_transit` → `receive` (`returns/:id/receive`) |
 | Por atender | Central | `replenishment=true&status=pending_dispatch` → pantalla de atención: por línea, variante + `centralWarehouseStock` + cantidad a mandar |
 | Nuevo envío / En camino / Por revisar | Central | como en [11 §9](11-central-warehouse-and-branch-transfers.md) |
 

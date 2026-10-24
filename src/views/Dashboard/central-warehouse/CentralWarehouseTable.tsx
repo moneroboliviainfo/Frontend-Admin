@@ -25,6 +25,8 @@ import IconButton from '@mui/material/IconButton'
 import CustomTextField from '@core/components/mui/TextField'
 import tableStyles from '@core/styles/table.module.css'
 import { useBranchContext } from '@/contexts/BranchContext'
+import { useAuthContext } from '@/contexts/AuthContext'
+import type { DispatchNote } from '@/utils/receptionReceipt'
 import { useCentralWarehouse, useCentralDispatch } from '@/hooks/useBranchTransfers'
 import { useVariants } from '@/hooks/useVariants'
 import { variantService } from '@/services/variantService'
@@ -33,6 +35,7 @@ import { prendas, variantes } from './units'
 import ConfirmWarehouseChangesModal from './ConfirmWarehouseChangesModal'
 import ExportMenu from './ExportMenu'
 import ExcelImportModal from './ExcelImportModal'
+import DispatchCreatedModal from './DispatchCreatedModal'
 import type { ImportMode } from './ExcelImportModal'
 import LowStockPanel from './LowStockPanel'
 import MovementsModal from './MovementsModal'
@@ -116,6 +119,10 @@ const CentralWarehouseTable = () => {
   // Las dos importaciones viven acá porque son la version masiva de las dos
   // columnas de esta tabla: Ingresar y Enviar a <tienda>.
   const [importMode, setImportMode] = useState<ImportMode | null>(null)
+
+  // El remito se ofrece DESPUES de confirmar, con el envio ya creado: asi lleva
+  // su numero y refleja lo que quedo registrado
+  const [dispatchNote, setDispatchNote] = useState<DispatchNote | null>(null)
   const [subtractTarget, setSubtractTarget] = useState<SubtractTarget | null>(null)
   const [movementsTarget, setMovementsTarget] = useState<MovementsTarget | null>(null)
 
@@ -125,6 +132,9 @@ const CentralWarehouseTable = () => {
 
   // La sucursal destino es la que esta elegida en la navbar
   const { selectedBranch } = useBranchContext()
+
+  // Quien despacha, para el remito
+  const { user } = useAuthContext()
   const previousBranchId = useRef<number | null>(null)
 
   const { data: warehouse, isLoading: isLoadingWarehouse, isError: isWarehouseError } = useCentralWarehouse()
@@ -269,7 +279,7 @@ const CentralWarehouseTable = () => {
       severity = 'error'
     } else if (canDispatch) {
       try {
-        await dispatchToBranch.mutateAsync({
+        const created = await dispatchToBranch.mutateAsync({
           destinationBranchId: selectedBranch.id,
           items: outgoingEntries.map(([variantSizeId, quantity]) => ({
             variantId: Number(variantSizeId),
@@ -278,6 +288,17 @@ const CentralWarehouseTable = () => {
         })
 
         messages.push(`${prendas(outgoingUnits)} en camino a ${selectedBranch.name}`)
+
+        setDispatchNote({
+          transferId: created.id,
+          destination: selectedBranch.name,
+          dispatchedBy: created.dispatchedBy?.name || user?.name || 'Bodega Central',
+          lines: outgoingEntries.map(([variantSizeId, quantity]) => ({
+            label: labels[Number(variantSizeId)] || `Variante ${variantSizeId}`,
+            quantity
+          }))
+        })
+
         setOutgoing({})
       } catch (error: any) {
         messages.push(error?.response?.data?.message || 'el envio fallo')
@@ -619,6 +640,8 @@ const CentralWarehouseTable = () => {
       </Card>
 
       <MovementsModal target={movementsTarget} warehouseId={warehouse?.id} onClose={() => setMovementsTarget(null)} />
+
+      <DispatchCreatedModal note={dispatchNote} onClose={() => setDispatchNote(null)} />
 
       <ExcelImportModal
         mode={importMode}

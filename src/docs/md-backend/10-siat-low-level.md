@@ -1,7 +1,14 @@
 # SIAT de bajo nivel (soporte técnico / panel interno)
 
-Todo lo de acá es **ADMIN + SUPERVISOR** y es la integración SOAP directa con el SIN
-(Servicio de Impuestos Nacionales de Bolivia). El frontend de **ventas**
+Es la integración SOAP directa con el SIN (Servicio de Impuestos Nacionales
+de Bolivia). Crear/editar CAFC, los puntos de venta de `/operaciones` y
+`/codigos` (salvo `verificar-nit`) son **ADMIN + SUPERVISOR**; todo
+`/catalogos`, `POST /codigos/verificar-nit` y `GET /cafc` son de **todos los
+roles** sin límite por sucursal; `/facturacion`, `/paquetes` y los eventos
+significativos de `/operaciones` son de **todos los roles**, con
+MANAGER/CASHIER limitados a su sucursal SIAT (el `codigoSucursal`
+de la query se reemplaza por el suyo; una factura, paquete o evento de otra
+sucursal da `404`) — ver [02-roles-and-permissions.md](02-roles-and-permissions.md). El frontend de **ventas**
 (POS/storefront) nunca llama nada de esto — usa
 `POST /orders/:orderId/facturar` (ver
 [07-branches-daily-cash-billing.md](07-branches-daily-cash-billing.md)), que
@@ -53,6 +60,10 @@ GET  /operaciones/punto-venta                                                   
 POST /operaciones/punto-venta/consulta            ?codigoSucursal                     consulta contra el SIN
 POST /operaciones/punto-venta/cierre              ?codigoPuntoVenta&codigoSucursal   cierra un punto de venta
 ```
+Los tres de **evento significativo** son de todos los roles (MANAGER/CASHIER
+solo con el `codigoSucursal` de su sucursal: el que manden se reemplaza); los
+de **punto de venta**, solo ADMIN/SUPERVISOR.
+
 Un "evento significativo" es lo que dispara el modo **contingencia** (emitir
 facturas offline cuando el SIN no responde) — ver
 [siat-unreachable-from-new-vps] para contexto de por qué esto importa en este
@@ -89,7 +100,9 @@ GET    /cafc/:id
 PATCH  /cafc/:id
 ```
 CRUD simple sobre el registro local de CAFCs (los códigos que habilitan a
-facturar en modo offline/contingencia).
+facturar en modo offline/contingencia). `GET` es de todos los roles (para
+elegir el `cafc` al facturar en contingencia); `POST`/`PATCH`, solo
+ADMIN/SUPERVISOR.
 
 ## Facturacion (`/facturacion`) — bajo nivel, no confundir con `/orders/:id/facturar`
 
@@ -114,6 +127,13 @@ en el código, no es un error de este doc.
   `orders`) — **normalmente no se usan así**; el flujo real pasa por
   `POST /orders/:orderId/facturar`, que arma el `CreateFacturaDto` con los
   datos de la orden y llama a esto por dentro.
+- **Datos del emisor**: `razonSocialEmisor`, `municipio`, `telefono` y
+  `nombreSucursal` del body **se ignoran** (ahora son opcionales): el backend
+  los toma de los datos SIAT de la sucursal del `codigoSucursal`, y
+  `nombreSucursal` sale como `<nombre SIAT> <código>` (ej. `COMERCIAL 2`),
+  igual que en las facturas de venta. Si esa sucursal SIAT está **desactivada**
+  (`siatBranch.active = false`) → `400 La sucursal SIAT N está desactivada para
+  facturar`; si no existe → `404`. Sus facturas viejas se siguen listando.
 - `anulacion`/`reversion` — no tienen contraparte en `/orders`; si tu panel
   de soporte necesita anular una factura ya emitida, es acá. Reglas:
   - solo se anula una factura `VALIDADA` (otro estado → `400` con el motivo);
@@ -132,8 +152,8 @@ en el código, no es un error de este doc.
 - El total facturado del listado (`totalFacturado`) cuenta las facturas
   `VALIDADA` y `REVERTIDA`.
 - **PDF**: `GET /facturacion/facturacion/:id/representacion-grafica` es el
-  único lugar donde se puede pedir el PDF de una factura por API, y es solo
-  ADMIN/SUPERVISOR a propósito — ver la nota en
+  único lugar donde se puede pedir el PDF de una factura por API (todos los
+  roles; MANAGER/CASHIER solo facturas de su sucursal) — ver la nota en
   [07-branches-daily-cash-billing.md](07-branches-daily-cash-billing.md)
   sobre por qué el POS no lo usa.
 

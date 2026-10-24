@@ -8,6 +8,8 @@ import DialogContent from '@mui/material/DialogContent'
 import DialogActions from '@mui/material/DialogActions'
 import Box from '@mui/material/Box'
 import Button from '@mui/material/Button'
+import Tooltip from '@mui/material/Tooltip'
+import IconButton from '@mui/material/IconButton'
 import Alert from '@mui/material/Alert'
 import Typography from '@mui/material/Typography'
 import FormControlLabel from '@mui/material/FormControlLabel'
@@ -21,9 +23,10 @@ import { useReceiveTransfer } from '@/hooks/useBranchTransfers'
 import { useAuthContext } from '@/contexts/AuthContext'
 import { printReceptionReceipt, printReceptionReceiptBluetooth } from '@/utils/receptionReceipt'
 import { isBluetoothAvailable } from '@/utils/bluetoothPrinter'
-import type { BranchTransfer } from '@/types/api/branchTransfer'
+import type { BranchTransfer, BranchTransferItem } from '@/types/api/branchTransfer'
 import { itemLabel } from '@/views/Dashboard/central-warehouse/transfers'
 import { prendas } from '@/views/Dashboard/central-warehouse/units'
+import VariantQRModal from '@/views/Dashboard/products/add/components/VariantQRModal'
 
 type Props = {
   transfer: BranchTransfer | null
@@ -40,6 +43,9 @@ const ReceiveTransferModal = ({ transfer, onClose, showMessage }: Props) => {
   const [location, setLocation] = useState<Location>('warehouse')
 
   const receive = useReceiveTransfer()
+
+  // Etiqueta de la prenda, para pegarla al guardar lo que acaba de llegar
+  const [qrTarget, setQrTarget] = useState<BranchTransferItem | null>(null)
 
   // Quien recibe firma el comprobante: su nombre va impreso bajo la linea
   const { user } = useAuthContext()
@@ -73,6 +79,7 @@ const ReceiveTransferModal = ({ transfer, onClose, showMessage }: Props) => {
     location: location === 'warehouse' ? 'Bodega de la sucursal' : 'Tienda',
     note: note.trim() || undefined,
     receivedBy: user?.name || 'Cajero',
+    dispatchedBy: transfer.dispatchedBy?.name,
     lines: dispatched.map(item => ({
       label: itemLabel(item),
       dispatched: item.dispatchedQuantity ?? 0,
@@ -161,6 +168,7 @@ const ReceiveTransferModal = ({ transfer, onClose, showMessage }: Props) => {
           <table className={tableStyles.table}>
             <thead>
               <tr>
+                <th>Etiqueta</th>
                 <th>Prenda</th>
                 <th>Despachado</th>
                 <th>Recibido</th>
@@ -173,6 +181,13 @@ const ReceiveTransferModal = ({ transfer, onClose, showMessage }: Props) => {
 
                 return (
                   <tr key={item.id}>
+                    <td>
+                      <Tooltip title='Ver e imprimir la etiqueta de esta prenda'>
+                        <IconButton size='small' onClick={() => setQrTarget(item)}>
+                          <i className='tabler-qrcode' />
+                        </IconButton>
+                      </Tooltip>
+                    </td>
                     <td>
                       <Typography variant='body2'>{itemLabel(item)}</Typography>
                     </td>
@@ -268,6 +283,14 @@ const ReceiveTransferModal = ({ transfer, onClose, showMessage }: Props) => {
           {receive.isPending ? 'Recibiendo...' : isShort ? 'Recibir con faltantes' : 'Recibir todo'}
         </Button>
       </DialogActions>
+      <VariantQRModal
+        open={!!qrTarget}
+        onClose={() => setQrTarget(null)}
+        variantId={Number(qrTarget?.variantId ?? 0)}
+        productName={qrTarget?.variant?.productColor?.product?.name}
+        colorName={qrTarget?.variant?.productColor?.color?.name || ''}
+        sizeName={qrTarget?.variant?.size?.name || ''}
+      />
     </Dialog>
   )
 }

@@ -181,8 +181,10 @@ GET  /payments/verify/:id           # público — pollear para saber si ya se p
 ```
 El frontend genera el QR, lo muestra, y **pollea `GET /payments/verify/:id`**
 (o similar) para detectar el pago — no hay push al cliente. El callback de
-BNB no está autenticado (BNB no firma el payload); es un riesgo aceptado a
-propósito, no un bug a reportar.
+BNB es público (BNB no firma el payload), pero el backend no le cree a
+ciegas: solo confirma el pago si el `QRId` es uno generado para esa orden
+(o pedido) con `generate-qr` y BNB lo informa como pagado al consultarlo.
+Un callback armado a mano no confirma nada. Nada que hacer en el front.
 
 - **Venta de retiro de un pedido cobrado**: el QR va **solo por el saldo**
   (`totalPrice − advanceApplied`). Si el saldo es 0, la venta ni siquiera se

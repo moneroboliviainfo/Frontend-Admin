@@ -1,6 +1,8 @@
 # Bodega principal, envíos a tiendas y pedidos entre sucursales
 
-Tres piezas nuevas que trabajan juntas:
+Tres piezas nuevas que trabajan juntas (más una cuarta, del 23/10: las
+**devoluciones** de una tienda a la bodega, `central_return`, ver
+[16-central-returns.md](16-central-returns.md)):
 
 1. **Bodega principal**: por donde entra **todo** el stock nuevo.
 2. **Envíos desde la bodega** (`central_dispatch`): la bodega le manda
@@ -49,7 +51,7 @@ El front pide el `id` una vez (por ejemplo al entrar al panel) y lo usa como
 
 | Endpoint | Con `?branchId=<bodega>` |
 |---|---|
-| `GET /variants`, `GET /variants/:id`, `GET /variants/stock/:id` | ✅ ver su stock |
+| `GET /variants`, `GET /variants/products`, `GET /variants/:id`, `GET /variants/stock/:id` | ✅ ver su stock (`/variants/products` pagina por producto: es el listado de la bodega) |
 | `GET /variants/:id/movements` | ✅ kardex de la bodega |
 | `POST /variants/subtractstock` | ✅ baja en la bodega (solo `location: "warehouse"`, o sin `location`) |
 | `GET /variants/dashboard/lowStock`, `GET /variants/export/exel`, `/export/stock-critico`, `/export/transactions/exel` | ✅ |
@@ -153,7 +155,9 @@ GET  /branch-transfers/central-dispatch/import/template?destinationBranchId=2
   "En camino a <tienda>"   = ya despachado hacia la tienda y sin recibir (cualquier traslado in_transit)
   "Pedido por la tienda"   = "Sí" si la variante está en una reposición de la tienda sin atender
                              (mejor atender la reposición: POST /branch-transfers/replenishments/:id/dispatch, doc 15 §1)
-  Las cuatro son referencia, para no mandar dos veces lo mismo. Orden: producto, color, talla (XXS…XXL).
+  Las cuatro son referencia, para no mandar dos veces lo mismo.
+  Encabezado en la fila 1 y en bloques, igual que la plantilla de ingreso: franja por categoría › subcategoría, título por
+  producto y sus variantes por color y talla. Franjas y títulos no tienen ID: se ignoran al subir.
 
 POST /branch-transfers/central-dispatch/import?destinationBranchId=2&dryRun=true|false
 multipart/form-data: file (.xlsx, máx. 5 MB), note? (texto)
@@ -586,7 +590,7 @@ GET /branch-transfers/pickup-stats?from=2026-10-01&to=2026-10-31     (fechas de 
 GET /branch-transfers?page=1&limit=10
   &direction=incoming|outgoing
   &status=pending_payment|pending_dispatch|in_transit|not_found|received|lost|cancelled
-  &type=central_dispatch|branch_request
+  &type=central_dispatch|branch_request|central_return   (central_return = devolución a la bodega, ver 16)
   &discrepancyStatus=pending_review|reviewed
   &awaitingPickup=true
   &pendingRefund=true                         (pedidos cobrados con devolución pendiente, ver 13 §5)
@@ -634,7 +638,7 @@ MANAGER/CASHIER: `404` si su tienda no es origen ni destino.
 ```jsonc
 {
   "id": 15,
-  "type": "branch_request",                 // o "central_dispatch"
+  "type": "branch_request",                 // o "central_dispatch" | "central_return"
   "replenishment": false,                   // true = reposición (central_dispatch que pidió la tienda, ver 15)
   "status": "received",
   "discrepancyStatus": null,                // "pending_review" | "reviewed" | null
@@ -736,6 +740,10 @@ branch_request:     pending_dispatch ──dispatch──▶ in_transit ──re
 con cobro por QR:   pending_payment ──pago QR──▶ pending_dispatch ──▶ (igual que arriba)
                         ├──cancel──▶ cancelled   (no se pagó: nada que devolver)
                         └──pago tardío sin la prenda en B──▶ cancelled   (se devuelve todo)
+
+central_return:     in_transit ──returns/:id/receive──▶ received   (al depósito de la bodega)
+(tienda → bodega)       │ ├──cancel──▶ cancelled   (vuelve a la tienda, a donde salió)
+                        │ └──mark-lost─▶ lost
 ```
 
 Actuar en un estado que no corresponde → `409 No se puede <acción>: el traslado #N <ya fue recibido | fue anulado | ...>`.
@@ -755,7 +763,8 @@ Las filas de traslados aparecen en `GET /variants/:id/movements` con estos
 |---|---|---|
 | `envio_bodega` | bodega (salida de un envío) | − |
 | `salida_pedido` | tienda B (sale por un pedido) | − |
-| `envio_anulado` / `pedido_anulado` | origen (vuelve al anular) | + |
+| `devolucion_bodega` | tienda (sale por una devolución a la bodega, ver [16](16-central-returns.md)) | − |
+| `envio_anulado` / `pedido_anulado` / `devolucion_anulada` | origen (vuelve al anular) | + |
 | `recepcion` | destino (al recibir) | + |
 | `aparecio_en_destino` | destino (revisión) | + |
 | `aparecio_en_origen` | origen (revisión) | + |
@@ -764,7 +773,8 @@ Esas filas traen además `branchTransferId` (número de traslado) y
 `counterpartBranch: { id, name }` (la otra sucursal). `ajuste` ahora puede ser
 negativo (baja) o positivo (ajuste positivo): distinguilo por el signo de
 `quantity`. En el Excel de movimientos las etiquetas son "Envío desde bodega",
-"Salida por pedido", "Envío anulado", "Pedido anulado", "Recepción",
+"Salida por pedido", "Devolución a bodega", "Envío anulado", "Pedido anulado",
+"Devolución anulada", "Recepción",
 "Apareció en destino", "Apareció en origen", "Baja" y "Ajuste positivo".
 
 ---
@@ -772,7 +782,8 @@ negativo (baja) o positivo (ajuste positivo): distinguilo por el signo de
 ## 9. Pantallas sugeridas
 
 **ADMIN / SUPERVISOR**
-- **Bodega principal**: stock (`GET /variants?branchId=<bodega>`), ingresos
+- **Bodega principal**: stock (`GET /variants/products?branchId=<bodega>`,
+  paginado por producto), ingresos
   (`addstock`), bajas, renombrar.
 - **Nuevo envío**: elegir tienda + prendas con stock de depósito en la bodega
   → `central-dispatch`.
