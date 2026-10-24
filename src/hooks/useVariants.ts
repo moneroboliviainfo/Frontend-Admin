@@ -7,6 +7,7 @@ import type { QueryClient } from '@tanstack/react-query'
 
 import { variantService } from '@/services/variantService'
 import type {
+  Variant,
   CreateVariantDto,
   UpdateVariantDto,
   CreateBrandDto,
@@ -253,5 +254,34 @@ export const usePositiveAdjustment = () => {
     onSuccess: () => {
       invalidarStock(queryClient)
     }
+  })
+}
+
+// Mismo contrato que useVariants para quien lo consume —devuelve `data` como
+// una lista de colores, igual que `GET /variants`— pero paginando por PRODUCTO.
+// Asi una tabla agrupada por producto nunca muestra un producto a medias
+// (ver el aplanado recomendado en doc 06).
+export const useVariantProducts = (
+  page: number = 1,
+  limit: number = 10,
+  search: string = '',
+  branchId?: number,
+  enabled: boolean = true,
+  keepPrevious: boolean = false
+) => {
+  return useQuery({
+    queryKey: ['variants', 'by-product', page, limit, search, branchId],
+    queryFn: () => variantService.getProductsWithStock(page, limit, search, branchId),
+    enabled,
+    placeholderData: keepPrevious ? previous => previous : undefined,
+    select: response => ({
+      meta: response.meta,
+      data: response.data.flatMap(product =>
+        (product.productColors || []).map(productColor => ({
+          ...productColor,
+          product
+        }))
+      ) as unknown as Variant[]
+    })
   })
 }

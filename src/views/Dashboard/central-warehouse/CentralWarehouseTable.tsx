@@ -28,7 +28,7 @@ import { useBranchContext } from '@/contexts/BranchContext'
 import { useAuthContext } from '@/contexts/AuthContext'
 import type { DispatchNote } from '@/utils/receptionReceipt'
 import { useCentralWarehouse, useCentralDispatch } from '@/hooks/useBranchTransfers'
-import { useVariants } from '@/hooks/useVariants'
+import { useVariantProducts } from '@/hooks/useVariants'
 import { variantService } from '@/services/variantService'
 import type { Variant, VariantSize } from '@/types/api/variants'
 import { prendas, variantes } from './units'
@@ -145,7 +145,7 @@ const CentralWarehouseTable = () => {
     isLoading: isLoadingVariants,
     isError: isVariantsError,
     isPlaceholderData
-  } = useVariants(page, pageSize, search, warehouse?.id, !!warehouse?.id, true)
+  } = useVariantProducts(page, pageSize, search, warehouse?.id, !!warehouse?.id, true)
 
   useEffect(() => {
     const timer = setTimeout(() => {

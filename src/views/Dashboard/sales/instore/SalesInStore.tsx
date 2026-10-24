@@ -121,7 +121,12 @@ const PointOfSale: React.FC = () => {
   const { data: dailyCashData, isLoading: isDailyCashLoading, error: dailyCashApiError } = useDailyCash()
 
   // El POS es de MANAGER/CASHIER: su sucursal viene del login
-  const { userBranch } = useUserRole()
+  const { userBranch, isCashier } = useUserRole()
+
+  // Salida del modal de caja. El cajero no tiene acceso al dashboard: mandarlo
+  // a /home lo dejaba atrapado sin poder abrir ninguna otra pantalla. Inventario
+  // si lo puede usar sin caja abierta (recibir, pedir, ver stock).
+  const salidaSinCaja = isCashier ? '/receptions' : '/home'
 
   // Un pedido por venta: enlazarlo marca el pedido entero como retirado
   const [linkedTransferId, setLinkedTransferId] = useState<number | null>(null)
@@ -920,7 +925,7 @@ const PointOfSale: React.FC = () => {
             </Box>
           </DialogContent>
           <DialogActions>
-            <Button onClick={() => router.push('/home')} color='secondary'>
+            <Button onClick={() => router.push(salidaSinCaja)} color='secondary'>
               Cancelar
             </Button>
             <Button
@@ -1063,7 +1068,7 @@ const PointOfSale: React.FC = () => {
         billing={billing}
       />
 
-      <CloseCashSummaryModal dailyCash={closedCash} onClose={() => router.push('/home')} />
+      <CloseCashSummaryModal dailyCash={closedCash} onClose={() => router.push(salidaSinCaja)} />
 
       <Dialog open={closeDailyCashModalOpen} maxWidth='sm' fullWidth>
         <DialogTitle>Cerrar Caja</DialogTitle>

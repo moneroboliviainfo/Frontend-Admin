@@ -1,5 +1,7 @@
 import { apiClient } from '@/libs/axios'
 import type {
+  ProductWithStock,
+  VariantsMeta,
   ImportStockResponse,
   Variant,
   CreateVariantDto,
@@ -30,6 +32,27 @@ class VariantServiceClass {
       total: productColors.length
     }
   }
+
+  // Paginado por producto. Devuelve la misma info de stock que getAllVariants;
+  // lo que cambia es la unidad de paginacion (producto, no color).
+  async getProductsWithStock(
+    page: number = 1,
+    limit: number = 10,
+    search: string = '',
+    branchId?: number
+  ): Promise<{ data: ProductWithStock[]; meta: VariantsMeta }> {
+    const params = new URLSearchParams({
+      page: page.toString(),
+      limit: limit.toString(),
+      ...(search && { search }),
+      ...(branchId && { branchId: branchId.toString() })
+    })
+
+    const response = await apiClient.get(`/api/variants/products?${params}`)
+
+    return response.data
+  }
+
   async getVariantById(variantId: number, branchId?: number): Promise<Variant> {
     const response = await apiClient.get(`/api/variants/${variantId}`, {
       params: branchId ? { branchId } : undefined

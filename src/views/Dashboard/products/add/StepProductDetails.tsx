@@ -8,6 +8,7 @@ import Button from '@mui/material/Button'
 import FormLabel from '@mui/material/FormLabel'
 import FormHelperText from '@mui/material/FormHelperText'
 import MenuItem from '@mui/material/MenuItem'
+import Autocomplete from '@mui/material/Autocomplete'
 import FormControl from '@mui/material/FormControl'
 import Dialog from '@mui/material/Dialog'
 import DialogTitle from '@mui/material/DialogTitle'
@@ -258,27 +259,30 @@ const StepProductDetails = ({ activeStep, handleNext, handlePrev, mode, productI
               control={control}
               rules={{ required: true }}
               render={({ field }) => (
-                <CustomTextField
-                  select
+                <Autocomplete
                   fullWidth
-                  label='Categoría'
-                  {...field}
-                  onChange={e => {
-                    field.onChange(e)
+                  options={filteredCategories}
+                  getOptionLabel={(option: any) => option?.name || ''}
+                  isOptionEqualToValue={(option: any, value: any) => option?.id === value?.id}
+                  disabled={!selectedGender || categoriesLoading}
+                  noOptionsText='Sin resultados'
+
+                  /* El form guarda el id como texto; el Autocomplete trabaja con
+                     el objeto, asi que se traduce en los dos sentidos */
+                  value={filteredCategories.find((category: any) => category.id.toString() === field.value) || null}
+                  onChange={(_, option: any) => {
+                    field.onChange(option ? option.id.toString() : '')
                     handleCategoryChange()
                   }}
-                  error={Boolean(errors.categoria)}
-                  disabled={!selectedGender || categoriesLoading}
-                >
-                  <MenuItem value=''>
-                    {!selectedGender ? 'Selecciona un género primero' : 'Seleccionar Categoría'}
-                  </MenuItem>
-                  {filteredCategories.map((category: any) => (
-                    <MenuItem key={category.id} value={category.id.toString()}>
-                      {category.name}
-                    </MenuItem>
-                  ))}
-                </CustomTextField>
+                  renderInput={params => (
+                    <CustomTextField
+                      {...params}
+                      label='Categoría'
+                      placeholder={!selectedGender ? 'Elija un género primero' : 'Escriba para buscar'}
+                      error={Boolean(errors.categoria)}
+                    />
+                  )}
+                />
               )}
             />
             {errors.categoria && <FormHelperText error>Este campo es requerido.</FormHelperText>}
@@ -290,27 +294,32 @@ const StepProductDetails = ({ activeStep, handleNext, handlePrev, mode, productI
               control={control}
               rules={{ required: true }}
               render={({ field }) => (
-                <CustomTextField
-                  select
+                <Autocomplete
                   fullWidth
-                  label='Subcategoría'
-                  {...field}
-                  error={Boolean(errors.subcategoria)}
+                  options={availableSubcategories}
+                  getOptionLabel={(option: any) => option?.name || ''}
+                  isOptionEqualToValue={(option: any, value: any) => option?.id === value?.id}
                   disabled={!selectedCategory || availableSubcategories.length === 0}
-                >
-                  <MenuItem value=''>
-                    {!selectedCategory
-                      ? 'Selecciona una categoría primero'
-                      : availableSubcategories.length === 0
-                        ? 'No hay subcategorías disponibles'
-                        : 'Seleccionar Subcategoría'}
-                  </MenuItem>
-                  {availableSubcategories.map((subcategory: any) => (
-                    <MenuItem key={subcategory.id} value={subcategory.id.toString()}>
-                      {subcategory.name}
-                    </MenuItem>
-                  ))}
-                </CustomTextField>
+                  noOptionsText='Sin resultados'
+                  value={
+                    availableSubcategories.find((subcategory: any) => subcategory.id.toString() === field.value) || null
+                  }
+                  onChange={(_, option: any) => field.onChange(option ? option.id.toString() : '')}
+                  renderInput={params => (
+                    <CustomTextField
+                      {...params}
+                      label='Subcategoría'
+                      placeholder={
+                        !selectedCategory
+                          ? 'Elija una categoría primero'
+                          : availableSubcategories.length === 0
+                            ? 'Esta categoría no tiene subcategorías'
+                            : 'Escriba para buscar'
+                      }
+                      error={Boolean(errors.subcategoria)}
+                    />
+                  )}
+                />
               )}
             />
             {errors.subcategoria && <FormHelperText error>Este campo es requerido.</FormHelperText>}

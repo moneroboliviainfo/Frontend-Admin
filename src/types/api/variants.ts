@@ -240,3 +240,37 @@ export interface ImportRowError {
   row: number
   message: string
 }
+
+// --- GET /variants/products: el mismo stock, paginado por PRODUCTO ---
+//
+// `GET /variants` pagina por color, asi que los colores de un mismo producto se
+// parten entre paginas y una tabla agrupada por producto muestra el producto
+// incompleto. Este endpoint devuelve cada producto con TODOS sus colores.
+
+export interface VariantsMeta {
+  total: number
+  page: number
+  lastPage: number
+  limit: number
+  offset: number
+  hasNextPage: boolean
+  hasPreviousPage: boolean
+}
+
+export interface ProductColorWithStock {
+  id?: number
+  color: Color
+  variants: VariantSize[]
+  multimedia?: string[]
+  pdfs?: string[]
+}
+
+export interface ProductWithStock {
+  id: number
+  name: string
+  productColors: ProductColorWithStock[]
+  subcategory?: { id: number; name: string; category?: { id: number; name: string } }
+
+  // null si no hay descuento vigente
+  discount?: unknown | null
+}

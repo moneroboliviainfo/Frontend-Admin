@@ -791,6 +791,41 @@ Tambien se sumo, en el modal de recibir, una columna **Etiqueta** (primera) con
 el QR de la variante: reutiliza `VariantQRModal`, asi se imprimen las etiquetas
 de lo que acaba de llegar sin salir de la pantalla.
 
+## Listados de stock paginados por producto (24/10/2026)
+
+Las tres tablas agrupadas por producto pasaron de `GET /variants` a
+**`GET /variants/products`**:
+
+- Bodega Central → Stock
+- Inventario → Stock (encargado)
+- Stock de Sucursales (admin)
+
+El POS sigue con `GET /variants`, que es para lo que esta pensado (el cajero
+agrega un color).
+
+**Arreglo, no mejora.** `GET /variants` pagina por **color**: con `limit=10`
+llegan 10 colores, asi que los colores de un mismo producto se parten entre
+paginas y el acordeon mostraba el producto **incompleto** —y su total de "en
+tienda" mal—. El endpoint nuevo pagina por producto y trae todos sus colores.
+
+De paso suma `subcategory.category` y `discount`, la busqueda abarca categoria
+y subcategoria, y las tallas vienen ordenadas por id (antes sin orden fijo).
+
+### Como se migro
+
+`useVariantProducts` devuelve **el mismo contrato** que `useVariants` —`data`
+como lista de colores— aplanando la respuesta en el `select` con el snippet que
+recomienda el doc 06:
+
+```ts
+response.data.flatMap(product => product.productColors.map(pc => ({ ...pc, product })))
+```
+
+Por eso cada tabla cambio **una linea** (el nombre del hook) y el
+`groupByProduct` de cada una quedo igual. Si alguna vez conviene dibujar
+producto › colores › tallas directamente, el service ya devuelve esa forma sin
+aplanar (`getProductsWithStock`).
+
 ## Pendientes de esta tanda
 
 - [x] **Prendas pagadas protegidas en el carrito** (18/10/2026): con un pedido

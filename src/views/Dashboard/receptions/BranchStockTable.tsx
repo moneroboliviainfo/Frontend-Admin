@@ -26,7 +26,7 @@ import CustomTextField from '@core/components/mui/TextField'
 import tableStyles from '@core/styles/table.module.css'
 import { useRequestReplenishment } from '@/hooks/useBranchTransfers'
 import { useUserRole } from '@/hooks/useUserRole'
-import { useVariants } from '@/hooks/useVariants'
+import { useVariantProducts } from '@/hooks/useVariants'
 import { variantService } from '@/services/variantService'
 import type { Variant, VariantSize } from '@/types/api/variants'
 import { prendas } from '@/views/Dashboard/central-warehouse/units'
@@ -144,7 +144,7 @@ const BranchStockTable = () => {
   }
 
   // Sin branchId: el back resuelve la sucursal del usuario
-  const { data, isLoading, isError, isPlaceholderData } = useVariants(page, pageSize, search, undefined, true, true)
+  const { data, isLoading, isError, isPlaceholderData } = useVariantProducts(page, pageSize, search, undefined, true, true)
 
   useEffect(() => {
     const timer = setTimeout(() => {

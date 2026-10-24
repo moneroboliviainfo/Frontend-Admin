@@ -20,7 +20,7 @@ import AccordionDetails from '@mui/material/AccordionDetails'
 import CustomTextField from '@core/components/mui/TextField'
 import tableStyles from '@core/styles/table.module.css'
 import { useBranchContext } from '@/contexts/BranchContext'
-import { useVariants } from '@/hooks/useVariants'
+import { useVariantProducts } from '@/hooks/useVariants'
 import PositiveAdjustmentModal from '@/views/Dashboard/products/add/components/PositiveAdjustmentModal'
 import type { Variant, VariantSize } from '@/types/api/variants'
 
@@ -108,7 +108,7 @@ const BranchStockAdminTable = () => {
   // que mostrar, porque el stock que se lista es el de esa tienda.
   const { selectedBranchId, selectedBranch } = useBranchContext()
 
-  const { data, isLoading, isError, isPlaceholderData } = useVariants(
+  const { data, isLoading, isError, isPlaceholderData } = useVariantProducts(
     page,
     pageSize,
     search,
