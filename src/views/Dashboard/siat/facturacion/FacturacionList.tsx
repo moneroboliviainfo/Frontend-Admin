@@ -28,7 +28,8 @@ import Tooltip from '@mui/material/Tooltip'
 import dayjs from 'dayjs'
 import 'dayjs/locale/es'
 
-import { useFacturas, useBranches, useAnularFactura, useRevertirAnulacion } from '@/hooks/useSales'
+import { useFacturas, useBillingBranches, useAnularFactura, useRevertirAnulacion } from '@/hooks/useSales'
+import { useUserRole } from '@/hooks/useUserRole'
 import type { Factura, Branch } from '@/types/api/sales'
 import FacturacionForm from './FacturacionForm'
 import { printInvoice } from '@/utils/invoicePrinter'
@@ -55,7 +56,15 @@ const FacturacionList = () => {
   const [showForm, setShowForm] = useState(false)
   const [search, setSearch] = useState('')
   const [searchInput, setSearchInput] = useState('')
-  const [selectedBranchId, setSelectedBranchId] = useState<number | ''>('')
+
+  // Un cajero o encargado factura SIEMPRE por la sucursal de su login (el back
+  // ademas le impone la propia). El admin elige acá, no en la navbar: ese
+  // selector solo lista tiendas y las facturas viven tambien en las sucursales
+  // de solo facturacion.
+  const { userBranch, isAdminLike } = useUserRole()
+  const [adminBranchId, setAdminBranchId] = useState<number | ''>('')
+
+  const branchId = isAdminLike ? adminBranchId || undefined : userBranch?.id
   const [selectedFactura, setSelectedFactura] = useState<Factura | null>(null)
   const [showAnularConfirm, setShowAnularConfirm] = useState(false)
   const [showRevertirConfirm, setShowRevertirConfirm] = useState(false)
@@ -69,22 +78,22 @@ const FacturacionList = () => {
   const [showBtConfirm, setShowBtConfirm] = useState(false)
   const [facturaParaBt, setFacturaParaBt] = useState<Factura | null>(null)
 
-  const { data: branchesData, isLoading: isLoadingBranches } = useBranches()
+  const { data: branchesData, isLoading: isLoadingBranches } = useBillingBranches(isAdminLike)
   const anularFacturaMutation = useAnularFactura()
   const revertirAnulacionMutation = useRevertirAnulacion()
 
-  const filteredBranches = useMemo(() => {
-    if (!branchesData) return []
-
-    return branchesData.filter((b: Branch) => b.active)
-  }, [branchesData])
-
-  // Obtener sucursal seleccionada
   const selectedBranch = useMemo(() => {
-    if (!branchesData || !selectedBranchId) return null
+    // El cajero no puede pedir /branches (403) y su login trae solo id, name y
+    // type — sin datos SIAT. No los necesita: el back le impone su propio
+    // codigoSucursal y los datos del emisor salen de ahi (doc 02 y 10).
+    if (!isAdminLike) {
+      return userBranch ? ({ id: userBranch.id, name: userBranch.name } as Branch) : null
+    }
 
-    return branchesData.find((b: Branch) => b.id === selectedBranchId)
-  }, [branchesData, selectedBranchId])
+    if (!branchesData || !branchId) return null
+
+    return branchesData.find((b: Branch) => b.id === branchId)
+  }, [branchesData, branchId, isAdminLike, userBranch])
 
   const {
     data: facturasData,
@@ -93,15 +102,14 @@ const FacturacionList = () => {
     refetch
   } = useFacturas(
     {
-      codigoSucursal: selectedBranch?.codigoSucursal ?? 0,
-      codigoPuntoVenta: 0,
+      branchId: branchId ?? 0,
       search: search || undefined,
       page: page + 1,
       limit: rowsPerPage,
       fechaInicio: fechaInicio || undefined,
       fechaFin: fechaFin || undefined
     },
-    !!selectedBranch
+    !!branchId
   )
 
   const handleSuccess = () => {
@@ -297,7 +305,7 @@ const FacturacionList = () => {
               variant='contained'
               startIcon={<i className='tabler-plus' />}
               onClick={() => setShowForm(true)}
-              disabled={!selectedBranch}
+              disabled={!branchId}
             >
               Nueva Factura
             </Button>
@@ -306,23 +314,31 @@ const FacturacionList = () => {
         <CardContent>
           {/* Filtros */}
           <Box sx={{ display: 'flex', gap: 2, mb: 3, flexWrap: 'wrap' }}>
-            <FormControl size='small' sx={{ minWidth: 200 }}>
-              <InputLabel>Sucursal *</InputLabel>
-              <Select
-                value={selectedBranchId}
-                label='Sucursal *'
-                onChange={e => {
-                  setSelectedBranchId(e.target.value as number)
-                  setPage(0)
-                }}
-              >
-                {filteredBranches.map((branch: Branch) => (
-                <MenuItem key={branch.id} value={branch.id}>
-                  {branch.alias} (Sucursal {branch.codigoSucursal})
-                </MenuItem>
-              ))}
-              </Select>
-            </FormControl>
+            {/* Un cajero no elige: ve la suya. El admin si, y la lista incluye
+                las sucursales de solo facturacion */}
+            {isAdminLike && (
+              <FormControl size='small' sx={{ minWidth: 220 }}>
+                <InputLabel>Sucursal</InputLabel>
+                <Select
+                  value={adminBranchId}
+                  label='Sucursal'
+                  disabled={isLoadingBranches}
+                  onChange={e => {
+                    setAdminBranchId(e.target.value as number)
+                    setPage(0)
+                  }}
+                >
+                  {(branchesData || []).map((branch: Branch) => (
+                    <MenuItem key={branch.id} value={branch.id} disabled={!branch.codigoSucursal}>
+                      {/* Sin datos SIAT no se puede facturar: se muestra pero
+                          no se puede elegir, en vez de un "(Sucursal )" vacio */}
+                      {branch.alias || branch.name}
+                      {branch.codigoSucursal ? ` (Sucursal ${branch.codigoSucursal})` : ' — sin datos SIAT'}
+                    </MenuItem>
+                  ))}
+                </Select>
+              </FormControl>
+            )}
 
             <TextField
               size='small'
@@ -330,11 +346,11 @@ const FacturacionList = () => {
               value={searchInput}
               onChange={e => setSearchInput(e.target.value)}
               onKeyPress={handleKeyPress}
-              disabled={!selectedBranch}
+              disabled={!branchId}
               InputProps={{
                 endAdornment: (
                   <InputAdornment position='end'>
-                    <IconButton size='small' onClick={handleSearch} disabled={!selectedBranch}>
+                    <IconButton size='small' onClick={handleSearch} disabled={!branchId}>
                       <i className='tabler-search' />
                     </IconButton>
                   </InputAdornment>
@@ -352,7 +368,7 @@ const FacturacionList = () => {
                 setFechaInicio(e.target.value)
                 setPage(0)
               }}
-              disabled={!selectedBranch}
+              disabled={!branchId}
               InputLabelProps={{ shrink: true }}
               sx={{ minWidth: 150 }}
             />
@@ -366,14 +382,19 @@ const FacturacionList = () => {
                 setFechaFin(e.target.value)
                 setPage(0)
               }}
-              disabled={!selectedBranch}
+              disabled={!branchId}
               InputLabelProps={{ shrink: true }}
               sx={{ minWidth: 150 }}
             />
           </Box>
 
+          {/* Un cajero nunca ve este aviso: su sucursal sale del login */}
           {!selectedBranch ? (
-            <Alert severity='info'>Seleccione una sucursal para ver las facturas</Alert>
+            <Alert severity='info'>
+              {isAdminLike
+                ? 'Seleccione una sucursal para ver las facturas'
+                : 'Su usuario no tiene una sucursal con datos de facturación asignada'}
+            </Alert>
           ) : isLoading ? (
             <Skeleton variant='rectangular' height={300} />
           ) : error ? (

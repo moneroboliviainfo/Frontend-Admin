@@ -1,5 +1,8 @@
 import { useCallback, useEffect, useState } from 'react'
+
 import type { SyntheticEvent } from 'react'
+
+import { useQuery } from '@tanstack/react-query'
 
 import Dialog from '@mui/material/Dialog'
 import DialogTitle from '@mui/material/DialogTitle'
@@ -18,7 +21,7 @@ import Snackbar from '@mui/material/Snackbar'
 
 import CustomTextField from '@core/components/mui/TextField'
 import { useUpdateUser, useUser } from '@/hooks/useUsers'
-import { useBranchContext } from '@/contexts/BranchContext'
+import { fetchBillingOnlyBranches, useBranchContext } from '@/contexts/BranchContext'
 
 type SnackbarMessage = {
   key: number
@@ -44,6 +47,15 @@ const UserEditDialog = ({ userId, onClose, onSuccess }: Props) => {
 
   const { data: user, isLoading: isLoadingUser } = useUser(userId)
   const { branches } = useBranchContext()
+
+  // Las sucursales de solo facturacion no vienen en GET /branches: sin esta
+  // consulta no se les puede asignar un cajero (doc 07).
+  const { data: billingOnly = [] } = useQuery({
+    queryKey: ['branches-billing-only'],
+    queryFn: fetchBillingOnlyBranches,
+    staleTime: 1000 * 60 * 30
+  })
+
   const updateUser = useUpdateUser()
 
   useEffect(() => {
@@ -78,7 +90,7 @@ const UserEditDialog = ({ userId, onClose, onSuccess }: Props) => {
   const isStaff = user?.rol === 'manager' || user?.rol === 'cashier'
 
   // BranchContext ya devuelve solo sucursales activas
-  const activeBranches = branches
+  const activeBranches = [...branches, ...billingOnly]
 
   const handleSubmit = async () => {
     if (!user) return

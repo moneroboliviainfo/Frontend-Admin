@@ -4,9 +4,17 @@ import type { Role } from '@/types/api/auth'
 export const filterMenuByRole = (
   menuItems: VerticalMenuDataType[],
   _userEmail: string | null,
-  userRole?: Role | null
+  userRole?: Role | null,
+  isBillingOnly = false
 ): VerticalMenuDataType[] => {
   const role = userRole || 'ADMIN'
+
+  // Sucursal 'solo facturacion': sin stock, ventas, caja ni traslados (el back
+  // responde 403). Se decide por el tipo de sucursal, no por un rol aparte:
+  // son cajeros y encargados comunes, con una sucursal distinta.
+  if (isBillingOnly) {
+    return menuItems.filter(item => item.label === 'SIAT')
+  }
 
   // SUPERVISOR = ADMIN salvo Usuarios. 'Inventario' (stock de la sucursal y
   // recepciones) es de MANAGER/CASHIER; el admin tiene su propia Bodega Central.
@@ -77,7 +85,11 @@ export const filterMenuByRole = (
   return []
 }
 
-export const getHomeRouteByRole = (_userEmail: string | null, userRole?: Role | null): string => {
+export const getHomeRouteByRole = (_userEmail: string | null, userRole?: Role | null,
+  isBillingOnly = false): string => {
+  // Su unica pantalla es facturacion: mandarlo al POS lo rebotaria el guard
+  if (isBillingOnly) return '/siat/facturacion'
+
   const role = userRole || 'ADMIN'
 
   if (role === 'CASHIER') return '/sales/instore'
@@ -86,7 +98,11 @@ export const getHomeRouteByRole = (_userEmail: string | null, userRole?: Role | 
   return '/home'
 }
 
-export const canAccessRoute = (role: Role | null, route: string): boolean => {
+export const canAccessRoute = (role: Role | null, route: string, isBillingOnly = false): boolean => {
+  // Escribir la URL a mano no puede saltear el tipo de sucursal: todo lo que no
+  // sea facturacion le responde 403 al backend igual
+  if (isBillingOnly) return route.startsWith('/siat')
+
   if (!role) return false
 
   if (role === 'ADMIN') {

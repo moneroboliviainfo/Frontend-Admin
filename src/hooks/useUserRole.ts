@@ -11,12 +11,18 @@ export const useUserRole = () => {
   const homeRoute = getHomeRouteByRole(userEmail, role)
   const userBranch = user?.branch ?? null
 
+  // Sucursal 'solo facturacion': no tiene stock, ventas, caja ni traslados — el
+  // back responde 403 en todo eso. No hace falta un rol nuevo: alcanza con el
+  // tipo que llega en el login (doc 07).
+  const isBillingOnly = userBranch?.type === 'billing_only'
+
   return {
     user,
     userEmail,
     role,
     homeRoute,
     userBranch,
+    isBillingOnly,
     isCashier: role === 'CASHIER',
     isManager: role === 'MANAGER',
 

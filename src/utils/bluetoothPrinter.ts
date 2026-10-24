@@ -113,10 +113,20 @@ export const ESC_POS = {
 let bluetoothDevice: BluetoothDevice | null = null
 let printerCharacteristic: BluetoothRemoteGATTCharacteristic | null = null
 
+// Web Bluetooth SOLO deja ver los servicios declarados aca: `getPrimaryServices()`
+// no descubre nada que no este en esta lista. Si la impresora usa otro UUID, el
+// navegador devuelve una lista vacia y parece que el equipo "no tiene servicios".
+// Por eso van todos los habituales de impresoras y puentes BLE-UART.
 const PRINTER_SERVICE_UUIDS = [
-  '000018f0-0000-1000-8000-00805f9b34fb',
-  '49535343-fe7d-4ae5-8fa9-9fafd205e455',
-  'e7810a71-73ae-499d-8c15-faa9aef0c3f2'
+  '000018f0-0000-1000-8000-00805f9b34fb', // impresoras ESC/POS comunes
+  '49535343-fe7d-4ae5-8fa9-9fafd205e455', // ISSC / Microchip transparent UART
+  'e7810a71-73ae-499d-8c15-faa9aef0c3f2',
+  '0000ff00-0000-1000-8000-00805f9b34fb', // chinas genericas
+  '0000ffe0-0000-1000-8000-00805f9b34fb', // HM-10 y clones
+  '0000fff0-0000-1000-8000-00805f9b34fb',
+  '0000fee7-0000-1000-8000-00805f9b34fb', // varias etiquetadoras
+  '0000ff80-0000-1000-8000-00805f9b34fb',
+  '6e400001-b5a3-f393-e0a9-e50e24dcca9e' // Nordic UART (NUS)
 ]
 
 const PRINTER_CHARACTERISTIC_UUIDS = [
@@ -157,43 +167,45 @@ export const connectBluetoothPrinter = async (): Promise<boolean> => {
       }
     }
 
-    if (!service) {
-      const services = await server.getPrimaryServices()
+    // Si ninguno de los conocidos respondio, se recorren todos los visibles y se
+    // elige el primero que tenga donde escribir. Quedarse con services[0] fallaba
+    // cuando el primero era, por ejemplo, el de bateria.
+    const candidatos = service ? [service] : await server.getPrimaryServices()
 
-      if (services.length > 0) {
-        service = services[0]
-      }
-    }
-
-    if (!service) {
-      throw new Error('No se encontró un servicio de impresión compatible')
-    }
-
-    for (const charUuid of PRINTER_CHARACTERISTIC_UUIDS) {
-      try {
-        printerCharacteristic = await service.getCharacteristic(charUuid)
-        break
-      } catch {
-        // Continuar buscando
-      }
-    }
-
-    if (!printerCharacteristic) {
-      const characteristics = await service.getCharacteristics()
-
-      for (const char of characteristics) {
-        if (char.properties.write || char.properties.writeWithoutResponse) {
-          printerCharacteristic = char
+    for (const candidato of candidatos) {
+      // Primero las caracteristicas conocidas; si no, cualquiera que escriba
+      for (const charUuid of PRINTER_CHARACTERISTIC_UUIDS) {
+        try {
+          printerCharacteristic = await candidato.getCharacteristic(charUuid)
           break
+        } catch {
+          // Continuar buscando
         }
       }
+
+      if (!printerCharacteristic) {
+        const characteristics = await candidato.getCharacteristics()
+
+        printerCharacteristic =
+          characteristics.find(char => char.properties.write || char.properties.writeWithoutResponse) || null
+      }
+
+      if (printerCharacteristic) {
+        service = candidato
+        break
+      }
     }
 
     if (!printerCharacteristic) {
-      throw new Error('No se encontró una característica de escritura compatible')
+      // El detalle ayuda a identificar una impresora no contemplada
+      const vistos = candidatos.map(c => c.uuid).join(', ') || 'ninguno'
+
+      throw new Error(
+        `La impresora no expone un servicio de impresión reconocido. Servicios visibles: ${vistos}`
+      )
     }
 
-    console.log('Impresora Bluetooth conectada:', bluetoothDevice.name)
+    console.log('Impresora Bluetooth conectada:', bluetoothDevice.name, '· servicio', service?.uuid)
 
     return true
   } catch (error) {

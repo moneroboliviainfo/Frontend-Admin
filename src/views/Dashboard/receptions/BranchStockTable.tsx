@@ -380,7 +380,7 @@ const BranchStockTable = () => {
                             <th>Bodega</th>
                             <th>Pasar a tienda</th>
                             <th>Tienda</th>
-                            <th>Devolver a bodega</th>
+                            <th>Devolver a bodega de sucursal</th>
                             <th />
                           </tr>
                         </thead>

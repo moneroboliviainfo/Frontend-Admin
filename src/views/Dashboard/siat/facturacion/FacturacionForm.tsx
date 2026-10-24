@@ -287,11 +287,10 @@ const FacturacionForm = ({ branch, onSuccess, onCancel }: FacturacionFormProps) 
       })
 
       // 2. Preparar datos de factura con el ID del billing como codigoCliente
+      // razonSocialEmisor, municipio, telefono y nombreSucursal ya no se mandan:
+      // el back los ignora y los toma de los datos SIAT de la sucursal. Ademas,
+      // un cajero no los tiene (su login no trae datos SIAT).
       const data = {
-        razonSocialEmisor: branch.razonSocial,
-        municipio: branch.municipio,
-        telefono: branch.telefono,
-        nombreSucursal: branch.name,
         tipoFacturaDocumento: 1,
         nombreRazonSocial: nombreRazonSocial.toUpperCase(),
         codigoTipoDocumentoIdentidad: codigoTipoDocumentoIdentidad || 1,
@@ -322,7 +321,10 @@ const FacturacionForm = ({ branch, onSuccess, onCancel }: FacturacionFormProps) 
       // 3. Emitir factura
       const result = await facturarMutation.mutateAsync({
         data,
-        codigoSucursal: branch.codigoSucursal,
+
+        // Un cajero no conoce su codigoSucursal (no puede pedir /branches): el
+        // back se lo reemplaza por el de su sucursal (doc 02)
+        codigoSucursal: branch.codigoSucursal ?? 0,
         codigoPuntoVenta: 0
       })
 
@@ -340,7 +342,8 @@ const FacturacionForm = ({ branch, onSuccess, onCancel }: FacturacionFormProps) 
         {error && <Alert severity='error'>{error}</Alert>}
 
         <Alert severity='info'>
-          Sucursal: <strong>{branch.alias}</strong> - {branch.razonSocial}
+          Sucursal: <strong>{branch.alias || branch.name}</strong>
+          {branch.razonSocial ? ` - ${branch.razonSocial}` : ''}
         </Alert>
 
         {/* Configuración de Facturación */}

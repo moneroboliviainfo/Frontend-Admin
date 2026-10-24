@@ -17,7 +17,9 @@ import type {
   ReceiveTransferRequest,
   ReplenishmentRequest,
   AttendReplenishmentRequest,
-  ReviewTransferRequest
+  ReviewTransferRequest,
+  CreateReturnRequest,
+  ReceiveReturnRequest,
 } from '@/types/api/branchTransfer'
 
 // Un traslado mueve mercaderia (y a veces plata), asi que toca varias vistas a
@@ -286,6 +288,27 @@ export const useAttendReplenishment = () => {
     onSuccess: () => {
       invalidarTraslados(queryClient)
     }
+  })
+}
+
+// --- Devoluciones a la bodega principal ---
+
+export const useCreateReturn = () => {
+  const queryClient = useQueryClient()
+
+  return useMutation({
+    mutationFn: (data: CreateReturnRequest) => branchTransferService.createReturn(data),
+    onSuccess: () => invalidarTraslados(queryClient)
+  })
+}
+
+export const useReceiveReturn = () => {
+  const queryClient = useQueryClient()
+
+  return useMutation({
+    mutationFn: ({ transferId, data }: { transferId: number; data: ReceiveReturnRequest }) =>
+      branchTransferService.receiveReturn(transferId, data),
+    onSuccess: () => invalidarTraslados(queryClient)
   })
 }
 

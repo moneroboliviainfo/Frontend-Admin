@@ -26,11 +26,14 @@ export const useCentralWarehouseAlerts = () => {
   // Reposiciones y Pedidos, y useQuery devuelve lo que haya en cache aunque este apagado.
   // Para la tienda replenishmentsPending = 1 es "tengo mi reposicion abierta", que no es
   // una accion suya (espera a la central, doc 15 §3): no se avisa
-  if (!isAdminLike) return { pendingReview: 0, replenishmentsPending: 0 }
+  if (!isAdminLike) return { pendingReview: 0, replenishmentsPending: 0, returnsToReceive: 0 }
 
   return {
     pendingReview: deLaBodega?.pendingReview || 0,
-    replenishmentsPending: deLaCentral?.replenishmentsPending || 0
+    replenishmentsPending: deLaCentral?.replenishmentsPending || 0,
+
+    // Devoluciones de las tiendas en camino a la bodega
+    returnsToReceive: deLaCentral?.returnsToReceive ?? 0
   }
 }
 
@@ -41,3 +44,6 @@ export const pendingReviewHint = (count: number) =>
 
 export const replenishmentsHint = (count: number) =>
   `${count === 1 ? '1 tienda pidió' : `${count} tiendas pidieron`} reposición. Aténdalas en Reposiciones.`
+
+export const returnsHint = (count: number) =>
+  `${count === 1 ? '1 devolución viene' : `${count} devoluciones vienen`} en camino a la bodega.`

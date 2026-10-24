@@ -1,4 +1,6 @@
-export type BranchTransferType = 'central_dispatch' | 'branch_request'
+// `central_return`: la tienda devuelve stock a la bodega principal. Va al
+// reves de un envio y solo lo crea la tienda (doc 16).
+export type BranchTransferType = 'central_dispatch' | 'branch_request' | 'central_return'
 
 export type BranchTransferStatus =
   | 'pending_payment'
@@ -273,6 +275,10 @@ export interface BranchTransferListResponse {
 export interface PendingCount {
   toDispatch: number
 
+  // Devoluciones en camino a la central. Sin branchId (central) son todas;
+  // para una tienda siempre 0, su devolucion ya cuenta en inTransit.
+  returnsToReceive?: number
+
   // Tienda: 1 si tiene su reposicion abierta. Central: cuantas tiendas esperan ser atendidas
   replenishmentsPending?: number
   toReceive: number
@@ -312,4 +318,24 @@ export interface PickupStatsItem {
   notPickedUpMarked: number
   notPickedUpExpired: number
   waiting: number
+}
+
+// --- Devoluciones a la bodega principal (doc 16) ---
+
+export interface CreateReturnRequest {
+
+  // Cada variante una sola vez, con su cantidad total
+  items: { variantId: number; quantity: number }[]
+
+  // De donde sale en la tienda. Por defecto 'warehouse'. Una devolucion sale
+  // de UNA sola ubicacion: para las dos, se hacen dos devoluciones.
+  location?: 'warehouse' | 'sales_floor'
+  note?: string
+}
+
+export interface ReceiveReturnRequest {
+
+  // Todas las lineas, una sola vez. Si llego menos, la nota es obligatoria.
+  items: { transferItemId: number; quantity: number }[]
+  note?: string
 }

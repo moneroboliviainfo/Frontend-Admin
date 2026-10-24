@@ -43,7 +43,9 @@ const styles: Record<StockMovementType, Style> = {
   pedido_anulado: { label: 'Pedido anulado', color: 'secondary' },
   recepcion: { label: 'Recepción', color: 'success' },
   aparecio_en_destino: { label: 'Apareció en destino', color: 'success' },
-  aparecio_en_origen: { label: 'Apareció en origen', color: 'success' }
+  aparecio_en_origen: { label: 'Apareció en origen', color: 'success' },
+  devolucion_bodega: { label: 'Devolución a bodega', color: 'primary' },
+  devolucion_anulada: { label: 'Devolución anulada', color: 'secondary' }
 }
 
 // 'ajuste' es baja o ajuste positivo segun el signo

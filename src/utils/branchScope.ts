@@ -22,13 +22,16 @@ const CON_SUCURSAL = [
   '/replenishments', // con el switch "Todas" apagado, las tablas filtran por la del selector
   '/central-warehouse', // a qué sucursal se despacha (salvo la pestaña Retiros)
   '/siat/eventos', // evento significativo del punto de venta de la sucursal
-  '/siat/facturacion' // facturas emitidas por esa sucursal
 ]
 
 const GENERALES = [
   '/home',
   '/products', // el alta y el listado son globales; el paso de Variantes se declara aparte
   '/siat/cafc',
+
+  // Tiene su propio selector: lista tambien las sucursales de solo facturacion,
+  // que el de la navbar no muestra
+  '/siat/facturacion',
   '/siat/paquetes',
   '/users',
   '/branches',

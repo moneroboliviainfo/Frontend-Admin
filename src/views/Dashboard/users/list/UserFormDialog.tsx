@@ -1,5 +1,8 @@
 import { useCallback, useEffect, useState } from 'react'
+
 import type { SyntheticEvent } from 'react'
+
+import { useQuery } from '@tanstack/react-query'
 
 import Dialog from '@mui/material/Dialog'
 import DialogTitle from '@mui/material/DialogTitle'
@@ -14,7 +17,7 @@ import Snackbar from '@mui/material/Snackbar'
 
 import CustomTextField from '@core/components/mui/TextField'
 import { useCreateAdmin, useCreateStaff } from '@/hooks/useUsers'
-import { useBranchContext } from '@/contexts/BranchContext'
+import { fetchBillingOnlyBranches, useBranchContext } from '@/contexts/BranchContext'
 import { createUserFormSchema } from '@/schemas/staffUser.schema'
 import type { CreateUserFormData } from '@/schemas/staffUser.schema'
 
@@ -46,6 +49,15 @@ const UserFormDialog = ({ open, onClose, onSuccess }: Props) => {
   const [messageInfo, setMessageInfo] = useState<SnackbarMessage | undefined>(undefined)
 
   const { branches, isLoading: isLoadingBranches } = useBranchContext()
+
+  // Las sucursales de solo facturacion no vienen en GET /branches: sin esta
+  // consulta no se les puede asignar un cajero (doc 07).
+  const { data: billingOnly = [] } = useQuery({
+    queryKey: ['branches-billing-only'],
+    queryFn: fetchBillingOnlyBranches,
+    staleTime: 1000 * 60 * 30
+  })
+
   const createAdmin = useCreateAdmin()
   const createStaff = useCreateStaff()
 
@@ -124,7 +136,7 @@ const UserFormDialog = ({ open, onClose, onSuccess }: Props) => {
   }
 
   // BranchContext ya devuelve solo sucursales activas
-  const activeBranches = branches
+  const activeBranches = [...branches, ...billingOnly]
 
   const roleHasNoBranch = form.rol === 'admin' || form.rol === 'supervisor'
 

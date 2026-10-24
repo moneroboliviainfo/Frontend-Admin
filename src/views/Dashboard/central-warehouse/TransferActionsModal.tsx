@@ -19,7 +19,7 @@ import type { BranchTransfer, ReviewOutcome } from '@/types/api/branchTransfer'
 import { itemLabel, missingUnits, transferUnits } from './transfers'
 import { prendas } from './units'
 
-type ActionKind = 'cancel' | 'mark-lost' | 'review'
+export type ActionKind = 'cancel' | 'mark-lost' | 'review'
 
 type Props = {
   action: { kind: ActionKind; transfer: BranchTransfer } | null
@@ -28,8 +28,12 @@ type Props = {
 }
 
 // El mismo modal sirve para envios, reposiciones y pedidos: cambia el sustantivo
-const nounOf = (transfer: BranchTransfer) =>
-  transfer.type === 'branch_request' ? 'pedido' : transfer.replenishment ? 'reposición' : 'envío'
+const nounOf = (transfer: BranchTransfer) => {
+  if (transfer.type === 'branch_request') return 'pedido'
+  if (transfer.type === 'central_return') return 'devolución'
+
+  return transfer.replenishment ? 'reposición' : 'envío'
+}
 
 const copy = (
   noun: string

@@ -772,10 +772,13 @@ export interface FacturacionOnlineDetalle {
 }
 
 export interface FacturacionOnlineRequest {
-  razonSocialEmisor: string
-  municipio: string
-  telefono: string
-  nombreSucursal: string
+
+  // Opcionales y además ignorados desde el 23/10/2026: el back los toma de los
+  // datos SIAT de la sucursal del codigoSucursal. Un cajero no los tiene.
+  razonSocialEmisor?: string
+  municipio?: string
+  telefono?: string
+  nombreSucursal?: string
   tipoFacturaDocumento: number
   nombreRazonSocial: string
   codigoTipoDocumentoIdentidad: number
@@ -795,8 +798,13 @@ export interface FacturacionOnlineRequest {
 }
 
 export interface FacturacionListParams {
-  codigoSucursal: number
-  codigoPuntoVenta: number
+
+  // Sucursal del SISTEMA, no el codigo SIAT: el back lo resuelve de sus datos.
+  // Ya no acepta `codigoSucursal` (400) y sin `branchId` responde 403.
+  branchId: number
+
+  // Opcional: sin el, todos los puntos de venta de la sucursal
+  codigoPuntoVenta?: number
   search?: string
   page?: number
   limit?: number

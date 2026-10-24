@@ -21,6 +21,16 @@ interface BranchContextType {
 
 const BranchContext = createContext<BranchContextType | null>(null)
 
+// Las de solo facturacion no vienen en GET /branches: se piden aparte. Sin
+// esto no se les puede asignar un cajero desde el formulario de usuarios.
+export const fetchBillingOnlyBranches = async (): Promise<BranchListItem[]> => {
+  const response = await apiClient.get<BranchListResponse>('/api/branches', {
+    params: { type: 'billing_only' }
+  })
+
+  return response.data.data.filter(b => b.active)
+}
+
 const fetchBranches = async (): Promise<BranchListItem[]> => {
   const response = await apiClient.get<BranchListResponse>('/api/branches')
 

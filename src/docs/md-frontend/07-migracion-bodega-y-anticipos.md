@@ -826,6 +826,120 @@ Por eso cada tabla cambio **una linea** (el nombre del hook) y el
 producto › colores › tallas directamente, el service ya devuelve esa forma sin
 aplanar (`getProductsWithStock`).
 
+## Devoluciones a la bodega principal (24/10/2026)
+
+Doc 16. La tienda devuelve stock a la Bodega Central: nace **ya en camino** (el
+stock sale de la tienda al confirmar, no hay despacho) y la central la recibe.
+
+### Pantallas
+
+- **Inventario → Devolver a bodega** (tienda): arriba el armador —selector de
+  ubicacion, buscador, **acordeon producto › color › talla** con la cantidad a
+  devolver, motivo— y abajo la lista de lo devuelto, con *Anular* mientras
+  viaje. Mismo armado que Inventario → Stock, que es la pestaña de al lado.
+
+  > Nacio como lista plana y se reagrupo: con `GET /variants/products` (paginado
+  > por producto) una lista plana da paginas de 30 a 200 filas segun cuantos
+  > colores tenga cada producto. Agrupada, son siempre 10 productos. Es el mismo
+  > motivo por el que el dialogo de reposiciones **no** se migro: ese sigue
+  > plano y por eso usa `GET /variants`, paginado por color.
+- **Bodega Central → Devoluciones** (central), con badge `returnsToReceive`:
+  las que vienen en camino, con *Recibir*, *Anular* y *Marcar perdido*.
+
+`ReturnsTable` es **una sola tabla** usada de los dos lados (`kind: 'branch' |
+'central'`), igual que `ReceptionsTable`.
+
+### Lo delicado
+
+`ReceiveTransferModal` ahora elige endpoint por tipo: una devolucion va a
+**`returns/:id/receive`** (`receive/:id` le responde **403** a la central) y no
+manda `location` (entra siempre al deposito de la bodega). El camino de envios
+y pedidos quedo identico: el `if` solo entra con `central_return`.
+
+El selector *"Ingresa a"* ya estaba condicionado a `central_dispatch`, asi que
+no se mostraba igual; lo que si cambio es el aviso de la rama alternativa, que
+daba por hecho que era un pedido.
+
+### Lo que se sumo a listas existentes
+
+- `BranchTransferType` + `'central_return'` — sin esto no tipaba.
+- `MovementsModal`: etiquetas de `devolucion_bodega` y `devolucion_anulada`.
+  (El fallback ya existia: un tipo desconocido mostraba el nombre crudo, no un
+  chip vacio como pensaba.)
+- `TransferActionsModal`: dice **"Anular devolucion"**, antes caia en "envio".
+- `useCentralWarehouseAlerts`: `returnsToReceive`. **Ojo**: tiene una salida
+  temprana para no-admin que hay que completar al sumar cualquier contador.
+
+### Renombres para no chocar
+
+| Donde | Antes | Ahora |
+| --- | --- | --- |
+| Inventario → Stock (columna) | Devolver a bodega | **Devolver a bodega de sucursal** |
+| Pedidos (pestaña) | Devoluciones | **Devoluciones de dinero** |
+
+La primera mueve stock dentro de la sucursal; la segunda es plata al cliente.
+Ninguna es la devolucion a la central.
+
+## Sucursales de solo facturacion (24/10/2026)
+
+Sucursales con datos SIAT que **solo emiten facturas**: sin stock, ventas, caja
+ni traslados (el back responde `403`). Se crean por SQL; la API no cambia el
+tipo.
+
+**No se agrego un rol nuevo.** Son cajeros y encargados comunes: lo que cambia
+es su sucursal. El login trae `branch.type`, y con `'billing_only'` el menu se
+reduce a **SIAT**. Eso reemplaza al parche `FACTURACION_JUNIN` que vive en
+`main` (un rol cableado al email, en el commit "no aplicar a develop").
+
+| Donde | Que hace |
+| --- | --- |
+| `useUserRole` | expone `isBillingOnly` desde `branch.type` |
+| `filterMenuByRole` | con `isBillingOnly`, deja solo el menu SIAT |
+| `canAccessRoute` | escribir la URL a mano tampoco entra: solo `/siat/*` |
+| `getHomeRouteByRole` | entra directo a `/siat/facturacion` — al POS lo rebotaria el guard |
+| `UserFormDialog` / `UserEditDialog` | cargan tambien `GET /branches?type=billing_only` |
+
+> **El selector de usuarios era imprescindible**: esas sucursales **no vienen**
+> en `GET /branches`, asi que sin la consulta extra no se les puede asignar un
+> cajero y quedan sin personal.
+
+Se saco el encabezado *VENTAS* del menu: queda solo SIAT, porque esa sucursal
+no vende.
+
+## Facturacion Online: la sucursal, segun quien mira (24/10/2026)
+
+Volvio al menu (estaba comentada) y cambio de quien saca la sucursal:
+
+| Rol | De donde sale |
+| --- | --- |
+| CASHIER / MANAGER | **del login** (`user.branch.id`). Sin selector: el back ademas le impone la suya |
+| ADMIN / SUPERVISOR | de un **selector propio de la pantalla** |
+
+> El selector del admin **no** puede ser el de la navbar: ese lista solo
+> tiendas (`GET /branches`), y buena parte de las facturas vive en las
+> sucursales de **solo facturacion**. `useBillingBranches` pide las dos listas
+> y las junta.
+
+`GET /facturacion/facturacion` paso de `codigoSucursal` a **`?branchId=`** (el
+back ya rechazaba el viejo con `400`). `codigoPuntoVenta` quedo opcional: sin
+el vienen todos los puntos de venta de la sucursal.
+
+## Detalle de venta: el admin solo lee (24/10/2026)
+
+Cancelar, editar (los dos pasos), cambiar estado y confirmar pago son **M y C**
+en el back (doc 02 §96-99): a ADMIN/SUPERVISOR les responde `403`. El detalle
+se los ofrecia igual.
+
+Se centralizo en `puedeOperarLaVenta = !isAdminLike` y se aplico en los dos
+helpers que ya existian (`canEditOrder`, `canCancelOrder`) y en el bloque de
+envio por FedEx. Confirmar pago no vive en esta pantalla (esta en el POS, que
+el admin no ve).
+
+> **Facturar queda visible a proposito.** El doc tambien lo lista como M/C
+> (`POST /orders/:orderId/facturar`), pero hoy se usa desde este panel: queda
+> pendiente que el back lo abra a A/S. Si lo deja como esta, hay que sumarlo al
+> mismo guard.
+
 ## Pendientes de esta tanda
 
 - [x] **Prendas pagadas protegidas en el carrito** (18/10/2026): con un pedido

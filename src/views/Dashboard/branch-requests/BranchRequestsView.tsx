@@ -109,7 +109,7 @@ const StoreRequestsView = () => {
           value='refunds'
           label={
             <TabLabel
-              text='Devoluciones'
+              text='Devoluciones de dinero'
               count={pendingRefunds}
               color='error'
               hint={`${plural(pendingRefunds, 'cliente espera', 'clientes esperan')} la devolución de su anticipo.`}

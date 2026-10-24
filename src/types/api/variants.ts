@@ -178,6 +178,10 @@ export type StockMovementType =
   | 'aparecio_en_destino'
   | 'aparecio_en_origen'
 
+  // Devoluciones a la bodega principal: salen de la tienda y vuelven si se anula
+  | 'devolucion_bodega'
+  | 'devolucion_anulada'
+
 export interface StockMovement {
   id: number
   type: StockMovementType

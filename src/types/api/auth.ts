@@ -30,6 +30,10 @@ export interface AuthUser {
   branch?: {
     id: number
     name: string
+
+    // 'billing_only': la sucursal solo emite facturas. Su staff no tiene
+    // stock, ventas, caja ni traslados (el back responde 403).
+    type?: BranchType
   } | null
 }
 
@@ -52,6 +56,10 @@ export interface AuthState {
   isLoading: boolean
 }
 
+// Las 'billing_only' NO vienen en GET /branches sin parametro: hay que pedirlas
+// aparte con ?type=billing_only (doc 07)
+export type BranchType = 'store' | 'billing_only'
+
 // Sucursal para selector (respuesta de GET /api/branches)
 export interface BranchListItem {
   id: number
@@ -59,6 +67,7 @@ export interface BranchListItem {
   active: boolean
   createdAt: string
   siatBranch: unknown | null
+  type?: BranchType
 }
 
 export interface BranchListResponse {

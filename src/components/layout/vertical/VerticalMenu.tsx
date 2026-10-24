@@ -51,7 +51,7 @@ const VerticalMenu = ({ scrollMenu }: Props) => {
   // Hooks
   const theme = useTheme()
   const verticalNavOptions = useVerticalNav()
-  const { role } = useUserRole()
+  const { role, isBillingOnly } = useUserRole()
 
   // Vars
   const { isBreakpointReached, transitionDuration } = verticalNavOptions
@@ -76,7 +76,7 @@ const VerticalMenu = ({ scrollMenu }: Props) => {
     }
   }
 
-  const menuData = verticalMenuData(role).map(item => {
+  const menuData = verticalMenuData(role, isBillingOnly).map(item => {
     const aviso = 'href' in item && item.href ? avisos[item.href] : undefined
 
     if (!aviso || aviso.count === 0) return item

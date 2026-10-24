@@ -214,7 +214,12 @@ const OrderDetailsModal = ({ open, onClose, order: orderProp }: OrderDetailsModa
   const cancelForEditMutation = useCancelOrderForEdit()
 
   // MANAGER/CASHIER ya tienen su sucursal fija desde el login (user.branch) — no eligen
-  const { userBranch, needsBranchSelector, hasFixedBranch } = useUserRole()
+  const { userBranch, needsBranchSelector, hasFixedBranch, isAdminLike } = useUserRole()
+
+  // Cancelar, editar, cambiar estado y confirmar pago son de MANAGER y CASHIER
+  // (doc 02): al admin y al supervisor el back les responde 403. Facturar queda
+  // porque, aunque el doc lo liste igual, hoy se usa desde este panel.
+  const puedeOperarLaVenta = !isAdminLike
 
   // Hooks de facturación
   const { data: branchesData, isLoading: isLoadingBranches } = useBranches()
@@ -485,6 +490,8 @@ const OrderDetailsModal = ({ open, onClose, order: orderProp }: OrderDetailsModa
   }
 
   const canEditOrder = () => {
+    if (!puedeOperarLaVenta) return false
+
     // Con la guia FedEx ya emitida el backend rechaza el cancel-for-edit
     if (order.type === 'online' && order.fedex_shipping_data) return false
 
@@ -497,6 +504,8 @@ const OrderDetailsModal = ({ open, onClose, order: orderProp }: OrderDetailsModa
 
   // Verificar si se puede cancelar la orden (bloquear si tiene factura activa)
   const canCancelOrder = () => {
+    if (!puedeOperarLaVenta) return false
+
     if (order.factura && ['VALIDADA', 'PENDIENTE', 'REVERTIDA'].includes(order.factura.estado)) {
       return false
     }
@@ -2049,7 +2058,7 @@ const OrderDetailsModal = ({ open, onClose, order: orderProp }: OrderDetailsModa
                   </Button>
                 )}
 
-                {!showTrackingInput && (
+                {puedeOperarLaVenta && !showTrackingInput && (
                   <Button
                     variant='contained'
                     color='primary'
@@ -2064,7 +2073,7 @@ const OrderDetailsModal = ({ open, onClose, order: orderProp }: OrderDetailsModa
                   </Button>
                 )}
 
-                {showTrackingInput && (
+                {puedeOperarLaVenta && showTrackingInput && (
                   <>
                     {!order.shipment && (
                       <TextField

@@ -21,7 +21,9 @@ import type {
   ReceiveTransferRequest,
   ReplenishmentRequest,
   AttendReplenishmentRequest,
-  ReviewTransferRequest
+  ReviewTransferRequest,
+  CreateReturnRequest,
+  ReceiveReturnRequest,
 } from '@/types/api/branchTransfer'
 
 class BranchTransferServiceClass {
@@ -193,6 +195,28 @@ class BranchTransferServiceClass {
         headers: { 'Content-Type': 'multipart/form-data' },
         params: { destinationBranchId, dryRun: dryRun ? 'true' : 'false' }
       }
+    )
+
+    return response.data
+  }
+
+  // --- Devoluciones a la bodega principal (doc 16) ---
+
+  // La crea SOLO la tienda (MANAGER/CASHIER): nace ya en camino, el stock sale
+  // de la tienda en este mismo paso.
+  async createReturn(data: CreateReturnRequest): Promise<BranchTransfer> {
+    const response = await apiClient.post<BranchTransfer>('/api/branch-transfers/returns', data)
+
+    return response.data
+  }
+
+  // OJO: la central recibe una devolucion por ESTA ruta. `receive/:id` es para
+  // que reciba una tienda y a la central le responde 403. Tampoco acepta
+  // `location`: entra siempre al deposito de la bodega.
+  async receiveReturn(transferId: number, data: ReceiveReturnRequest): Promise<BranchTransfer> {
+    const response = await apiClient.post<BranchTransfer>(
+      `/api/branch-transfers/returns/${transferId}/receive`,
+      data
     )
 
     return response.data

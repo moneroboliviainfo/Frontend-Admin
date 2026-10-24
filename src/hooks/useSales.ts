@@ -251,6 +251,28 @@ export const useBranches = () => {
   })
 }
 
+// Todas las sucursales que pueden facturar: las tiendas y las de solo
+// facturacion. `GET /branches` sin parametro deja fuera a las segundas, que son
+// justo donde vive buena parte de las facturas.
+// `enabled`: todos los endpoints de /branches son ADMIN/SUPERVISOR. A un cajero
+// le responden 403, asi que ni se pregunta: su sucursal sale del login.
+export const useBillingBranches = (enabled: boolean = true) => {
+  return useQuery({
+    enabled,
+    queryKey: ['branches', 'billing'],
+    queryFn: async () => {
+      const [tiendas, soloFacturacion] = await Promise.all([
+        cartService.getBranches(),
+        cartService.getBranches('billing_only')
+      ])
+
+      return [...tiendas, ...soloFacturacion]
+    },
+    staleTime: 1000 * 60 * 60,
+    retry: 2
+  })
+}
+
 // Hook para emitir factura
 export const useFacturar = () => {
   return useMutation({
@@ -478,7 +500,7 @@ export const useFacturas = (params: FacturacionListParams, enabled: boolean = tr
   return useQuery({
     queryKey: ['facturas', params],
     queryFn: () => cartService.getFacturas(params),
-    enabled: enabled && params.codigoSucursal !== undefined,
+    enabled: enabled && !!params.branchId,
     staleTime: 1000 * 60 * 2
   })
 }

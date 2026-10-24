@@ -19,7 +19,7 @@ import CircularProgress from '@mui/material/CircularProgress'
 
 import CustomTextField from '@core/components/mui/TextField'
 import tableStyles from '@core/styles/table.module.css'
-import { useReceiveTransfer } from '@/hooks/useBranchTransfers'
+import { useReceiveReturn, useReceiveTransfer } from '@/hooks/useBranchTransfers'
 import { useAuthContext } from '@/contexts/AuthContext'
 import { printReceptionReceipt, printReceptionReceiptBluetooth } from '@/utils/receptionReceipt'
 import { isBluetoothAvailable } from '@/utils/bluetoothPrinter'
@@ -43,6 +43,7 @@ const ReceiveTransferModal = ({ transfer, onClose, showMessage }: Props) => {
   const [location, setLocation] = useState<Location>('warehouse')
 
   const receive = useReceiveTransfer()
+  const receiveReturn = useReceiveReturn()
 
   // Etiqueta de la prenda, para pegarla al guardar lo que acaba de llegar
   const [qrTarget, setQrTarget] = useState<BranchTransferItem | null>(null)
@@ -98,18 +99,30 @@ const ReceiveTransferModal = ({ transfer, onClose, showMessage }: Props) => {
 
   const isFromWarehouse = transfer.type === 'central_dispatch'
 
+  // Una devolucion la recibe la CENTRAL y va por otra ruta: `receive/:id` le
+  // responde 403. Tampoco acepta `location`: entra siempre al deposito de la
+  // bodega, asi que el selector no se muestra (doc 16 §3).
+  const isReturn = transfer.type === 'central_return'
+
   const handleConfirm = async () => {
     try {
-      await receive.mutateAsync({
-        transferId: transfer.id,
-        data: {
-          items: dispatched.map(item => ({ transferItemId: item.id, quantity: received[item.id] ?? 0 })),
-          ...(note.trim() && { note: note.trim() }),
+      const items = dispatched.map(item => ({ transferItemId: item.id, quantity: received[item.id] ?? 0 }))
+      const nota = note.trim() ? { note: note.trim() } : {}
 
-          // Un pedido entre sucursales entra siempre a la tienda: mandar location da 400
-          ...(isFromWarehouse && { location })
-        }
-      })
+      if (isReturn) {
+        await receiveReturn.mutateAsync({ transferId: transfer.id, data: { items, ...nota } })
+      } else {
+        await receive.mutateAsync({
+          transferId: transfer.id,
+          data: {
+            items,
+            ...nota,
+
+            // Un pedido entre sucursales entra siempre a la tienda: mandar location da 400
+            ...(isFromWarehouse && { location })
+          }
+        })
+      }
 
       showMessage(
         isShort
@@ -126,7 +139,7 @@ const ReceiveTransferModal = ({ transfer, onClose, showMessage }: Props) => {
   return (
     <Dialog open onClose={onClose} maxWidth='sm' fullWidth>
       <DialogTitle>
-        Recibir traslado #{transfer.id}
+        {isReturn ? 'Recibir devolución' : 'Recibir traslado'} #{transfer.id}
         <Typography variant='body2' color='text.secondary' sx={{ mt: 1 }}>
           {prendas(totalDispatched)} desde {transfer.sourceBranch?.name || 'la bodega'}
         </Typography>
@@ -152,6 +165,10 @@ const ReceiveTransferModal = ({ transfer, onClose, showMessage }: Props) => {
                 : 'Todo entra a la tienda y queda a la venta. Si quiere repartir, recíbalo aquí y devuelva el resto a la bodega desde Stock.'}
             </Alert>
           </>
+        ) : isReturn ? (
+          <Alert severity='info' sx={{ mb: 4 }}>
+            Es una devolución de una tienda: entra al depósito de la Bodega Central.
+          </Alert>
         ) : (
           <Alert severity='info' sx={{ mb: 4 }}>
             Es un pedido: ingresa directamente a la tienda, reservado para su cliente.
@@ -249,7 +266,7 @@ const ReceiveTransferModal = ({ transfer, onClose, showMessage }: Props) => {
       </DialogContent>
 
       <DialogActions sx={{ gap: 1, flexWrap: 'wrap' }}>
-        <Button onClick={onClose} color='secondary' disabled={receive.isPending}>
+        <Button onClick={onClose} color='secondary' disabled={(receive.isPending || receiveReturn.isPending)}>
           Volver
         </Button>
 
@@ -259,7 +276,7 @@ const ReceiveTransferModal = ({ transfer, onClose, showMessage }: Props) => {
           variant='outlined'
           startIcon={<i className='tabler-printer' />}
           onClick={() => printReceptionReceipt(buildReceipt())}
-          disabled={receive.isPending}
+          disabled={(receive.isPending || receiveReturn.isPending)}
         >
           Imprimir
         </Button>
@@ -269,7 +286,7 @@ const ReceiveTransferModal = ({ transfer, onClose, showMessage }: Props) => {
             variant='outlined'
             startIcon={<i className='tabler-bluetooth' />}
             onClick={() => printReceptionReceiptBluetooth(buildReceipt())}
-            disabled={receive.isPending}
+            disabled={(receive.isPending || receiveReturn.isPending)}
           >
             Térmica
           </Button>
@@ -277,10 +294,10 @@ const ReceiveTransferModal = ({ transfer, onClose, showMessage }: Props) => {
         <Button
           onClick={handleConfirm}
           variant='contained'
-          disabled={!isValid || receive.isPending}
-          startIcon={receive.isPending ? <CircularProgress size={16} /> : <i className='tabler-check' />}
+          disabled={!isValid || (receive.isPending || receiveReturn.isPending)}
+          startIcon={(receive.isPending || receiveReturn.isPending) ? <CircularProgress size={16} /> : <i className='tabler-check' />}
         >
-          {receive.isPending ? 'Recibiendo...' : isShort ? 'Recibir con faltantes' : 'Recibir todo'}
+          {(receive.isPending || receiveReturn.isPending) ? 'Recibiendo...' : isShort ? 'Recibir con faltantes' : 'Recibir todo'}
         </Button>
       </DialogActions>
       <VariantQRModal

@@ -61,11 +61,11 @@ const getFullMenuData = (): VerticalMenuDataType[] => [
     label: 'SIAT',
     icon: 'tabler-file-invoice',
     children: [
-      /*  {
+      {
         label: 'Facturación Online',
         icon: 'tabler-receipt',
         href: '/siat/facturacion/'
-      }, */
+      },
       {
         label: 'Eventos Significativos',
         icon: 'tabler-alert-triangle',
@@ -231,11 +231,11 @@ const getFullMenuData = (): VerticalMenuDataType[] => [
 ]
 
 // Función que recibe el rol como parámetro
-const verticalMenuData = (userRole?: Role | null): VerticalMenuDataType[] => {
+const verticalMenuData = (userRole?: Role | null, isBillingOnly = false): VerticalMenuDataType[] => {
   const fullMenu = getFullMenuData()
 
-  // Filtrar el menú basado en el rol del usuario
-  return filterMenuByRole(fullMenu, null, userRole)
+  // Filtrar el menú basado en el rol y en el tipo de sucursal
+  return filterMenuByRole(fullMenu, null, userRole, isBillingOnly)
 }
 
 export default verticalMenuData

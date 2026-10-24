@@ -1,6 +1,7 @@
 // services/cartService.ts
 
 import { apiClient } from '@/libs/axios'
+import type { Branch as BranchWithSiat } from '@/types/api/branch'
 import type {
   CartRequest,
   CartResponse,
@@ -205,10 +206,29 @@ class CartServiceClass {
   }
 
   // Obtener lista de sucursales
-  async getBranches(): Promise<Branch[]> {
-    const response = await apiClient.get<Branch[]>('/api/branches')
+  // Las de solo facturacion NO vienen sin el parametro: para facturar hay que
+  // pedirlas aparte y juntarlas (doc 07)
+  async getBranches(type?: 'billing_only'): Promise<Branch[]> {
+    // El endpoint devuelve { data, meta }. Antes se devolvia `response.data`
+    // entero, asi que quien hacia .find() sobre el resultado recibia un objeto:
+    // el selector quedaba vacio. Se tolera tambien un arreglo pelado por si
+    // alguna version responde asi.
+    const response = await apiClient.get<BranchWithSiat[] | { data: BranchWithSiat[] }>('/api/branches', {
+      params: type ? { type } : undefined
+    })
 
-    return response.data
+    const body = response.data
+    const list = Array.isArray(body) ? body : (body?.data ?? [])
+
+    // El endpoint anida los datos SIAT en `siatBranch`; el tipo `Branch` de este
+    // modulo los espera planos. Se aplanan acá para no tocar las 4 pantallas
+    // que ya los leen asi.
+    return list.map(branch => ({
+      ...(branch.siatBranch || {}),
+      ...branch,
+      id: branch.id,
+      name: branch.name
+    })) as unknown as Branch[]
   }
 
   // Emitir factura para una orden
@@ -377,8 +397,10 @@ class CartServiceClass {
   async getFacturas(params: FacturacionListParams): Promise<FacturacionListResponse> {
     const response = await apiClient.get<FacturacionListResponse>('/api/facturacion/facturacion', {
       params: {
-        codigoSucursal: params.codigoSucursal,
-        codigoPuntoVenta: params.codigoPuntoVenta,
+        branchId: params.branchId,
+
+        // Solo si se pide uno puntual: sin el vienen todos los puntos de venta
+        ...(params.codigoPuntoVenta !== undefined && { codigoPuntoVenta: params.codigoPuntoVenta }),
         search: params.search,
         page: params.page ?? 1,
         limit: params.limit ?? 10,

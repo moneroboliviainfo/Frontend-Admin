@@ -11,19 +11,22 @@ import { initLogRocket, identifyUser } from '@/libs/logrocket'
 import { canAccessRoute, getHomeRouteByRole } from '@/utils/menuPermissions'
 import type { AuthUser, Role } from '@/types/api/auth'
 
-const getUserRole = (): Role | null => {
+const getUser = (): AuthUser | null => {
   try {
     const userCookie = Cookies.get('auth-user')
 
     if (!userCookie) return null
 
-    const user: AuthUser = JSON.parse(userCookie)
-
-    return user.role
+    return JSON.parse(userCookie) as AuthUser
   } catch {
     return null
   }
 }
+
+const getUserRole = (): Role | null => getUser()?.role ?? null
+
+// El tipo de sucursal viaja en la cookie del login, igual que el rol
+const isBillingOnlyBranch = (): boolean => getUser()?.branch?.type === 'billing_only'
 
 interface AuthGuardProps {
   children: React.ReactNode
@@ -57,7 +60,7 @@ const AuthGuard = ({ children }: AuthGuardProps) => {
       const isPublicPath = publicPaths.some(path => pathname.startsWith(path))
 
       if (pathname === '/') {
-        router.replace(isAuth ? getHomeRouteByRole(null, getUserRole()) : '/login')
+        router.replace(isAuth ? getHomeRouteByRole(null, getUserRole(), isBillingOnlyBranch()) : '/login')
 
         return
       }
@@ -71,16 +74,17 @@ const AuthGuard = ({ children }: AuthGuardProps) => {
       }
 
       if (isPublicPath && isAuth) {
-        router.replace(getHomeRouteByRole(null, getUserRole()))
+        router.replace(getHomeRouteByRole(null, getUserRole(), isBillingOnlyBranch()))
 
         return
       }
 
       if (isAuth && !isPublicPath) {
         const role = getUserRole()
+        const isBillingOnly = isBillingOnlyBranch()
 
-        if (!canAccessRoute(role, pathname)) {
-          router.replace(getHomeRouteByRole(null, role))
+        if (!canAccessRoute(role, pathname, isBillingOnly)) {
+          router.replace(getHomeRouteByRole(null, role, isBillingOnly))
 
           return
         }
