@@ -242,8 +242,11 @@ export const useVerificarNit = () => {
 }
 
 // Hook para obtener sucursales
-export const useBranches = () => {
+// `enabled`: todos los endpoints de /branches son ADMIN/SUPERVISOR; a un cajero
+// o encargado les responden 403. Su sucursal ya viene en el login.
+export const useBranches = (enabled: boolean = true) => {
   return useQuery({
+    enabled,
     queryKey: ['branches'],
     queryFn: () => cartService.getBranches(),
     staleTime: 1000 * 60 * 60, // Cache 1 hora

@@ -4,11 +4,9 @@ Es la integración SOAP directa con el SIN (Servicio de Impuestos Nacionales
 de Bolivia). Crear/editar CAFC, los puntos de venta de `/operaciones` y
 `/codigos` (salvo `verificar-nit`) son **ADMIN + SUPERVISOR**; todo
 `/catalogos`, `POST /codigos/verificar-nit` y `GET /cafc` son de **todos los
-roles** sin límite por sucursal; `/facturacion`, `/paquetes` y los eventos
-significativos de `/operaciones` son de **todos los roles**, con
-MANAGER/CASHIER limitados a su sucursal SIAT (el `codigoSucursal`
-de la query se reemplaza por el suyo; una factura, paquete o evento de otra
-sucursal da `404`) — ver [02-roles-and-permissions.md](02-roles-and-permissions.md). El frontend de **ventas**
+roles**; `/facturacion`, `/paquetes` y los eventos significativos de
+`/operaciones` son de **todos los roles**, con MANAGER/CASHIER limitados a su
+sucursal (una factura, paquete o evento de otra sucursal da `404`) — ver [02-roles-and-permissions.md](02-roles-and-permissions.md). El frontend de **ventas**
 (POS/storefront) nunca llama nada de esto — usa
 `POST /orders/:orderId/facturar` (ver
 [07-branches-daily-cash-billing.md](07-branches-daily-cash-billing.md)), que
@@ -17,18 +15,29 @@ soporte/configuración SIAT** (diagnosticar por qué falló una factura,
 resincronizar catálogos, ver CUIS/CUFD vigentes, reenviar paquetes de
 contingencia).
 
-Todos estos endpoints comparten dos query params casi siempre obligatorios:
-`codigoPuntoVenta` y `codigoSucursal` (identifican el punto de venta SIAT
-contra el que se opera — no confundir con el `id` interno de `Branch`).
-Confirmá en Swagger cuáles son opcionales caso por caso.
+**La sucursal se elige por `branchId`, como en el resto del sistema — nunca
+por `codigoSucursal`.** Todos estos endpoints comparten dos query params
+opcionales:
+
+- `branchId` (`Branch.id`): **obligatorio para ADMIN/SUPERVISOR** (sin él →
+  `403 La sucursal no pudo ser determinada`); MANAGER/CASHIER usan siempre la
+  suya y el que manden se ignora. El backend saca el `codigoSucursal` SIAT de
+  los datos SIAT de esa sucursal (sin datos SIAT → `403`; inexistente →
+  `404`; la bodega principal → `403`). Las sucursales "solo facturación"
+  (DASH 21, ZARGA 701) se aceptan.
+- `codigoPuntoVenta`: el punto de venta SIAT de esa sucursal; **por defecto
+  `0`** (el que usan las ventas).
+
+`codigoSucursal` en la query **se ignora** (se acepta solo para que un front
+viejo no reciba `400`): ya no hace falta mandarlo.
 
 ## Catálogos (`/catalogos`) — sincronizar catálogos SIAT desde el SIN
 
 ```
-POST /catalogos/sincronizacion    ?codigoPuntoVenta&codigoSucursal
-POST /catalogos/parametricas      ?codigoPuntoVenta&codigoSucursal   body: ParametricasDto
-POST /catalogos/listas            ?codigoPuntoVenta&codigoSucursal   body: ListasDto
-POST /catalogos/fecha-hora        ?codigoPuntoVenta&codigoSucursal
+POST /catalogos/sincronizacion    ?branchId&codigoPuntoVenta
+POST /catalogos/parametricas      ?branchId&codigoPuntoVenta         body: ParametricasDto
+POST /catalogos/listas            ?branchId&codigoPuntoVenta         body: ListasDto
+POST /catalogos/fecha-hora        ?branchId&codigoPuntoVenta
 ```
 Trae/actualiza las tablas paramétricas del SIN (tipos de documento, unidades
 de medida, actividades económicas, etc.) que se usan como catálogos en los
@@ -37,11 +46,11 @@ DTOs de facturación.
 ## Códigos (`/codigos`) — CUIS/CUFD (credenciales de emisión)
 
 ```
-POST /codigos/cuis              ?codigoPuntoVenta&codigoSucursal   solicita/renueva el CUIS
-POST /codigos/cufd              ?codigoPuntoVenta&codigoSucursal   solicita/renueva el CUFD (rota seguido)
-POST /codigos/verificar-nit     ?codigoPuntoVenta&codigoSucursal   body: VerificarNitDto — valida un NIT contra el SIN
+POST /codigos/cuis              ?branchId&codigoPuntoVenta         solicita/renueva el CUIS
+POST /codigos/cufd              ?branchId&codigoPuntoVenta         solicita/renueva el CUFD (rota seguido)
+POST /codigos/verificar-nit     ?branchId&codigoPuntoVenta         body: VerificarNitDto — valida un NIT contra el SIN
 GET  /codigos/cuis/all                                              lista histórico de CUIS emitidos
-GET  /codigos/cufd/all          ?codigoPuntoVenta&codigoSucursal&soloVigentes=true|false
+GET  /codigos/cufd/all          ?branchId&codigoPuntoVenta&soloVigentes=true|false
 ```
 CUIS/CUFD son los códigos que habilitan a un punto de venta a facturar; se
 piden solos automáticamente en el flujo normal (ver
@@ -51,18 +60,17 @@ conectividad) — estos endpoints son para inspeccionar/forzar manualmente.
 ## Operaciones (`/operaciones`) — eventos significativos y puntos de venta
 
 ```
-POST /operaciones/evento-significativo            ?codigoPuntoVenta&codigoSucursal   registra un evento (ej. corte de luz, sistema caído)
-GET  /operaciones/evento-significativo            ?codigoPuntoVenta&codigoSucursal   lista eventos registrados
-POST /operaciones/evento-significativo/consulta   ?codigoPuntoVenta&codigoSucursal   consulta contra el SIN
+POST /operaciones/evento-significativo            ?branchId&codigoPuntoVenta         registra un evento (ej. corte de luz, sistema caído)
+GET  /operaciones/evento-significativo            ?branchId&codigoPuntoVenta         lista eventos registrados
+POST /operaciones/evento-significativo/consulta   ?branchId&codigoPuntoVenta         consulta contra el SIN
 
-POST /operaciones/punto-venta                     ?codigoPuntoVenta&codigoSucursal   registra un punto de venta nuevo ante el SIN
+POST /operaciones/punto-venta                     ?branchId&codigoPuntoVenta         registra un punto de venta nuevo ante el SIN
 GET  /operaciones/punto-venta                                                        lista puntos de venta registrados (local)
-POST /operaciones/punto-venta/consulta            ?codigoSucursal                     consulta contra el SIN
-POST /operaciones/punto-venta/cierre              ?codigoPuntoVenta&codigoSucursal   cierra un punto de venta
+POST /operaciones/punto-venta/consulta            ?branchId                           consulta contra el SIN
+POST /operaciones/punto-venta/cierre              ?branchId&codigoPuntoVenta         cierra un punto de venta
 ```
 Los tres de **evento significativo** son de todos los roles (MANAGER/CASHIER
-solo con el `codigoSucursal` de su sucursal: el que manden se reemplaza); los
-de **punto de venta**, solo ADMIN/SUPERVISOR.
+siempre sobre su sucursal); los de **punto de venta**, solo ADMIN/SUPERVISOR.
 
 Un "evento significativo" es lo que dispara el modo **contingencia** (emitir
 facturas offline cuando el SIN no responde) — ver
@@ -74,8 +82,8 @@ proyecto puntualmente.
 ```
 POST /paquetes                                    envía el paquete acumulado de facturas online pendientes
 POST /paquetes/contingencia                        body: CreatePaqueteContingenciaDto — envía paquete de facturas emitidas en contingencia
-GET  /paquetes/contingencia/:cafc/eventos          ?codigoSucursal&codigoPuntoVenta   eventos pendientes de un CAFC
-GET  /paquetes?limit=&page=&search=&codigoPuntoVenta=&codigoSucursal=
+GET  /paquetes/contingencia/:cafc/eventos          ?branchId&codigoPuntoVenta       eventos pendientes de un CAFC
+GET  /paquetes?limit=&page=&search=&branchId=&codigoPuntoVenta=&fechaInicio=&fechaFin=
 GET  /paquetes/:id
 POST /paquetes/validacion/:id                      valida el resultado de un paquete ya enviado
 ```
@@ -108,9 +116,9 @@ ADMIN/SUPERVISOR.
 
 ```
 GET  /facturacion/facturacion/verificar-comunicacion                          ping al SIN
-POST /facturacion/facturacion/online            ?codigoPuntoVenta&codigoSucursal   body: CreateFacturaDto
-POST /facturacion/facturacion/contingencia      ?codigoPuntoVenta&codigoSucursal   body: CreateFacturaContingenciaDto
-POST /facturacion/facturacion/offline           ?codigoPuntoVenta&codigoSucursal   body: CreateFacturaDto
+POST /facturacion/facturacion/online            ?branchId&codigoPuntoVenta         body: CreateFacturaDto
+POST /facturacion/facturacion/contingencia      ?branchId&codigoPuntoVenta         body: CreateFacturaContingenciaDto
+POST /facturacion/facturacion/offline           ?branchId&codigoPuntoVenta         body: CreateFacturaDto
 POST /facturacion/facturacion/verificacion                                         body: VerificacionEstadoFacturaDto
 POST /facturacion/facturacion/anulacion                                            body: AnulacionFacturaDto — anula una factura ya emitida
 POST /facturacion/facturacion/reversion                                            body: ReversionAnulacionFacturaDto — revierte una anulación
@@ -129,7 +137,7 @@ en el código, no es un error de este doc.
   datos de la orden y llama a esto por dentro.
 - **Datos del emisor**: `razonSocialEmisor`, `municipio`, `telefono` y
   `nombreSucursal` del body **se ignoran** (ahora son opcionales): el backend
-  los toma de los datos SIAT de la sucursal del `codigoSucursal`, y
+  los toma de los datos SIAT de la sucursal (`branchId`), y
   `nombreSucursal` sale como `<nombre SIAT> <código>` (ej. `COMERCIAL 2`),
   igual que en las facturas de venta. Si esa sucursal SIAT está **desactivada**
   (`siatBranch.active = false`) → `400 La sucursal SIAT N está desactivada para

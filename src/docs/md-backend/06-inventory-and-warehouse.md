@@ -220,11 +220,19 @@ POST /variants/addstock                                     (ADMIN, SUPERVISOR)
 { "variantId": 1, "quantity": 20 }
 → entra SIEMPRE al depósito de la bodega principal (?branchId= se ignora)
 
-POST /variants/subtractstock?branchId=                      (ADMIN, SUPERVISOR, MANAGER)
+POST /variants/subtractstock?branchId=                      (ADMIN, SUPERVISOR)
 { "variantId": 1, "quantity": -3, "reason": "producto dañado", "location?": "warehouse" | "sales_floor" }
 → default: descuenta del depósito. location: "sales_floor" para dar de baja
   algo que ya estaba en el piso. Acepta la bodega principal como branchId
   (solo depósito: con "sales_floor" → 400).
+
+POST /variants/subtractstock/bulk                           (ADMIN, SUPERVISOR)
+{ "items": [ { "variantId": 1, "quantity": -3 }, { "variantId": 7, "quantity": -1 } ],
+  "reason": "producto dañado" }
+→ varias variantes de una vez, mismo motivo, SOLO del depósito de la bodega
+  principal (?branchId= se ignora; sin "location"). Hasta 300 líneas, sin
+  repetir variante. Todo o nada: una línea sin stock → 400 y no se graba
+  ninguna. Responde un movimiento por línea. En tiendas: subtractstock, de a una.
 
 POST /variants/positive-adjustment?branchId=<tienda>        (ADMIN, SUPERVISOR)
 { "variantId": 1, "quantity": 2, "location": "sales_floor" | "warehouse", "note": "Sobrante conteo" }

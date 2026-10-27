@@ -28,17 +28,18 @@ passwords, no deshabilita a nadie ni cambia de sucursal a un empleado**
 - **Catálogo / configuración** (productos, categorías, descuentos, marcas,
   colores, tallas, sucursales, clientes admin, SIAT, archivos) → **ADMIN +
   SUPERVISOR**. Usuarios: ver ADMIN + SUPERVISOR, crear/editar solo ADMIN.
-- **Ventas** (crear/confirmar/cancelar/editar órdenes, caja diaria, facturar
-  a mano, buscar/crear billing) → **MANAGER + CASHIER**. **ADMIN y SUPERVISOR
-  no operan ventas, solo consultan** (listas, detalle, exports). Es la
-  inversión respecto al resto del sistema.
+- **Ventas** (crear/confirmar/cancelar/editar órdenes, caja diaria,
+  buscar/crear billing) → **MANAGER + CASHIER**. **ADMIN y SUPERVISOR no
+  operan ventas, solo consultan** (listas, detalle, exports). Es la inversión
+  respecto al resto del sistema. **Excepción: facturar una venta** — ADMIN y
+  SUPERVISOR sí pueden (cualquier venta, desde la sucursal de la venta).
 - **Inventario de lectura** (catálogo de variantes, stock, movimientos,
   disponibilidad por sucursal) → todos los roles (el cajero lo necesita para
   armar el carrito del POS).
 - **Ingresos de stock** (`addstock`, alta de variantes) → **ADMIN +
   SUPERVISOR**, y siempre a la **bodega principal**. El MANAGER ya no carga
   stock: le llega por envíos desde la bodega.
-- **Bajas** (`subtractstock`) → ADMIN + SUPERVISOR + MANAGER.
+- **Bajas** (`subtractstock`) → **solo ADMIN + SUPERVISOR** (desde el 26/10 el MANAGER ya no; el CASHIER nunca).
   **Ajuste positivo** (sobrante de conteo en una tienda) → ADMIN + SUPERVISOR.
 - **Traspasos depósito ↔ piso** (`/stock-transfers`) → todos.
 - **Traslados entre sucursales** (`/branch-transfers`): la bodega envía
@@ -101,8 +102,8 @@ A = ADMIN, S = SUPERVISOR, M = MANAGER, C = CASHIER.
 | `GET /orders/:id` | A, S, M, C | detalle — A/S ven cualquiera, M/C solo la suya |
 | `GET /orders/export/exel` | A, S, M | reporte Excel |
 | `POST /orders/reprice` | público | sin `@Auth`, a propósito (checkout guest) |
-| `POST /orders/:orderId/facturar` | M, C | facturación manual (y refacturar ANULADA/RECHAZADA) |
-| `POST /orders/:orderId/facturar-contingencia` | M, C | ídem, modo contingencia SIAT |
+| `POST /orders/:orderId/facturar` | A, S, M, C | facturación manual (y refacturar ANULADA/RECHAZADA). M/C solo ventas de su sucursal; A/S cualquiera, sin `?branchId=` (factura desde la sucursal de la venta) |
+| `POST /orders/:orderId/facturar-contingencia` | A, S, M, C | ídem, modo contingencia SIAT |
 | `POST /dailyCash/open` | M, C | abrir caja |
 | `POST /dailyCash/:id/close` | M, C | cerrar caja |
 | `GET /dailyCash/current` | A, S, M, C | caja abierta actual |
@@ -124,7 +125,8 @@ A = ADMIN, S = SUPERVISOR, M = MANAGER, C = CASHIER.
 | `GET /variants/branch-stock/:variantId` | A, S, M, C | disponibilidad en cada tienda (para pedir); `?branchId=` opcional = solo esa tienda, cualquier rol puede pasar cualquiera |
 | `GET /variants/branch-stock/product-color/:id` | A, S, M, C | ídem, todas las tallas |
 | `POST /variants/addstock` | A, S | ingresa stock **al depósito de la bodega principal** (sin sucursal) |
-| `POST /variants/subtractstock` 🏭 | A, S, M | baja de stock |
+| `POST /variants/subtractstock` 🏭 | A, S | baja de stock (con `?branchId=`) |
+| `POST /variants/subtractstock/bulk` 🏭 | A, S | baja de varias variantes a la vez, solo del depósito de la bodega (sin `?branchId=`) |
 | `POST /variants/positive-adjustment` | A, S | sobrante de conteo en una tienda (nota obligatoria) |
 | `GET /variants/dashboard/bestsellers` | A, S, M | |
 | `GET /variants/dashboard/lowStock` 🏭 | A, S, M | |
@@ -215,15 +217,17 @@ Excepciones dentro de ese bloque que **no** son de admin:
 Los endpoints directos contra el SIN (no `/orders/:id/facturar`). Ver
 [10-siat-low-level.md](10-siat-low-level.md).
 
-- `facturacion`, `paquetes` → **todos los roles**. MANAGER/CASHIER
-  quedan limitados al `codigoSucursal` SIAT de su sucursal, con la misma regla
-  que `@GetBranchId()`: el `codigoSucursal` que manden en la query **se
-  reemplaza por el suyo**, y una factura / paquete / evento de otra sucursal
-  da `404`. Si su sucursal no tiene datos SIAT → `403`.
+- **En todo SIAT la sucursal se elige por `branchId`**, con la misma regla que
+  el resto del sistema: MANAGER/CASHIER usan siempre la suya; ADMIN/SUPERVISOR
+  mandan `?branchId=` (sin él → `403`). El `codigoSucursal` SIAT lo saca el
+  backend de los datos SIAT de la sucursal (sin datos SIAT → `403`); ya no se
+  manda. `codigoPuntoVenta` es opcional (por defecto `0`).
+- `facturacion`, `paquetes` → **todos los roles**. MANAGER/CASHIER quedan
+  limitados a su sucursal: una factura / paquete / evento de otra sucursal da
+  `404`.
 - `catalogos` (incluida `sincronizacion`) y `POST /codigos/verificar-nit` →
-  **todos los roles**, **sin** límite por sucursal (los catálogos del SIN son
-  los mismos para todo el NIT: se usa el `codigoSucursal` + `codigoPuntoVenta`
-  que mande el front, igual que un admin).
+  **todos los roles** (los catálogos del SIN son los mismos para todo el NIT;
+  se sincronizan con el CUIS de la sucursal del usuario).
 - `GET /cafc` y `GET /cafc/:id` → **todos los roles** (leer el `cafc` para
   facturar en contingencia).
 - `operaciones/evento-significativo` (registrar, listar, consultar) →

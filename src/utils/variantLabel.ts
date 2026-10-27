@@ -299,8 +299,26 @@ export const printVariantLabel = (label: VariantLabel, size: LabelSize): void =>
 // diseño de la hoja (labelParts) a la resolucion de la impresora y se manda
 // como imagen ESC/POS, asi sale igual que desde la PC.
 
-// 203 dpi = 8 puntos por milimetro
+// ---------------------------------------------------------------------------
+// CALIBRACION DE LA IMPRESORA TERMICA
+//
+// Estos tres valores solo afectan al boton "Termica". La impresion por hoja
+// (boton "Imprimir etiqueta") no pasa por aca y ya esta calibrada: no tocarla.
+// ---------------------------------------------------------------------------
+
+// Resolucion del cabezal. 203 dpi = 8 puntos/mm (lo habitual); una de 300 dpi
+// usa 11.81. Si la etiqueta sale mas chica o mas grande que el rollo, es esto.
 const DOTS_PER_MM = 8
+
+// Ancho FISICO del cabezal, en mm — no el de la etiqueta. ESC/POS imprime la
+// imagen pegada al borde izquierdo del cabezal, asi que con un cabezal mas
+// ancho que el rollo la etiqueta sale corrida a la izquierda. Con este valor
+// la imagen se centra sola. En 0 no se centra nada.
+const ANCHO_CABEZAL_MM = 48
+
+// Corrimiento fino a la derecha, en mm, por si el centrado no queda exacto.
+// Acepta negativos para mover a la izquierda.
+const OFFSET_IZQUIERDO_MM = 0
 
 // CSS trabaja a 96 px por pulgada: los mm y pt del diseño se resuelven sobre esto
 const PX_PER_MM = 96 / 25.4
@@ -338,8 +356,15 @@ export const renderLabelBitmap = async (label: VariantLabel, size: LabelSize): P
     image.src = 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(svg)
   })
 
+  const etiquetaDots = Math.round(size.width * DOTS_PER_MM)
+
+  // Margen izquierdo: lo que sobra del cabezal, repartido a la mitad, mas el
+  // ajuste fino. Nunca negativo: la imagen no puede empezar fuera del papel.
+  const centrado = ANCHO_CABEZAL_MM > size.width ? ((ANCHO_CABEZAL_MM - size.width) * DOTS_PER_MM) / 2 : 0
+  const margenDots = Math.max(0, Math.round(centrado + OFFSET_IZQUIERDO_MM * DOTS_PER_MM))
+
   // El ancho en puntos tiene que ser multiplo de 8: cada byte son 8 puntos
-  const width = Math.ceil((size.width * DOTS_PER_MM) / 8) * 8
+  const width = Math.ceil((etiquetaDots + margenDots) / 8) * 8
   const height = Math.round(size.height * DOTS_PER_MM)
 
   const canvas = document.createElement('canvas')
@@ -353,7 +378,10 @@ export const renderLabelBitmap = async (label: VariantLabel, size: LabelSize): P
 
   ctx.fillStyle = '#fff'
   ctx.fillRect(0, 0, width, height)
-  ctx.drawImage(image, 0, 0, width, height)
+
+  // La etiqueta conserva SU ancho y se corre a la derecha. Estirarla hasta
+  // `width` la deformaba cuando hay margen.
+  ctx.drawImage(image, margenDots, 0, etiquetaDots, height)
 
   // Termica = blanco o negro. El corte va por encima del gris medio: el borde
   // suavizado de las letras cuenta como negro y la negrita no sale finita

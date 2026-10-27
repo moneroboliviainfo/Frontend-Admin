@@ -125,7 +125,9 @@ const OrdersListTable = () => {
   const [limit, setLimit] = useState(10)
   const [selectedOrder, setSelectedOrder] = useState<Order | null>(null)
   const [modalOpen, setModalOpen] = useState(false)
-  const [typeFilter, setTypeFilter] = useState(isCashier ? 'online' : 'all')
+
+  // Todos los roles arrancan viendo las dos: en tienda y en linea
+  const [typeFilter, setTypeFilter] = useState('all')
   const [startDate, setStartDate] = useState('')
   const [endDate, setEndDate] = useState('')
   const [paymentTypeFilter, setPaymentTypeFilter] = useState('all')

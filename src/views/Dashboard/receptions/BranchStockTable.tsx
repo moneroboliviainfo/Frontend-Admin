@@ -120,8 +120,8 @@ const BranchStockTable = () => {
   const [isSaving, setIsSaving] = useState(false)
   const [snackbar, setSnackbar] = useState<{ message: string; severity: 'success' | 'error' } | null>(null)
 
-  // Dar de baja es ADMIN/SUPERVISOR/MANAGER: el cajero no la tiene
-  const { isCashier } = useUserRole()
+  // Dar de baja es solo ADMIN/SUPERVISOR: encargado y cajero no la tienen
+  const { isAdminLike } = useUserRole()
 
   // Atajo: solo suma la talla a la reposicion abierta. Verla, quitar o anular es en Reposiciones
   const requestReplenishment = useRequestReplenishment()
@@ -504,7 +504,7 @@ const BranchStockTable = () => {
                                           </IconButton>
                                         </span>
                                       </Tooltip>
-                                      {!isCashier && (
+                                      {isAdminLike && (
                                         <Tooltip title='Dar de baja'>
                                           <span>
                                             <IconButton

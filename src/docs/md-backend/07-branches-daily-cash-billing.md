@@ -128,11 +128,14 @@ Dos niveles:
 
 ### Nivel orden (lo que usa el frontend de ventas)
 ```
-POST /orders/:orderId/facturar                (M, C)
-POST /orders/:orderId/facturar-contingencia    (M, C)
+POST /orders/:orderId/facturar                (A, S, M, C)
+POST /orders/:orderId/facturar-contingencia    (A, S, M, C)
 ```
-Emite la factura para una orden específica. Falla si la orden ya tiene
-factura, no tiene `billing`, o no es de tu sucursal. Además:
+Emite la factura para una orden específica, **siempre desde la sucursal de
+la venta**. MANAGER/CASHIER solo facturan ventas de su sucursal (otra →
+`403`); ADMIN/SUPERVISOR, cualquier venta, sin mandar `?branchId=` (no crean
+ni cobran ventas, pero sí facturan). Falla si la orden ya tiene factura o no
+tiene `billing`. Además:
 
 - **Solo ventas cobradas**: en tienda `sent`; online `paid` o `sent`. Otra
   orden (`pending`, `cancelled`, `expired`, `cancelled_for_edit`,
@@ -144,6 +147,8 @@ factura, no tiene `billing`, o no es de tu sucursal. Además:
 - `usuario`, `descuentoAdicional` y `montoGiftCard` del body **se ignoran**:
   en la factura figura el usuario logueado, y el monto es lo cobrado en la
   orden (sale de sus items).
+- `branchId` del body **no hace falta y se ignora**: se factura desde la
+  sucursal del usuario logueado.
 
 **Refacturar** (mismo endpoint): si la factura actual de la orden está
 **ANULADA** o **RECHAZADA**, se emite una nueva que la reemplaza. En el body

@@ -137,7 +137,7 @@ const ReceiveTransferModal = ({ transfer, onClose, showMessage }: Props) => {
   }
 
   return (
-    <Dialog open onClose={onClose} maxWidth='sm' fullWidth>
+    <Dialog open onClose={onClose} maxWidth='md' fullWidth>
       <DialogTitle>
         {isReturn ? 'Recibir devolución' : 'Recibir traslado'} #{transfer.id}
         <Typography variant='body2' color='text.secondary' sx={{ mt: 1 }}>

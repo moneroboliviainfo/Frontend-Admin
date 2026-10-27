@@ -27,7 +27,7 @@ type Props = {
 const reviewLabels = (transfer: BranchTransfer): Record<ReviewOutcome, string> => ({
   lost: 'Se perdió',
   found_at_destination: 'Apareció en el destino',
-  found_at_origin: transfer.type === 'branch_request' ? 'Apareció en el origen' : 'Apareció en la bodega'
+  found_at_origin: transfer.type === 'branch_request' ? 'Apareció en el origen' : 'Apareció en la bodega central'
 })
 
 const titleOf = (transfer: BranchTransfer) =>

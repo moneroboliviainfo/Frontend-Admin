@@ -16,6 +16,7 @@ import dayjs from 'dayjs'
 import 'dayjs/locale/es'
 
 import { useCrearEventoSignificativo, useCufds, useEventosSignificativosParametricas, useBranches } from '@/hooks/useSales'
+import { useUserRole } from '@/hooks/useUserRole'
 import type { Cufd, EventoSignificativoParametrica, Branch } from '@/types/api/sales'
 
 interface EventoFormProps {
@@ -34,8 +35,11 @@ const EventoForm = ({ onSuccess, onCancel }: EventoFormProps) => {
 
   const crearEventoMutation = useCrearEventoSignificativo()
 
-  // Obtener sucursales
-  const { data: branches, isLoading: isLoadingBranches } = useBranches()
+  // /branches es solo ADMIN/SUPERVISOR: a un cajero o encargado le responde 403.
+  // Ellos no eligen sucursal — el back usa la suya — asi que ni se pide.
+  const { needsBranchSelector } = useUserRole()
+
+  const { data: branches, isLoading: isLoadingBranches } = useBranches(needsBranchSelector)
 
   // Obtener tipos de eventos del catálogo SIAT
   const { data: eventosParametricas } = useEventosSignificativosParametricas()

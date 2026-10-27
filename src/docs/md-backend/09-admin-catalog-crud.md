@@ -193,7 +193,7 @@ envío nuevo, es un gap real, no algo que solo falte documentar.
 ## Files (subida de imágenes)
 
 ```
-POST   /multimedia                    (A)   multipart/form-data, campo "files" (hasta 10, 5MB c/u)
+POST   /multimedia                    (A)   multipart/form-data, campo "files" (hasta 10, 10MB c/u)
                                        → devuelve URLs seguras para usar en products/categories/etc.
 GET    /multimedia/upload/:file        público, sin @Auth — sirve el archivo físico
 GET    /multimedia/uploads            (A)   lista todos los archivos subidos
@@ -204,6 +204,12 @@ nombre del módulo en el código no coincide con la ruta HTTP.
 Subís la imagen **antes** de crear/editar el producto/categoría/etc., y le
 mandás la URL devuelta en el campo correspondiente del DTO (`image`,
 `images`, etc. — confirmar el campo exacto por entidad en Swagger).
+
+Formatos: jpg, png, webp, pdf y mp4. **Las imágenes se guardan siempre como
+webp** (el backend convierte jpg/png, calidad 80, máx. 2000 px de ancho), así
+que la URL devuelta termina en `.webp` aunque se haya subido un `.jpg`: usarla
+tal cual. Otro formato (heic, gif…) → `400 Formato no permitido: …`; si un
+archivo falla no se guarda ninguno de la subida.
 
 ## Users (staff: ADMIN/SUPERVISOR/MANAGER/CASHIER)
 

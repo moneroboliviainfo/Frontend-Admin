@@ -56,6 +56,7 @@ import {
 } from '@/hooks/useSales'
 import { printInvoice } from '@/utils/invoicePrinter'
 import { useUserRole } from '@/hooks/useUserRole'
+import { useBranchContext } from '@/contexts/BranchContext'
 import type { Order, Branch, Cafc, Factura, BillingInfo, TipoDocumentoIdentidad, OrderFacturaDetalle, EventoSignificativo } from '@/types/api/sales'
 
 interface SnackbarMessage {
@@ -216,13 +217,17 @@ const OrderDetailsModal = ({ open, onClose, order: orderProp }: OrderDetailsModa
   // MANAGER/CASHIER ya tienen su sucursal fija desde el login (user.branch) — no eligen
   const { userBranch, needsBranchSelector, hasFixedBranch, isAdminLike } = useUserRole()
 
+  // El admin elige su sucursal en la navbar: el selector de facturacion arranca
+  // en esa, en vez de vacio
+  const { selectedBranchId: navbarBranchId } = useBranchContext()
+
   // Cancelar, editar, cambiar estado y confirmar pago son de MANAGER y CASHIER
   // (doc 02): al admin y al supervisor el back les responde 403. Facturar queda
   // porque, aunque el doc lo liste igual, hoy se usa desde este panel.
   const puedeOperarLaVenta = !isAdminLike
 
   // Hooks de facturación
-  const { data: branchesData, isLoading: isLoadingBranches } = useBranches()
+  const { data: branchesData, isLoading: isLoadingBranches } = useBranches(needsBranchSelector)
   const facturarMutation = useFacturar()
   const facturarContingenciaMutation = useFacturarContingencia()
   const anularFacturaMutation = useAnularFactura()
@@ -295,13 +300,21 @@ const OrderDetailsModal = ({ open, onClose, order: orderProp }: OrderDetailsModa
     }
   }, [open, order?.billing])
 
-  // MANAGER/CASHIER: la sucursal ya viene fija del login, se autocompleta sin elegir.
-  // Se re-sincroniza siempre (no solo si está vacía) porque resetFacturaState la limpia.
+  // MANAGER/CASHIER: la sucursal ya viene fija del login, se autocompleta sin elegir
   useEffect(() => {
     if (hasFixedBranch && userBranch?.id && selectedBranchId !== userBranch.id) {
       setSelectedBranchId(userBranch.id)
     }
   }, [hasFixedBranch, userBranch?.id, selectedBranchId])
+
+  // ADMIN/SUPERVISOR: arranca en la sucursal del selector de la navbar y la
+  // sigue cuando cambia. Igual puede elegir otra para una factura puntual: no
+  // depende de `selectedBranchId`, asi que no le pisa lo que haya elegido.
+  useEffect(() => {
+    if (needsBranchSelector && navbarBranchId) {
+      setSelectedBranchId(navbarBranchId)
+    }
+  }, [needsBranchSelector, navbarBranchId])
 
   // Resetear estados de facturación cuando cambia la orden o se cierra el modal
   useEffect(() => {
@@ -652,7 +665,10 @@ const OrderDetailsModal = ({ open, onClose, order: orderProp }: OrderDetailsModa
 
   const resetFacturaState = () => {
     setShowFacturacion(false)
-    setSelectedBranchId('')
+
+    // Vuelve a la sucursal por defecto, no a vacio: la del login para un cajero
+    // y la del selector de la navbar para un admin
+    setSelectedBranchId(userBranch?.id ?? navbarBranchId ?? '')
     setFacturaError('')
     setFacturaSuccess(false)
     setFacturaData(null)

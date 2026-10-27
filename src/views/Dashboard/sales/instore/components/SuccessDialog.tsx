@@ -70,7 +70,7 @@ const SuccessDialog: React.FC<SuccessDialogProps> = ({
   const { userBranch, needsBranchSelector, hasFixedBranch } = useUserRole()
 
   // Hooks
-  const { data: branchesData, isLoading: isLoadingBranches } = useBranches()
+  const { data: branchesData, isLoading: isLoadingBranches } = useBranches(needsBranchSelector)
   const facturarMutation = useFacturar()
   const facturarContingenciaMutation = useFacturarContingencia()
   const { data: cafcsData } = useCafcs()
