@@ -176,7 +176,7 @@ const PaymentDialog: React.FC<PaymentDialogProps> = ({
       setNitValidationStatus('idle')
 
       const timer = setTimeout(() => {
-        verificarNitMutation.mutate(parseInt(billing.ci), {
+        verificarNitMutation.mutate({ nit: parseInt(billing.ci) }, {
           onSuccess: data => {
             if (data.success && data.data.RespuestaVerificarNit.transaccion) {
               setNitValidationStatus('valid')

@@ -13,6 +13,7 @@ import type {
   CreateBrandDto,
   AddStockRequest,
   SubtractStockRequest,
+  SubtractStockBulkRequest,
   TransferStockRequest,
   PositiveAdjustmentRequest
 } from '@/types/api/variants'
@@ -114,6 +115,20 @@ export const useSubtractStock = () => {
     },
     onError: error => {
       console.error('Error subtracting stock:', error)
+    }
+  })
+}
+
+export const useSubtractStockBulk = () => {
+  const queryClient = useQueryClient()
+
+  return useMutation({
+    mutationFn: (data: SubtractStockBulkRequest) => variantService.subtractStockBulk(data),
+    onSuccess: () => {
+      invalidarStock(queryClient)
+    },
+    onError: error => {
+      console.error('Error subtracting stock bulk:', error)
     }
   })
 }

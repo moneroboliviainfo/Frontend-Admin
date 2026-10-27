@@ -1,6 +1,13 @@
 import type { VerticalMenuDataType } from '@/types/menuTypes'
 import type { Role } from '@/types/api/auth'
 
+// 'Códigos CAFC' (crear/editar) sigue siendo solo ADMIN/SUPERVISOR: a M/C se
+// les quita ese hijo de SIAT, dejando Facturación/Eventos/Paquetes
+const excludeCafc = (item: any) =>
+  item.label === 'SIAT' && item.children
+    ? { ...item, children: item.children.filter((child: any) => child.label !== 'Códigos CAFC') }
+    : item
+
 export const filterMenuByRole = (
   menuItems: VerticalMenuDataType[],
   _userEmail: string | null,
@@ -36,7 +43,8 @@ export const filterMenuByRole = (
 
   if (role === 'MANAGER') {
     // Nota: 'VENTAS' (la sección) no se excluye porque ahí vive 'Ventas', que
-    // sí puede ver — solo se excluye 'SIAT' puntualmente dentro de esa sección.
+    // sí puede ver. 'SIAT' tampoco: facturación, eventos y paquetes son suyos
+    // desde el 23/10 (doc 02) — solo 'Códigos CAFC' sigue siendo A/S.
     const managerExcluded = [
       'ADMINISTRACIÓN',
       'Usuarios',
@@ -54,11 +62,12 @@ export const filterMenuByRole = (
       'CONTENIDO',
       'Sliders',
       'Anuncios',
-      'Banners',
-      'SIAT'
+      'Banners'
     ]
 
-    return menuItems.filter((item: any) => !managerExcluded.includes(item.label))
+    return menuItems
+      .filter((item: any) => !managerExcluded.includes(item.label))
+      .map(excludeCafc)
   }
 
   if (role === 'CASHIER') {
@@ -69,7 +78,8 @@ export const filterMenuByRole = (
       'Inventario',
       'Reposiciones',
       'PEDIDOS ENTRE SUCURSALES',
-      'Pedidos'
+      'Pedidos',
+      'SIAT'
     ]
 
     // El historial de caja es A/S/M: el cajero ve el submenu pero no esa opcion
@@ -80,6 +90,7 @@ export const filterMenuByRole = (
           ? { ...item, children: item.children.filter((child: any) => child.label !== 'Caja') }
           : item
       )
+      .map(excludeCafc)
   }
 
   return []
@@ -116,6 +127,7 @@ export const canAccessRoute = (role: Role | null, route: string, isBillingOnly =
   }
 
   if (role === 'MANAGER') {
+    // '/siat/cafc' queda afuera: crear/editar CAFC sigue siendo solo A/S
     const managerBlockedRoutes = [
       '/central-warehouse',
       '/users',
@@ -129,14 +141,17 @@ export const canAccessRoute = (role: Role | null, route: string, isBillingOnly =
       '/sliders',
       '/advertisement',
       '/banners',
-      '/siat'
+      '/siat/cafc'
     ]
 
     return !managerBlockedRoutes.some(r => route.startsWith(r))
   }
 
   if (role === 'CASHIER') {
-    const cashierAllowedRoutes = ['/sales', '/receptions', '/replenishments', '/branch-requests']
+    const cashierAllowedRoutes = ['/sales', '/receptions', '/replenishments', '/branch-requests', '/siat']
+
+    // '/siat/cafc' (crear/editar CAFC) sigue siendo solo A/S
+    if (route.startsWith('/siat/cafc')) return false
 
     return cashierAllowedRoutes.some(r => route.startsWith(r))
   }

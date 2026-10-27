@@ -202,30 +202,34 @@ export const useCreateOrUpdateBilling = () => {
 }
 
 // Hook para obtener tipos de documento de identidad del SIAT
-export const useTiposDocumentoIdentidad = () => {
+// `branchId`: obligatorio para ADMIN/SUPERVISOR (sin sucursal elegida, no se pide); M/C lo omiten
+export const useTiposDocumentoIdentidad = (branchId?: number, enabled: boolean = true) => {
   return useQuery({
-    queryKey: ['tipos-documento-identidad'],
-    queryFn: () => cartService.getTiposDocumentoIdentidad(),
+    enabled,
+    queryKey: ['tipos-documento-identidad', branchId],
+    queryFn: () => cartService.getTiposDocumentoIdentidad(branchId),
     staleTime: 1000 * 60 * 60, // Cache 1 hora
     retry: 2
   })
 }
 
 // Hook para obtener tipos de eventos significativos del catálogo SIAT
-export const useEventosSignificativosParametricas = () => {
+export const useEventosSignificativosParametricas = (branchId?: number, enabled: boolean = true) => {
   return useQuery({
-    queryKey: ['eventos-significativos-parametricas'],
-    queryFn: () => cartService.getEventosSignificativosParametricas(),
+    enabled,
+    queryKey: ['eventos-significativos-parametricas', branchId],
+    queryFn: () => cartService.getEventosSignificativosParametricas(branchId),
     staleTime: 1000 * 60 * 60, // Cache 1 hora
     retry: 2
   })
 }
 
 // Hook para obtener actividades económicas del SIAT
-export const useActividades = () => {
+export const useActividades = (branchId?: number, enabled: boolean = true) => {
   return useQuery({
-    queryKey: ['actividades-economicas'],
-    queryFn: () => cartService.getActividades(),
+    enabled,
+    queryKey: ['actividades-economicas', branchId],
+    queryFn: () => cartService.getActividades(branchId),
     staleTime: 1000 * 60 * 60, // Cache 1 hora
     retry: 2
   })
@@ -234,7 +238,7 @@ export const useActividades = () => {
 // Hook para verificar NIT con el SIAT
 export const useVerificarNit = () => {
   return useMutation({
-    mutationFn: (nit: number) => cartService.verificarNit(nit),
+    mutationFn: ({ nit, branchId }: { nit: number; branchId?: number }) => cartService.verificarNit(nit, branchId),
     onError: (error: any) => {
       console.error('Error verificando NIT:', error)
     }
@@ -289,13 +293,13 @@ export const useFacturar = () => {
 
 // Hook para obtener CUFDs
 export const useCufds = (
-  codigoSucursal: number,
-  codigoPuntoVenta: number,
+  branchId?: number,
+  codigoPuntoVenta?: number,
   enabled: boolean = true
 ) => {
   return useQuery({
-    queryKey: ['cufds', codigoSucursal, codigoPuntoVenta],
-    queryFn: () => cartService.getCufds(codigoSucursal, codigoPuntoVenta),
+    queryKey: ['cufds', branchId, codigoPuntoVenta],
+    queryFn: () => cartService.getCufds(branchId, codigoPuntoVenta),
     enabled,
     staleTime: 1000 * 60 * 5
   })
@@ -348,15 +352,16 @@ export const useEventosSignificativos = () => {
 }
 
 // Hook para obtener eventos significativos por sucursal (para contingencia)
+// `branchId`: obligatorio para ADMIN/SUPERVISOR; M/C lo omiten (doc 10)
 export const useEventosSignificativosBySucursal = (
-  codigoSucursal: number | null,
-  codigoPuntoVenta: number | null,
+  branchId?: number,
+  codigoPuntoVenta?: number,
   enabled: boolean = true
 ) => {
   return useQuery({
-    queryKey: ['eventos-significativos-sucursal', codigoSucursal, codigoPuntoVenta],
-    queryFn: () => cartService.getEventosSignificativosBySucursal(codigoSucursal!, codigoPuntoVenta!),
-    enabled: enabled && codigoSucursal !== null && codigoPuntoVenta !== null,
+    queryKey: ['eventos-significativos-sucursal', branchId, codigoPuntoVenta],
+    queryFn: () => cartService.getEventosSignificativosBySucursal(branchId, codigoPuntoVenta),
+    enabled,
     staleTime: 1000 * 60 * 2
   })
 }
@@ -368,13 +373,13 @@ export const useCrearEventoSignificativo = () => {
   return useMutation({
     mutationFn: ({
       data,
-      codigoSucursal,
+      branchId,
       codigoPuntoVenta
     }: {
       data: EventoSignificativoRequest
-      codigoSucursal?: number
+      branchId?: number
       codigoPuntoVenta?: number
-    }) => cartService.crearEventoSignificativo(data, codigoSucursal, codigoPuntoVenta),
+    }) => cartService.crearEventoSignificativo(data, branchId, codigoPuntoVenta),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['eventos-significativos'] })
       queryClient.invalidateQueries({ queryKey: ['eventos-significativos-sucursal'] })
@@ -435,13 +440,13 @@ export const useCufdsByCafc = (cafc: string, enabled: boolean = true) => {
 // Hook para obtener Eventos Significativos disponibles por CAFC
 export const useEventosByCafc = (
   cafc: string,
-  codigoSucursal: number,
-  codigoPuntoVenta: number,
+  branchId?: number,
+  codigoPuntoVenta?: number,
   enabled: boolean = true
 ) => {
   return useQuery({
-    queryKey: ['eventos-by-cafc', cafc, codigoSucursal, codigoPuntoVenta],
-    queryFn: () => cartService.getEventosByCafc(cafc, codigoSucursal, codigoPuntoVenta),
+    queryKey: ['eventos-by-cafc', cafc, branchId, codigoPuntoVenta],
+    queryFn: () => cartService.getEventosByCafc(cafc, branchId, codigoPuntoVenta),
     enabled: enabled && !!cafc,
     staleTime: 1000 * 60 * 2
   })
@@ -485,13 +490,13 @@ export const useFacturarOnline = () => {
   return useMutation({
     mutationFn: ({
       data,
-      codigoSucursal,
+      branchId,
       codigoPuntoVenta
     }: {
       data: FacturacionOnlineRequest
-      codigoSucursal: number
-      codigoPuntoVenta: number
-    }) => cartService.facturarOnline(data, codigoSucursal, codigoPuntoVenta),
+      branchId?: number
+      codigoPuntoVenta?: number
+    }) => cartService.facturarOnline(data, branchId, codigoPuntoVenta),
     onError: (error: any) => {
       console.error('Error emitiendo factura online:', error)
     }

@@ -265,8 +265,8 @@ const OrderDetailsModal = ({ open, onClose, order: orderProp }: OrderDetailsModa
 
   // Eventos significativos disponibles para la sucursal seleccionada
   const { data: eventosData, isLoading: isLoadingEventos } = useEventosSignificativosBySucursal(
-    selectedBranch?.codigoSucursal ?? null,
-    0, // codigoPuntoVenta
+    selectedBranch?.id,
+    undefined,
     showContingencia && !!selectedBranch
   )
 
@@ -334,7 +334,7 @@ const OrderDetailsModal = ({ open, onClose, order: orderProp }: OrderDetailsModa
       setNitValidationStatus('idle')
 
       const timer = setTimeout(() => {
-        verificarNitMutation.mutate(parseInt(editableBilling.ci), {
+        verificarNitMutation.mutate({ nit: parseInt(editableBilling.ci), branchId: selectedBranch?.id }, {
           onSuccess: data => {
             if (data.success && data.data.RespuestaVerificarNit.transaccion) {
               setNitValidationStatus('valid')

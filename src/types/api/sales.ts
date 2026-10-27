@@ -725,7 +725,7 @@ export interface PaqueteValidacionRequest {
 }
 
 export interface PaquetesListParams {
-  codigoSucursal?: number
+  branchId?: number
   codigoPuntoVenta?: number
   page?: number
   limit?: number

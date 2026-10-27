@@ -14,6 +14,8 @@ import type {
   BrandsResponse,
   AddStockRequest,
   SubtractStockRequest,
+  SubtractStockBulkRequest,
+  SubtractStockBulkResponse,
   PositiveAdjustmentRequest,
   AddStockResponse,
   TransferStockRequest,
@@ -83,6 +85,14 @@ class VariantServiceClass {
     const response = await apiClient.post<AddStockResponse>('/api/variants/subtractstock', body, {
       params: branchId ? { branchId } : undefined
     })
+
+    return response.data
+  }
+
+  // Varias variantes de una, siempre del deposito de la bodega principal
+  // (no acepta branchId ni location — doc 06)
+  async subtractStockBulk(data: SubtractStockBulkRequest): Promise<SubtractStockBulkResponse> {
+    const response = await apiClient.post<SubtractStockBulkResponse>('/api/variants/subtractstock/bulk', data)
 
     return response.data
   }

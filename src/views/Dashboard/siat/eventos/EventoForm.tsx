@@ -15,17 +15,18 @@ import Typography from '@mui/material/Typography'
 import dayjs from 'dayjs'
 import 'dayjs/locale/es'
 
-import { useCrearEventoSignificativo, useCufds, useEventosSignificativosParametricas, useBranches } from '@/hooks/useSales'
-import { useUserRole } from '@/hooks/useUserRole'
-import type { Cufd, EventoSignificativoParametrica, Branch } from '@/types/api/sales'
+import { useCrearEventoSignificativo, useCufds, useEventosSignificativosParametricas } from '@/hooks/useSales'
+import type { Cufd, EventoSignificativoParametrica } from '@/types/api/sales'
 
+// branchId: la elige EventosList (propia para M/C, seleccionada para el admin);
+// acá no se vuelve a pedir ni se llama a /branches (doc 10)
 interface EventoFormProps {
+  branchId: number
   onSuccess: () => void
   onCancel: () => void
 }
 
-const EventoForm = ({ onSuccess, onCancel }: EventoFormProps) => {
-  const [selectedBranchId, setSelectedBranchId] = useState<number | ''>('')
+const EventoForm = ({ branchId, onSuccess, onCancel }: EventoFormProps) => {
   const [codigoMotivoEvento, setCodigoMotivoEvento] = useState<number | ''>('')
   const [descripcion, setDescripcion] = useState<string>('')
   const [selectedCufdId, setSelectedCufdId] = useState<number | ''>('')
@@ -35,24 +36,11 @@ const EventoForm = ({ onSuccess, onCancel }: EventoFormProps) => {
 
   const crearEventoMutation = useCrearEventoSignificativo()
 
-  // /branches es solo ADMIN/SUPERVISOR: a un cajero o encargado le responde 403.
-  // Ellos no eligen sucursal — el back usa la suya — asi que ni se pide.
-  const { needsBranchSelector } = useUserRole()
-
-  const { data: branches, isLoading: isLoadingBranches } = useBranches(needsBranchSelector)
-
   // Obtener tipos de eventos del catálogo SIAT
-  const { data: eventosParametricas } = useEventosSignificativosParametricas()
+  const { data: eventosParametricas } = useEventosSignificativosParametricas(branchId)
 
-  // Sucursal seleccionada
-  const selectedBranch = branches?.find((b: Branch) => b.id === selectedBranchId)
-
-  // Obtener CUFDs de la sucursal seleccionada
-  const { data: cufds, isLoading: isLoadingCufds } = useCufds(
-    selectedBranch?.codigoSucursal ?? 0,
-    0,
-    !!selectedBranch
-  )
+  // Obtener CUFDs de la sucursal
+  const { data: cufds, isLoading: isLoadingCufds } = useCufds(branchId, undefined, !!branchId)
 
   // Extraer los tipos de evento del catálogo (solo códigos 5, 6, 7 válidos para SIAT)
   const tiposEvento = useMemo(() => {
@@ -80,13 +68,6 @@ const EventoForm = ({ onSuccess, onCancel }: EventoFormProps) => {
       max: dayjs(selectedCufd.fechaVigencia).format('YYYY-MM-DDTHH:mm')
     }
   }, [selectedCufd])
-
-  const handleBranchChange = (branchId: number) => {
-    setSelectedBranchId(branchId)
-    setSelectedCufdId('')
-    setFechaInicio('')
-    setFechaFin('')
-  }
 
   const handleCufdChange = (cufdId: number) => {
     setSelectedCufdId(cufdId)
@@ -141,12 +122,6 @@ const EventoForm = ({ onSuccess, onCancel }: EventoFormProps) => {
       return
     }
 
-    if (!selectedBranch) {
-      setError('Debe seleccionar una sucursal')
-
-      return
-    }
-
     if (!selectedCufdId) {
       setError('Debe seleccionar un CUFD')
 
@@ -187,7 +162,7 @@ const EventoForm = ({ onSuccess, onCancel }: EventoFormProps) => {
     }
 
     crearEventoMutation.mutate(
-      { data, codigoSucursal: selectedBranch.codigoSucursal, codigoPuntoVenta: 0 },
+      { data, branchId },
       {
         onSuccess: () => {
           onSuccess()
@@ -241,43 +216,16 @@ const EventoForm = ({ onSuccess, onCancel }: EventoFormProps) => {
         fullWidth
       />
 
-      {/* Selector de Sucursal */}
-      <FormControl fullWidth>
-        <InputLabel>Sucursal *</InputLabel>
-        <Select
-          value={selectedBranchId}
-          label='Sucursal *'
-          onChange={e => handleBranchChange(e.target.value as number)}
-          disabled={isLoadingBranches}
-        >
-          {isLoadingBranches ? (
-            <MenuItem value=''>Cargando sucursales...</MenuItem>
-          ) : !branches || branches.length === 0 ? (
-            <MenuItem value=''>No hay sucursales disponibles</MenuItem>
-          ) : (
-            branches
-              .filter((b: Branch) => b.active)
-              .map((branch: Branch) => (
-                <MenuItem key={branch.id} value={branch.id}>
-                  {branch.alias} (Sucursal {branch.codigoSucursal})
-                </MenuItem>
-              ))
-          )}
-        </Select>
-      </FormControl>
-
       {/* Selector de CUFD */}
-      <FormControl fullWidth disabled={!selectedBranch}>
+      <FormControl fullWidth>
         <InputLabel>CUFD *</InputLabel>
         <Select
           value={selectedCufdId}
           label='CUFD *'
           onChange={e => handleCufdChange(e.target.value as number)}
-          disabled={!selectedBranch || isLoadingCufds}
+          disabled={isLoadingCufds}
         >
-          {!selectedBranch ? (
-            <MenuItem value=''>Seleccione una sucursal primero</MenuItem>
-          ) : isLoadingCufds ? (
+          {isLoadingCufds ? (
             <MenuItem value=''>Cargando CUFDs...</MenuItem>
           ) : !cufds || cufds.length === 0 ? (
             <MenuItem value=''>No hay CUFDs disponibles</MenuItem>
@@ -352,7 +300,7 @@ const EventoForm = ({ onSuccess, onCancel }: EventoFormProps) => {
         <Button
           type='submit'
           variant='contained'
-          disabled={crearEventoMutation.isPending || !selectedBranchId || !selectedCufdId || !codigoMotivoEvento || !fechaInicio || !fechaFin}
+          disabled={crearEventoMutation.isPending || !selectedCufdId || !codigoMotivoEvento || !fechaInicio || !fechaFin}
           startIcon={crearEventoMutation.isPending ? <CircularProgress size={20} /> : null}
         >
           {crearEventoMutation.isPending ? 'Registrando...' : 'Registrar Evento'}

@@ -162,44 +162,46 @@ class CartServiceClass {
   }
 
   // Obtener tipos de documento de identidad del SIAT
-  async getTiposDocumentoIdentidad(): Promise<ParametricasResponse> {
+  // `branchId`: obligatorio para ADMIN/SUPERVISOR (?branchId=, si no 403); M/C
+  // usan siempre la suya y lo omiten (doc 10 — ya no se elige por codigoSucursal)
+  async getTiposDocumentoIdentidad(branchId?: number): Promise<ParametricasResponse> {
     const response = await apiClient.post<ParametricasResponse>(
       '/api/catalogos/parametricas',
       { metodo: 'sincronizarParametricaTipoDocumentoIdentidad' } as ParametricasRequest,
-      { params: { codigoSucursal: 0, codigoPuntoVenta: 0 } }
+      { params: { ...(branchId && { branchId }) } }
     )
 
     return response.data
   }
 
   // Obtener tipos de eventos significativos del SIAT
-  async getEventosSignificativosParametricas(): Promise<ParametricasResponse> {
+  async getEventosSignificativosParametricas(branchId?: number): Promise<ParametricasResponse> {
     const response = await apiClient.post<ParametricasResponse>(
       '/api/catalogos/parametricas',
       { metodo: 'sincronizarParametricaEventosSignificativos' } as ParametricasRequest,
-      { params: { codigoSucursal: 0, codigoPuntoVenta: 0 } }
+      { params: { ...(branchId && { branchId }) } }
     )
 
     return response.data
   }
 
   // Obtener actividades económicas del SIAT
-  async getActividades(): Promise<ActividadesResponse> {
+  async getActividades(branchId?: number): Promise<ActividadesResponse> {
     const response = await apiClient.post<ActividadesResponse>(
       '/api/catalogos/parametricas',
       { metodo: 'sincronizarActividades' } as ParametricasRequest,
-      { params: { codigoSucursal: 0, codigoPuntoVenta: 0 } }
+      { params: { ...(branchId && { branchId }) } }
     )
 
     return response.data
   }
 
   // Verificar NIT con el SIAT
-  async verificarNit(nit: number): Promise<VerificarNitResponse> {
+  async verificarNit(nit: number, branchId?: number): Promise<VerificarNitResponse> {
     const response = await apiClient.post<VerificarNitResponse>(
       '/api/codigos/verificar-nit',
       { nitParaVerificacion: nit } as VerificarNitRequest,
-      { params: { codigoSucursal: 0, codigoPuntoVenta: 0 } }
+      { params: { ...(branchId && { branchId }) } }
     )
 
     return response.data
@@ -239,9 +241,9 @@ class CartServiceClass {
   }
 
   // Obtener lista de CUFDs
-  async getCufds(codigoSucursal: number, codigoPuntoVenta: number): Promise<Cufd[]> {
+  async getCufds(branchId?: number, codigoPuntoVenta?: number): Promise<Cufd[]> {
     const response = await apiClient.get<Cufd[]>('/api/codigos/cufd/all', {
-      params: { codigoSucursal, codigoPuntoVenta }
+      params: { ...(branchId && { branchId }), ...(codigoPuntoVenta !== undefined && { codigoPuntoVenta }) }
     })
 
     return response.data
@@ -279,11 +281,11 @@ class CartServiceClass {
 
   // Obtener eventos significativos por sucursal y punto de venta
   async getEventosSignificativosBySucursal(
-    codigoSucursal: number,
-    codigoPuntoVenta: number
+    branchId?: number,
+    codigoPuntoVenta?: number
   ): Promise<EventoSignificativo[]> {
     const response = await apiClient.get<EventoSignificativo[]>('/api/operaciones/evento-significativo', {
-      params: { codigoSucursal, codigoPuntoVenta }
+      params: { ...(branchId && { branchId }), ...(codigoPuntoVenta !== undefined && { codigoPuntoVenta }) }
     })
 
     return response.data
@@ -292,11 +294,11 @@ class CartServiceClass {
   // Registrar nuevo evento significativo
   async crearEventoSignificativo(
     data: EventoSignificativoRequest,
-    codigoSucursal: number = 0,
-    codigoPuntoVenta: number = 0
+    branchId?: number,
+    codigoPuntoVenta?: number
   ): Promise<EventoSignificativo> {
     const response = await apiClient.post<EventoSignificativo>('/api/operaciones/evento-significativo', data, {
-      params: { codigoSucursal, codigoPuntoVenta }
+      params: { ...(branchId && { branchId }), ...(codigoPuntoVenta !== undefined && { codigoPuntoVenta }) }
     })
 
     return response.data
@@ -308,8 +310,8 @@ class CartServiceClass {
   async getPaquetes(params: PaquetesListParams = {}): Promise<PaquetesListResponse> {
     const response = await apiClient.get<PaquetesListResponse>('/api/paquetes', {
       params: {
-        codigoSucursal: params.codigoSucursal ?? 0,
-        codigoPuntoVenta: params.codigoPuntoVenta ?? 0,
+        ...(params.branchId && { branchId: params.branchId }),
+        ...(params.codigoPuntoVenta !== undefined && { codigoPuntoVenta: params.codigoPuntoVenta }),
         page: params.page ?? 1,
         limit: params.limit ?? 10
       }
@@ -342,11 +344,11 @@ class CartServiceClass {
   // Obtener eventos significativos disponibles por CAFC para paquetes de contingencia
   async getEventosByCafc(
     cafc: string,
-    codigoSucursal: number,
-    codigoPuntoVenta: number
+    branchId?: number,
+    codigoPuntoVenta?: number
   ): Promise<EventoByCafc[]> {
     const response = await apiClient.get<EventoByCafc[]>(`/api/paquetes/contingencia/${cafc}/eventos`, {
-      params: { codigoSucursal, codigoPuntoVenta }
+      params: { ...(branchId && { branchId }), ...(codigoPuntoVenta !== undefined && { codigoPuntoVenta }) }
     })
 
     return response.data
@@ -383,11 +385,11 @@ class CartServiceClass {
   // Emitir factura online para otras sucursales
   async facturarOnline(
     data: FacturacionOnlineRequest,
-    codigoSucursal: number,
-    codigoPuntoVenta: number
+    branchId?: number,
+    codigoPuntoVenta?: number
   ): Promise<FacturarResponse> {
     const response = await apiClient.post<FacturarResponse>('/api/facturacion/facturacion/online', data, {
-      params: { codigoSucursal, codigoPuntoVenta }
+      params: { ...(branchId && { branchId }), ...(codigoPuntoVenta !== undefined && { codigoPuntoVenta }) }
     })
 
     return response.data

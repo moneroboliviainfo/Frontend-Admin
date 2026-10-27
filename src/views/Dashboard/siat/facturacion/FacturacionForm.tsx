@@ -88,7 +88,11 @@ const FacturacionForm = ({ branch, onSuccess, onCancel }: FacturacionFormProps) 
 
   const facturarMutation = useFacturarOnline()
   const createOrUpdateBillingMutation = useCreateOrUpdateBilling()
-  const { data: tiposDocumentoData } = useTiposDocumentoIdentidad()
+
+  // El catalogo de tipos de documento y verificar-nit se eligen por branchId
+  // (doc 10): un cajero/encargado no manda nada (el back usa la suya); acá se
+  // manda la de la pantalla (propia o elegida por el admin)
+  const { data: tiposDocumentoData } = useTiposDocumentoIdentidad(branch.id)
   const { data: billingSearchData, isFetching: isSearchingBilling } = useSearchBilling(searchCi)
   const verificarNitMutation = useVerificarNit()
 
@@ -129,7 +133,7 @@ const FacturacionForm = ({ branch, onSuccess, onCancel }: FacturacionFormProps) 
       setNitValidationStatus('idle')
 
       const timer = setTimeout(() => {
-        verificarNitMutation.mutate(parseInt(numeroDocumento), {
+        verificarNitMutation.mutate({ nit: parseInt(numeroDocumento), branchId: branch.id }, {
           onSuccess: data => {
             if (data.success && data.data.RespuestaVerificarNit.transaccion) {
               setNitValidationStatus('valid')
@@ -322,10 +326,9 @@ const FacturacionForm = ({ branch, onSuccess, onCancel }: FacturacionFormProps) 
       const result = await facturarMutation.mutateAsync({
         data,
 
-        // Un cajero no conoce su codigoSucursal (no puede pedir /branches): el
-        // back se lo reemplaza por el de su sucursal (doc 02)
-        codigoSucursal: branch.codigoSucursal ?? 0,
-        codigoPuntoVenta: 0
+        // Por branchId (doc 10): un cajero/encargado manda la suya pero el back
+        // la ignora y usa siempre la propia; el admin sí depende de esto
+        branchId: branch.id
       })
 
       // El API retorna { response, factura }

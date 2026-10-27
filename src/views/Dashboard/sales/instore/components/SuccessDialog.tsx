@@ -94,8 +94,8 @@ const SuccessDialog: React.FC<SuccessDialogProps> = ({
 
   // Eventos significativos disponibles para la sucursal seleccionada
   const { data: eventosData, isLoading: isLoadingEventos } = useEventosSignificativosBySucursal(
-    selectedBranch?.codigoSucursal ?? null,
-    0, // codigoPuntoVenta
+    selectedBranch?.id,
+    undefined,
     showContingencia && !!selectedBranch
   )
 

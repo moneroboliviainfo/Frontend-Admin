@@ -17,12 +17,14 @@ import 'dayjs/locale/es'
 import { useCrearPaqueteContingencia, useCafcs, useEventosByCafc } from '@/hooks/useSales'
 import type { Cafc, EventoByCafc } from '@/types/api/sales'
 
+// branchId: la elige PaquetesList (propia para M/C, seleccionada para el admin); doc 10
 interface PaqueteFormProps {
+  branchId: number
   onSuccess: () => void
   onCancel: () => void
 }
 
-const PaqueteForm = ({ onSuccess, onCancel }: PaqueteFormProps) => {
+const PaqueteForm = ({ branchId, onSuccess, onCancel }: PaqueteFormProps) => {
   const [selectedCafcId, setSelectedCafcId] = useState<number | ''>('')
   const [selectedEventoId, setSelectedEventoId] = useState<number | ''>('')
   const [error, setError] = useState<string>('')
@@ -42,8 +44,8 @@ const PaqueteForm = ({ onSuccess, onCancel }: PaqueteFormProps) => {
   // Obtener Eventos Significativos disponibles para el CAFC seleccionado
   const { data: eventosList, isLoading: isLoadingEventos } = useEventosByCafc(
     selectedCafc?.codigo || '',
-    0,
-    0,
+    branchId,
+    undefined,
     !!selectedCafc
   )
 

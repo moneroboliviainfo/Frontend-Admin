@@ -83,6 +83,11 @@ const BranchEditDialog = ({ branchId, onClose, onSuccess }: Props) => {
   const handleSubmit = async () => {
     if (!branchId) return
 
+    // El back rechaza `id`/`createdAt` en el body (doc 07): se manda lo que
+    // valida el schema (sin esos campos), no el `siatForm` crudo que trae
+    // tambien lo que vino en el GET.
+    let siatPayload: SiatBranchFormData | undefined
+
     if (siatEnabled) {
       const result = siatBranchFormSchema.safeParse(siatForm)
 
@@ -98,6 +103,8 @@ const BranchEditDialog = ({ branchId, onClose, onSuccess }: Props) => {
 
         return
       }
+
+      siatPayload = result.data
     }
 
     try {
@@ -106,7 +113,7 @@ const BranchEditDialog = ({ branchId, onClose, onSuccess }: Props) => {
         data: {
           name,
           active,
-          ...(siatEnabled && { siatBranch: siatForm })
+          ...(siatEnabled && { siatBranch: siatPayload })
         }
       })
 

@@ -1,5 +1,7 @@
 'use client'
 
+import { useEffect, useState } from 'react'
+
 import Dialog from '@mui/material/Dialog'
 import DialogTitle from '@mui/material/DialogTitle'
 import DialogContent from '@mui/material/DialogContent'
@@ -10,6 +12,7 @@ import Alert from '@mui/material/Alert'
 import Divider from '@mui/material/Divider'
 import Typography from '@mui/material/Typography'
 
+import CustomTextField from '@core/components/mui/TextField'
 import { prendas } from './units'
 
 type Entry = [string, number]
@@ -17,7 +20,10 @@ type Entry = [string, number]
 type Props = {
   open: boolean
   onClose: () => void
-  onConfirm: () => void
+
+  // `note`: el comentario opcional del envio (doc 11 — `note?` del body de
+  // central-dispatch); solo tiene sentido cuando hay algo saliendo
+  onConfirm: (note: string) => void
   branchName?: string
   labels: Record<number, string>
   incoming: Entry[]
@@ -35,6 +41,12 @@ const ConfirmWarehouseChangesModal = ({
   incoming,
   outgoing
 }: Props) => {
+  const [note, setNote] = useState('')
+
+  useEffect(() => {
+    if (open) setNote('')
+  }, [open])
+
   const renderLines = (entries: Entry[], sign: string) => (
     <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
       {entries.map(([variantSizeId, quantity]) => (
@@ -74,6 +86,17 @@ const ConfirmWarehouseChangesModal = ({
             </Typography>
             {renderLines(outgoing, '-')}
 
+            <CustomTextField
+              fullWidth
+              multiline
+              rows={2}
+              label='Comentario (opcional)'
+              placeholder='Reposición de temporada'
+              value={note}
+              onChange={e => setNote(e.target.value)}
+              sx={{ mt: 3 }}
+            />
+
             <Alert severity='warning' sx={{ mt: 3 }}>
               El envío queda <strong>en camino</strong>: sale de la bodega y no está disponible en ninguna ubicación
               hasta que {branchName} lo reciba. Para revertirlo debe anularse.
@@ -92,7 +115,7 @@ const ConfirmWarehouseChangesModal = ({
         <Button onClick={onClose} color='secondary'>
           Volver
         </Button>
-        <Button onClick={onConfirm} variant='contained'>
+        <Button onClick={() => onConfirm(note.trim())} variant='contained'>
           Confirmar
         </Button>
       </DialogActions>

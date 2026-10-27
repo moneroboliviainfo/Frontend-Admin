@@ -28,7 +28,7 @@ import { useBranchContext } from '@/contexts/BranchContext'
 import { useAuthContext } from '@/contexts/AuthContext'
 import type { DispatchNote } from '@/utils/receptionReceipt'
 import { useCentralWarehouse, useCentralDispatch } from '@/hooks/useBranchTransfers'
-import { useVariantProducts } from '@/hooks/useVariants'
+import { useVariantProducts, useSubtractStockBulk } from '@/hooks/useVariants'
 import { variantService } from '@/services/variantService'
 import type { Variant, VariantSize } from '@/types/api/variants'
 import { prendas, variantes } from './units'
@@ -42,23 +42,24 @@ import MovementsModal from './MovementsModal'
 import type { MovementsTarget } from './MovementsModal'
 import RenameWarehouseModal from './RenameWarehouseModal'
 import StockStatusCell from './StockStatusCell'
-import SubtractCentralStockModal from './SubtractCentralStockModal'
-import type { SubtractTarget } from './SubtractCentralStockModal'
+import ConfirmBulkSubtractModal from './ConfirmBulkSubtractModal'
+import DispatchShortcuts from './DispatchShortcuts'
+import type { ShortcutEntry } from './DispatchShortcuts'
 
-type SizeRow = {
+export type SizeRow = {
   variantSizeId: number
   sizeName: string
   warehouseStock: number
 }
 
-type ColorGroup = {
+export type ColorGroup = {
   key: string
   colorName: string
   colorCode: string
   sizes: SizeRow[]
 }
 
-type ProductGroup = {
+export type ProductGroup = {
   key: string
   productName: string
   totalStock: number
@@ -123,8 +124,19 @@ const CentralWarehouseTable = () => {
   // El remito se ofrece DESPUES de confirmar, con el envio ya creado: asi lleva
   // su numero y refleja lo que quedo registrado
   const [dispatchNote, setDispatchNote] = useState<DispatchNote | null>(null)
-  const [subtractTarget, setSubtractTarget] = useState<SubtractTarget | null>(null)
   const [movementsTarget, setMovementsTarget] = useState<MovementsTarget | null>(null)
+
+  // Dar de baja varias de una: el icono de basurero abre un input ahi mismo en
+  // vez de un modal por variante; se junta todo y se manda con un solo motivo
+  // via subtractstock/bulk (doc 06)
+  const [subtractOpenRows, setSubtractOpenRows] = useState<Record<number, boolean>>({})
+  const [toSubtract, setToSubtract] = useState<Record<number, number>>({})
+  const [confirmSubtractOpen, setConfirmSubtractOpen] = useState(false)
+  const subtractStockBulk = useSubtractStockBulk()
+
+  // Atajos para llenar "Enviar" de todo un producto de una: viven en un modal
+  // aparte, abierto por el boton del acordeon de ese producto
+  const [shortcutsGroup, setShortcutsGroup] = useState<ProductGroup | null>(null)
 
   const [isSaving, setIsSaving] = useState(false)
 
@@ -224,6 +236,30 @@ const CentralWarehouseTable = () => {
     })
   }
 
+  // Los atajos llenan muchas variantes de una: se mezclan igual que si se
+  // hubiera tipeado cada input de "Enviar" a mano
+  const applyShortcut = (entries: ShortcutEntry[]) => {
+    setOutgoing(prev => {
+      const next = { ...prev }
+
+      entries.forEach(entry => {
+        next[entry.variantSizeId] = entry.quantity
+      })
+
+      return next
+    })
+
+    setLabels(prev => {
+      const next = { ...prev }
+
+      entries.forEach(entry => {
+        next[entry.variantSizeId] = entry.label
+      })
+
+      return next
+    })
+  }
+
   const pendingInProduct = (group: ProductGroup) =>
     group.colors.reduce(
       (sum, color) =>
@@ -240,7 +276,52 @@ const CentralWarehouseTable = () => {
     setOutgoing({})
   }
 
-  const handleConfirm = async () => {
+  const toSubtractEntries = Object.entries(toSubtract).filter(([, quantity]) => quantity > 0)
+  const toSubtractUnits = toSubtractEntries.reduce((sum, [, quantity]) => sum + quantity, 0)
+  const subtractOverStock = toSubtractEntries.some(([id, qty]) => qty > (stockById[Number(id)] ?? 0))
+
+  const openSubtractRow = (variantSizeId: number) =>
+    setSubtractOpenRows(prev => ({ ...prev, [variantSizeId]: true }))
+
+  const closeSubtractRow = (variantSizeId: number) => {
+    setSubtractOpenRows(prev => {
+      const next = { ...prev }
+
+      delete next[variantSizeId]
+
+      return next
+    })
+    setToSubtract(prev => {
+      const next = { ...prev }
+
+      delete next[variantSizeId]
+
+      return next
+    })
+  }
+
+  const handleConfirmSubtractBulk = async (reason: string) => {
+    try {
+      await subtractStockBulk.mutateAsync({
+        items: toSubtractEntries.map(([variantSizeId, quantity]) => ({
+          variantId: Number(variantSizeId),
+
+          // El back espera la cantidad en negativo
+          quantity: -quantity
+        })),
+        reason
+      })
+
+      setToSubtract({})
+      setSubtractOpenRows({})
+      setConfirmSubtractOpen(false)
+      setSnackbar({ message: `Se dieron de baja ${prendas(toSubtractUnits)} de la bodega`, severity: 'success' })
+    } catch (error: any) {
+      setSnackbar({ message: error?.response?.data?.message || 'No se pudo dar de baja', severity: 'error' })
+    }
+  }
+
+  const handleConfirm = async (comment: string) => {
     setConfirmOpen(false)
     setIsSaving(true)
 
@@ -284,7 +365,8 @@ const CentralWarehouseTable = () => {
           items: outgoingEntries.map(([variantSizeId, quantity]) => ({
             variantId: Number(variantSizeId),
             quantity
-          }))
+          })),
+          ...(comment && { note: comment })
         })
 
         messages.push(`${prendas(outgoingUnits)} en camino a ${selectedBranch.name}`)
@@ -403,8 +485,34 @@ const CentralWarehouseTable = () => {
             >
               {isSaving ? 'Guardando...' : 'Guardar cambios'}
             </Button>
+
+            {toSubtractEntries.length > 0 && (
+              <>
+                <Chip
+                  label={`-${prendas(toSubtractUnits)} a dar de baja`}
+                  color='error'
+                  variant='tonal'
+                  size='small'
+                />
+                <Button
+                  variant='outlined'
+                  color='error'
+                  onClick={() => setConfirmSubtractOpen(true)}
+                  disabled={subtractOverStock}
+                  startIcon={<i className='tabler-trash' />}
+                >
+                  Dar de baja
+                </Button>
+              </>
+            )}
           </Box>
         </Box>
+
+        {subtractOverStock && (
+          <Box sx={{ px: 6, pb: 4 }}>
+            <Alert severity='error'>Hay cantidades a dar de baja que superan el stock de la bodega.</Alert>
+          </Box>
+        )}
 
         {overStock.length > 0 && (
           <Box sx={{ px: 6, pb: 4 }}>
@@ -484,6 +592,21 @@ const CentralWarehouseTable = () => {
                   </AccordionSummary>
 
                   <AccordionDetails sx={{ p: 0 }}>
+                    <Box sx={{ px: 4, pt: 4 }}>
+                      <Tooltip title={selectedBranch ? '' : 'Seleccione una sucursal en la barra superior'}>
+                        <span>
+                          <Button
+                            size='small'
+                            variant='outlined'
+                            disabled={!selectedBranch}
+                            startIcon={<i className='tabler-bolt' />}
+                            onClick={() => setShortcutsGroup(group)}
+                          >
+                            Atajos
+                          </Button>
+                        </span>
+                      </Tooltip>
+                    </Box>
                     <div className='overflow-x-auto'>
                       <table className={tableStyles.table}>
                         <thead>
@@ -589,24 +712,41 @@ const CentralWarehouseTable = () => {
                                         <i className='tabler-history' />
                                       </IconButton>
                                     </Tooltip>
-                                    <Tooltip title='Dar de baja'>
-                                      <span>
-                                        <IconButton
+                                    {subtractOpenRows[size.variantSizeId] ? (
+                                      <Box className='flex items-center gap-1'>
+                                        <CustomTextField
+                                          autoFocus
+                                          type='number'
                                           size='small'
-                                          color='error'
-                                          disabled={size.warehouseStock === 0}
-                                          onClick={() =>
-                                            setSubtractTarget({
-                                              variantSizeId: size.variantSizeId,
-                                              label,
-                                              warehouseStock: size.warehouseStock
-                                            })
+                                          placeholder='0'
+                                          error={(toSubtract[size.variantSizeId] || 0) > size.warehouseStock}
+                                          value={toSubtract[size.variantSizeId] || ''}
+                                          onChange={e =>
+                                            setQuantity(setToSubtract, size.variantSizeId, label, e.target.value)
                                           }
-                                        >
-                                          <i className='tabler-trash' />
-                                        </IconButton>
-                                      </span>
-                                    </Tooltip>
+                                          sx={{ width: '90px' }}
+                                          inputProps={{ min: 0, max: size.warehouseStock }}
+                                        />
+                                        <Tooltip title='Cancelar'>
+                                          <IconButton size='small' onClick={() => closeSubtractRow(size.variantSizeId)}>
+                                            <i className='tabler-x' />
+                                          </IconButton>
+                                        </Tooltip>
+                                      </Box>
+                                    ) : (
+                                      <Tooltip title='Dar de baja'>
+                                        <span>
+                                          <IconButton
+                                            size='small'
+                                            color='error'
+                                            disabled={size.warehouseStock === 0}
+                                            onClick={() => openSubtractRow(size.variantSizeId)}
+                                          >
+                                            <i className='tabler-trash' />
+                                          </IconButton>
+                                        </span>
+                                      </Tooltip>
+                                    )}
                                   </td>
                                 </tr>
                               )
@@ -657,12 +797,25 @@ const CentralWarehouseTable = () => {
         showMessage={(message, severity) => setSnackbar({ message, severity })}
       />
 
-      <SubtractCentralStockModal
-        target={subtractTarget}
-        warehouseId={warehouse?.id}
-        onClose={() => setSubtractTarget(null)}
-        showMessage={(message, severity) => setSnackbar({ message, severity })}
+      <ConfirmBulkSubtractModal
+        open={confirmSubtractOpen}
+        lines={toSubtractEntries.map(([variantSizeId, quantity]) => ({
+          variantSizeId: Number(variantSizeId),
+          label: labels[Number(variantSizeId)] || `Variante ${variantSizeId}`,
+          quantity
+        }))}
+        isPending={subtractStockBulk.isPending}
+        onClose={() => setConfirmSubtractOpen(false)}
+        onConfirm={handleConfirmSubtractBulk}
       />
+
+      {shortcutsGroup && (
+        <DispatchShortcuts
+          group={shortcutsGroup}
+          onApply={applyShortcut}
+          onClose={() => setShortcutsGroup(null)}
+        />
+      )}
 
       <ConfirmWarehouseChangesModal
         open={confirmOpen}

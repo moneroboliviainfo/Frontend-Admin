@@ -46,8 +46,14 @@ const fuzzyFilter: FilterFn<any> = (row, columnId, value, addMeta) => {
   return itemRank.passed
 }
 
-import { usePaquetes, useValidarPaquete } from '@/hooks/useSales'
-import type { Paquete } from '@/types/api/sales'
+import FormControl from '@mui/material/FormControl'
+import InputLabel from '@mui/material/InputLabel'
+import Select from '@mui/material/Select'
+import MenuItem from '@mui/material/MenuItem'
+
+import { useBillingBranches, usePaquetes, useValidarPaquete } from '@/hooks/useSales'
+import { useUserRole } from '@/hooks/useUserRole'
+import type { Branch, Paquete } from '@/types/api/sales'
 import PaqueteForm from './PaqueteForm'
 
 import tableStyles from '@core/styles/table.module.css'
@@ -60,7 +66,16 @@ const PaquetesList = () => {
   const [showForm, setShowForm] = useState(false)
   const [validandoPaqueteId, setValidandoPaqueteId] = useState<number | null>(null)
 
+  // Un cajero/encargado ve siempre los suyos; el admin elige la sucursal
+  // (doc 10 — branchId, igual que en Facturación Online)
+  const { userBranch, isAdminLike } = useUserRole()
+  const [adminBranchId, setAdminBranchId] = useState<number | ''>('')
+  const { data: branchesData, isLoading: isLoadingBranches } = useBillingBranches(isAdminLike)
+
+  const branchId = isAdminLike ? adminBranchId || undefined : userBranch?.id
+
   const { data: paquetesData, isLoading, error, refetch } = usePaquetes({
+    branchId,
     page: page + 1,
     limit: rowsPerPage
   })
@@ -224,10 +239,41 @@ const PaquetesList = () => {
       <Card>
         <CardContent className='flex justify-between flex-wrap max-sm:flex-col sm:items-center gap-4'>
           <Typography variant='h6'>Paquetes de Contingencia</Typography>
-          <Button variant='contained' color='primary' onClick={() => setShowForm(true)}>
-            + Crear Paquete
-          </Button>
+
+          <Box className='flex items-center gap-3'>
+            {isAdminLike && (
+              <FormControl size='small' sx={{ minWidth: 220 }}>
+                <InputLabel>Sucursal</InputLabel>
+                <Select
+                  value={adminBranchId}
+                  label='Sucursal'
+                  disabled={isLoadingBranches}
+                  onChange={e => {
+                    setAdminBranchId(e.target.value as number)
+                    setPage(0)
+                  }}
+                >
+                  {(branchesData || []).map((b: Branch) => (
+                    <MenuItem key={b.id} value={b.id} disabled={!b.codigoSucursal}>
+                      {b.alias || b.name}
+                      {b.codigoSucursal ? ` (Sucursal ${b.codigoSucursal})` : ' — sin datos SIAT'}
+                    </MenuItem>
+                  ))}
+                </Select>
+              </FormControl>
+            )}
+
+            <Button variant='contained' color='primary' onClick={() => setShowForm(true)} disabled={!branchId}>
+              + Crear Paquete
+            </Button>
+          </Box>
         </CardContent>
+
+        {isAdminLike && !branchId && (
+          <Box sx={{ px: 4, pb: 4 }}>
+            <Alert severity='info'>Seleccione una sucursal para ver sus paquetes</Alert>
+          </Box>
+        )}
 
         <div className='overflow-x-auto'>
           <table className={tableStyles.table}>
@@ -309,7 +355,7 @@ const PaquetesList = () => {
           </Box>
         </DialogTitle>
         <DialogContent>
-          <PaqueteForm onSuccess={handleSuccess} onCancel={() => setShowForm(false)} />
+          {branchId && <PaqueteForm branchId={branchId} onSuccess={handleSuccess} onCancel={() => setShowForm(false)} />}
         </DialogContent>
       </Dialog>
     </>

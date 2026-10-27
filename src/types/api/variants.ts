@@ -140,6 +140,16 @@ export type AddStockResponse = {
   }
 }
 
+// Varias variantes de un saque, mismo motivo, solo del deposito de la bodega
+// principal (?branchId se ignora). Todo o nada: una linea sin stock, no se
+// graba ninguna. Hasta 300 lineas, sin repetir variante.
+export type SubtractStockBulkRequest = {
+  items: { variantId: number; quantity: number }[]
+  reason: string
+}
+
+export type SubtractStockBulkResponse = AddStockResponse[]
+
 export type StockTransferDirection = 'warehouse_to_floor' | 'floor_to_warehouse'
 
 export type TransferStockRequest = {

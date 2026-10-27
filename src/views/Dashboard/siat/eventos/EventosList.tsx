@@ -46,8 +46,14 @@ const fuzzyFilter: FilterFn<any> = (row, columnId, value, addMeta) => {
   return itemRank.passed
 }
 
-import { useEventosSignificativosBySucursal } from '@/hooks/useSales'
-import type { EventoSignificativo } from '@/types/api/sales'
+import FormControl from '@mui/material/FormControl'
+import InputLabel from '@mui/material/InputLabel'
+import Select from '@mui/material/Select'
+import MenuItem from '@mui/material/MenuItem'
+
+import { useBillingBranches, useEventosSignificativosBySucursal } from '@/hooks/useSales'
+import { useUserRole } from '@/hooks/useUserRole'
+import type { Branch, EventoSignificativo } from '@/types/api/sales'
 import EventoForm from './EventoForm'
 
 import tableStyles from '@core/styles/table.module.css'
@@ -55,7 +61,21 @@ import tableStyles from '@core/styles/table.module.css'
 const columnHelper = createColumnHelper<EventoSignificativo>()
 
 const EventosList = () => {
-  const { data: eventos, isLoading, error, refetch } = useEventosSignificativosBySucursal(0, 0)
+  // Un cajero/encargado ve siempre sus eventos (el back usa su sucursal); el
+  // admin elige acá, igual que en Facturación Online (doc 10)
+  const { userBranch, isAdminLike } = useUserRole()
+  const [adminBranchId, setAdminBranchId] = useState<number | ''>('')
+  const { data: branchesData, isLoading: isLoadingBranches } = useBillingBranches(isAdminLike)
+
+  const branchId = isAdminLike ? adminBranchId || undefined : userBranch?.id
+
+  const {
+    data: eventos,
+    isLoading,
+    error,
+    refetch
+  } = useEventosSignificativosBySucursal(branchId, undefined, !isAdminLike || !!branchId)
+
   const [showForm, setShowForm] = useState(false)
   const [page, setPage] = useState(0)
   const [rowsPerPage, setRowsPerPage] = useState(10)
@@ -187,10 +207,38 @@ const EventosList = () => {
       <Card>
         <CardContent className='flex justify-between flex-wrap max-sm:flex-col sm:items-center gap-4'>
           <Typography variant='h6'>Eventos Significativos</Typography>
-          <Button variant='contained' color='primary' onClick={() => setShowForm(true)}>
-            + Registrar Evento
-          </Button>
+
+          <Box className='flex items-center gap-3'>
+            {isAdminLike && (
+              <FormControl size='small' sx={{ minWidth: 220 }}>
+                <InputLabel>Sucursal</InputLabel>
+                <Select
+                  value={adminBranchId}
+                  label='Sucursal'
+                  disabled={isLoadingBranches}
+                  onChange={e => setAdminBranchId(e.target.value as number)}
+                >
+                  {(branchesData || []).map((b: Branch) => (
+                    <MenuItem key={b.id} value={b.id} disabled={!b.codigoSucursal}>
+                      {b.alias || b.name}
+                      {b.codigoSucursal ? ` (Sucursal ${b.codigoSucursal})` : ' — sin datos SIAT'}
+                    </MenuItem>
+                  ))}
+                </Select>
+              </FormControl>
+            )}
+
+            <Button variant='contained' color='primary' onClick={() => setShowForm(true)} disabled={!branchId}>
+              + Registrar Evento
+            </Button>
+          </Box>
         </CardContent>
+
+        {isAdminLike && !branchId && (
+          <Box sx={{ px: 4, pb: 4 }}>
+            <Alert severity='info'>Seleccione una sucursal para ver sus eventos</Alert>
+          </Box>
+        )}
 
         <div className='overflow-x-auto'>
           <table className={tableStyles.table}>
@@ -272,7 +320,7 @@ const EventosList = () => {
           </Box>
         </DialogTitle>
         <DialogContent>
-          <EventoForm onSuccess={handleSuccess} onCancel={() => setShowForm(false)} />
+          {branchId && <EventoForm branchId={branchId} onSuccess={handleSuccess} onCancel={() => setShowForm(false)} />}
         </DialogContent>
       </Dialog>
     </>
