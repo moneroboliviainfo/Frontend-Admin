@@ -34,6 +34,11 @@ interface VariantQRModalProps {
 const VariantQRModal = ({ open, onClose, variantId, sku, colorName, sizeName, productName }: VariantQRModalProps) => {
   const qrRef = useRef<HTMLDivElement>(null)
 
+  // QR solo para imprimir, sin el margen blanco de alrededor: en la etiqueta ese
+  // margen formaba un recuadro blanco que tapaba las letras de al lado. El de
+  // pantalla (y el de "Descargar QR") conserva su margen
+  const printQrRef = useRef<HTMLDivElement>(null)
+
   const qrValue = `<qr>${variantId}</qr>`
 
   // Menu de medidas: la misma etiqueta sale en cuatro tamaños de rollo
@@ -45,7 +50,7 @@ const VariantQRModal = ({ open, onClose, variantId, sku, colorName, sizeName, pr
   // El QR va como PNG: el SVG de pantalla no se imprime de forma confiable
   const qrToDataUrl = (): Promise<string> =>
     new Promise(resolve => {
-      const svg = qrRef.current?.querySelector('svg')
+      const svg = printQrRef.current?.querySelector('svg')
 
       if (!svg) return resolve('')
 
@@ -228,6 +233,11 @@ const VariantQRModal = ({ open, onClose, variantId, sku, colorName, sizeName, pr
             }}
           >
             <QRCodeSVG value={qrValue} size={256} level='M' includeMargin={true} />
+          </Box>
+
+          {/* Fuente del QR de la etiqueta: oculto, sin margen */}
+          <Box ref={printQrRef} sx={{ display: 'none' }}>
+            <QRCodeSVG value={qrValue} size={256} level='M' marginSize={0} />
           </Box>
 
           <Box sx={{ textAlign: 'center' }}>

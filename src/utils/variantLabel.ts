@@ -52,10 +52,12 @@ type LabelLayout = {
   productoLineas: number
   detalle: number
   detalleLineas: number
-
-  // mm que se corre a la derecha el bloque de talla/color/id, para acercarlo al QR
-  sangria: number
   id: number
+
+  // Aire, en mm: entre talla y color (cada uno es un parrafo: si no entra en un
+  // renglon baja dentro del suyo) y el espacio marcado antes del SKU
+  parrafo: number
+  antesDelSku: number
 }
 
 const layoutFor = (size: LabelSize): LabelLayout => {
@@ -67,34 +69,36 @@ const layoutFor = (size: LabelSize): LabelLayout => {
     return {
       mode: 'side',
 
-      // Tope de ancho: el QR toma el alto que deja el nombre, pero sin pasar el
-      // 45% del ancho para que talla y color conserven su lado
-      qrSide: size.width * (size.id === '50x25' ? 0.48 : 0.45),
+      // Lado fijo del QR en mm, el mismo en toda etiqueta de esta medida. Entra
+      // con el nombre en sus 2 renglones: 30x20 deja ~11 mm de alto, 50x25 ~12,8
+      qrSide: chica ? 10 : 12,
 
       // Con el nombre a todo el ancho entran 2 renglones. En 30 mm talla y color
       // van mas chicos para que entren completos en el lado del QR
       producto: size.id === '30x20' ? 6 : 9.5,
       productoLineas: 2,
       detalle: size.id === '30x20' ? 5 : 7.5,
-      sangria: chica ? 1.5 : size.id === '50x25' ? 0 : 4,
       detalleLineas: chica ? 3 : 2,
-      id: size.id === '30x20' ? 3 : 4
+      id: chica ? 5 : 7,
+      parrafo: chica ? 0.6 : 1,
+      antesDelSku: chica ? 0.8 : 1.2
     }
   }
 
   const grande = size.width >= 50
 
-  // El QR toma todo el alto que deja el texto (ver .qrbox): el id un poco mas
-  // chico que el maximo posible le deja mas lugar al QR
+  // Lado fijo del QR en mm. Entra aun con nombre y color en 2 renglones cada uno
+  // (el texto ocupa hasta ~22 mm en 40x40 y ~27 mm en 50x50)
   return {
     mode: 'stack',
-    qrSide: size.width - padding * 2,
+    qrSide: Math.min(size.width - padding * 2, grande ? 19 : 15),
     producto: grande ? 11 : 9,
     productoLineas: 2,
     detalle: grande ? 7.5 : 6,
     detalleLineas: 2,
-    sangria: 0,
-    id: grande ? 5 : 4
+    id: grande ? 9 : 7,
+    parrafo: grande ? 1.2 : 1,
+    antesDelSku: grande ? 2 : 1.5
   }
 }
 
@@ -128,7 +132,7 @@ const labelParts = (label: VariantLabel, size: LabelSize) => {
 
   const markup = stack
     ? `<div class="texto">${producto}${detalles}</div><div class="qrbox">${qr}</div>`
-    : `${producto}<div class="fila"><div class="texto"><div>${detalles}</div></div>${qr}</div>`
+    : `${producto}<div class="fila"><div class="texto">${detalles}</div>${qr}</div>`
 
   const css = `
       .etiqueta, .etiqueta * { margin: 0; padding: 0; box-sizing: border-box; }
@@ -147,57 +151,45 @@ const labelParts = (label: VariantLabel, size: LabelSize) => {
         justify-content: flex-start;
         gap: ${compactHorizontal ? '0.25mm' : '0.5mm'};
         overflow: hidden;
-        line-height: 1.15;
+
+        /* Renglones con aire: pegados se leian amontonados */
+        line-height: 1.3;
         -webkit-print-color-adjust: exact;
         print-color-adjust: exact;
       }
 
-      /* El QR conserva el diseño vertical en etiquetas cuadradas y se fija al
-         lado de los detalles en las etiquetas bajas */
+      /* El QR tiene un solo tamaño por medida y siempre es cuadrado: no crece ni
+         se achica con el texto, el texto se acomoda alrededor. Va sin margen
+         blanco propio (ver VariantQRModal): con margen, el recuadro blanco tapaba
+         las letras de al lado */
       .etiqueta img {
         flex: none;
-        height: ${compactHorizontal ? `${layout.qrSide}mm` : '100%'};
-        width: ${compactHorizontal ? `${layout.qrSide}mm` : 'auto'};
-        aspect-ratio: 1 / 1;
-        ${compactHorizontal ? 'margin-top: -1.5mm; align-self: flex-start;' : `max-width: ${layout.qrSide}mm;`}
+        width: ${layout.qrSide}mm;
+        height: ${layout.qrSide}mm;
         image-rendering: pixelated;
       }
 
+      /* Cuadradas: el QR centrado en el alto que deja el texto, sin achicarse nunca */
       .qrbox {
-        ${stack ? 'flex: 1; min-height: 0; width: 100%; display: flex; justify-content: center; align-items: center;' : ''}
+        ${stack ? 'flex: 1 0 auto; width: 100%; display: flex; justify-content: center; align-items: center;' : ''}
       }
 
+      /* Si algun texto fuera larguisimo, cede el texto y no el QR */
       .texto {
-        ${stack ? 'width: 100%; text-align: center;' : 'flex: 1; min-width: 0;'}
+        ${stack ? 'width: 100%; text-align: center; flex: 0 1 auto; min-height: 0; overflow: hidden;' : 'flex: 0 1 auto; min-width: 0; text-align: left;'}
       }
 
-      /* Bajas: talla, color e id centrados en el lado izquierdo, o sea mas
-         cerca del QR, pero alineados entre si a la izquierda */
-      ${
-        stack
-          ? ''
-          : `.texto {
-        display: flex;
-        justify-content: center;
-
-        /* Con un color largo el bloque llena el lado y centrar no lo mueve:
-           la sangria lo corre igual hacia el QR */
-        padding-left: ${layout.sangria}mm;
-      }
-
-      .texto > div {
-        min-width: 0;
-        text-align: left;
-      }`
-      }
-
-      /* Debajo del nombre: talla, color e id y el QR pegado a la derecha */
+      /* Bajas, debajo del nombre: talla/color/SKU y el QR forman un bloque
+         centrado en la etiqueta, con el mismo aire a izquierda y derecha. El
+         texto ocupa lo que necesita (si es largo, baja de renglon) y el QR va
+         a su lado */
       .fila {
         flex: 1;
         min-height: 0;
         display: flex;
-        align-items: ${compactHorizontal ? 'flex-start' : 'center'};
-        gap: 1mm;
+        align-items: center;
+        justify-content: center;
+        gap: ${compactHorizontal ? 1.5 : 3}mm;
       }
 
       /* El nombre va completo, partido en renglones. El tope de renglones es
@@ -205,6 +197,9 @@ const labelParts = (label: VariantLabel, size: LabelSize) => {
          fuera de la etiqueta */
       .producto {
         font-size: ${layout.producto}pt;
+
+        /* El titulo va centrado en todas las medidas */
+        text-align: center;
         overflow-wrap: anywhere;
         display: -webkit-box;
         -webkit-box-orient: vertical;
@@ -213,10 +208,16 @@ const labelParts = (label: VariantLabel, size: LabelSize) => {
         margin-bottom: ${compactHorizontal ? '0.15mm' : '0.3mm'};
       }
 
-      /* Talla y color completos: si no entran en un renglon pasan al siguiente.
-         El tope de renglones es el mismo resguardo que el del nombre */
+      /* Talla y color son parrafos: si no entran en un renglon bajan dentro del
+         suyo, y entre uno y otro queda aire. El tope de renglones es el mismo
+         resguardo que el del nombre */
       .detalle {
         font-size: ${layout.detalle}pt;
+
+        /* Renglones de un mismo parrafo juntos y aire entre parrafos: asi se ve
+           que "Oxido wash / desgastado" es un solo color */
+        line-height: 1.15;
+        margin-bottom: ${layout.parrafo}mm;
         overflow-wrap: anywhere;
         display: -webkit-box;
         -webkit-box-orient: vertical;
@@ -224,11 +225,13 @@ const labelParts = (label: VariantLabel, size: LabelSize) => {
         overflow: hidden;
       }
 
-      /* El SKU identifica la variante sin ocupar demasiado espacio */
+      /* El SKU identifica la variante: en un solo renglon (partido en dos se sale
+         de la etiqueta) y separado del color por un espacio marcado */
       .id {
         font-size: ${layout.id}pt;
         line-height: 1;
-        margin-top: ${compactHorizontal ? '1mm' : '0.3mm'};
+        white-space: nowrap;
+        margin-top: ${layout.antesDelSku}mm;
       }`
 
   return { css, markup }
