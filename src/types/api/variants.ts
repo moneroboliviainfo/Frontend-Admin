@@ -1,5 +1,6 @@
 export interface VariantSize {
   id?: number
+  sku?: string
   size:
     | {
         id: number

@@ -27,6 +27,7 @@ export const LABEL_SIZES: LabelSize[] = [
 
 export type VariantLabel = {
   variantId: number
+  sku?: string
   productName?: string
   colorName: string
   sizeName: string
@@ -38,7 +39,7 @@ export type VariantLabel = {
 // --------------------------------------------------------------- hoja / PDF
 
 // Armado y tipografias de cada medida, en pt. Jerarquia en todas: el producto
-// completo arriba, talla y color chicos, y el id —el numero que se busca a
+// completo arriba, talla y color chicos, y el SKU —el codigo que se busca a
 // ojo— en grande y sin rotulo.
 type LabelLayout = {
 
@@ -68,16 +69,16 @@ const layoutFor = (size: LabelSize): LabelLayout => {
 
       // Tope de ancho: el QR toma el alto que deja el nombre, pero sin pasar el
       // 45% del ancho para que talla y color conserven su lado
-      qrSide: size.width * 0.45,
+      qrSide: size.width * (size.id === '50x25' ? 0.48 : 0.45),
 
       // Con el nombre a todo el ancho entran 2 renglones. En 30 mm talla y color
       // van mas chicos para que entren completos en el lado del QR
-      producto: chica ? 5.5 : 8.5,
+      producto: size.id === '30x20' ? 6 : 9.5,
       productoLineas: 2,
-      detalle: chica ? 5.5 : 7.5,
-      sangria: chica ? 1.5 : 4,
+      detalle: size.id === '30x20' ? 5 : 7.5,
+      sangria: chica ? 1.5 : size.id === '50x25' ? 0 : 4,
       detalleLineas: chica ? 3 : 2,
-      id: chica ? 8 : 13
+      id: size.id === '30x20' ? 3 : 4
     }
   }
 
@@ -88,12 +89,12 @@ const layoutFor = (size: LabelSize): LabelLayout => {
   return {
     mode: 'stack',
     qrSide: size.width - padding * 2,
-    producto: grande ? 10 : 8,
+    producto: grande ? 11 : 9,
     productoLineas: 2,
     detalle: grande ? 7.5 : 6,
     detalleLineas: 2,
     sangria: 0,
-    id: grande ? 15 : 12
+    id: grande ? 5 : 4
   }
 }
 
@@ -112,15 +113,16 @@ const escapeText = (text: string) =>
 const labelParts = (label: VariantLabel, size: LabelSize) => {
   const layout = layoutFor(size)
   const stack = layout.mode === 'stack'
+  const compactHorizontal = size.id === '30x20'
 
   const producto = label.productName
-    ? `<div class="producto">${escapeText(sentenceCase(label.productName))}</div>`
+    ? `<div class="producto">${escapeText(label.productName)}</div>`
     : ''
 
   const detalles = `
     <div class="detalle">Talla: ${escapeText(label.sizeName)}</div>
     <div class="detalle">Color: ${escapeText(sentenceCase(label.colorName))}</div>
-    <div class="id">${label.variantId}</div>`
+    <div class="id">${escapeText(label.sku || String(label.variantId))}</div>`
 
   const qr = `<img src="${label.qrDataUrl}" alt="" />`
 
@@ -143,32 +145,26 @@ const labelParts = (label: VariantLabel, size: LabelSize) => {
         flex-direction: column;
         align-items: ${stack ? 'center' : 'stretch'};
         justify-content: flex-start;
-        gap: 0.5mm;
+        gap: ${compactHorizontal ? '0.25mm' : '0.5mm'};
         overflow: hidden;
         line-height: 1.15;
         -webkit-print-color-adjust: exact;
         print-color-adjust: exact;
       }
 
-      /* El QR ocupa todo el alto que deja el texto, siempre cuadrado. Asi crece
-         al maximo y nunca se sale de la etiqueta aunque el texto ocupe mas */
+      /* El QR conserva el diseño vertical en etiquetas cuadradas y se fija al
+         lado de los detalles en las etiquetas bajas */
       .etiqueta img {
         flex: none;
-        height: 100%;
-        width: auto;
+        height: ${compactHorizontal ? `${layout.qrSide}mm` : '100%'};
+        width: ${compactHorizontal ? `${layout.qrSide}mm` : 'auto'};
         aspect-ratio: 1 / 1;
-        max-width: ${layout.qrSide}mm;
+        ${compactHorizontal ? 'margin-top: -1.5mm; align-self: flex-start;' : `max-width: ${layout.qrSide}mm;`}
         image-rendering: pixelated;
       }
 
-      /* Cuadradas: debajo del texto, centrado */
       .qrbox {
-        flex: 1;
-        min-height: 0;
-        width: 100%;
-        display: flex;
-        justify-content: center;
-        align-items: center;
+        ${stack ? 'flex: 1; min-height: 0; width: 100%; display: flex; justify-content: center; align-items: center;' : ''}
       }
 
       .texto {
@@ -200,7 +196,7 @@ const labelParts = (label: VariantLabel, size: LabelSize) => {
         flex: 1;
         min-height: 0;
         display: flex;
-        align-items: center;
+        align-items: ${compactHorizontal ? 'flex-start' : 'center'};
         gap: 1mm;
       }
 
@@ -214,7 +210,7 @@ const labelParts = (label: VariantLabel, size: LabelSize) => {
         -webkit-box-orient: vertical;
         -webkit-line-clamp: ${layout.productoLineas};
         overflow: hidden;
-        margin-bottom: 0.3mm;
+        margin-bottom: ${compactHorizontal ? '0.15mm' : '0.3mm'};
       }
 
       /* Talla y color completos: si no entran en un renglon pasan al siguiente.
@@ -228,11 +224,11 @@ const labelParts = (label: VariantLabel, size: LabelSize) => {
         overflow: hidden;
       }
 
-      /* El id es lo que se busca a ojo: grande y sin rotulo */
+      /* El SKU identifica la variante sin ocupar demasiado espacio */
       .id {
         font-size: ${layout.id}pt;
         line-height: 1;
-        margin-top: 0.3mm;
+        margin-top: ${compactHorizontal ? '1mm' : '0.3mm'};
       }`
 
   return { css, markup }

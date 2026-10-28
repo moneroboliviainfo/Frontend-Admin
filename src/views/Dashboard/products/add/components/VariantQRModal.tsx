@@ -25,12 +25,13 @@ interface VariantQRModalProps {
   open: boolean
   onClose: () => void
   variantId: number
+  sku?: string
   colorName: string
   sizeName: string
   productName?: string
 }
 
-const VariantQRModal = ({ open, onClose, variantId, colorName, sizeName, productName }: VariantQRModalProps) => {
+const VariantQRModal = ({ open, onClose, variantId, sku, colorName, sizeName, productName }: VariantQRModalProps) => {
   const qrRef = useRef<HTMLDivElement>(null)
 
   const qrValue = `<qr>${variantId}</qr>`
@@ -74,7 +75,7 @@ const VariantQRModal = ({ open, onClose, variantId, colorName, sizeName, product
 
     // Las dos salidas usan el mismo diseño y el mismo QR: la termica dibuja la
     // etiqueta como imagen (formato POS), asi sale igual que desde la PC
-    const label = { variantId, productName, colorName, sizeName, qrDataUrl: await qrToDataUrl() }
+    const label = { variantId, sku, productName, colorName, sizeName, qrDataUrl: await qrToDataUrl() }
 
     if (!viaBluetooth) {
       printVariantLabel(label, size)

@@ -30,13 +30,20 @@ const VariantsList = ({ variants, isLoading, editingVariantId, onVariantClick, p
 
   const [selectedVariant, setSelectedVariant] = useState<{
     id: number
+    sku?: string
     colorName: string
     sizeName: string
   } | null>(null)
 
-  const handleOpenQR = (e: React.MouseEvent, variantSizeId: number, colorName: string, sizeName: string) => {
+  const handleOpenQR = (
+    e: React.MouseEvent,
+    variantSizeId: number,
+    sku: string | undefined,
+    colorName: string,
+    sizeName: string
+  ) => {
     e.stopPropagation()
-    setSelectedVariant({ id: variantSizeId, colorName, sizeName })
+    setSelectedVariant({ id: variantSizeId, sku, colorName, sizeName })
     setQrModalOpen(true)
   }
 
@@ -162,7 +169,7 @@ const VariantsList = ({ variants, isLoading, editingVariantId, onVariantClick, p
                             <IconButton
                               size='small'
                               color='primary'
-                              onClick={e => handleOpenQR(e, Number(sizeId), colorName, sizeName)}
+                              onClick={e => handleOpenQR(e, Number(sizeId), variantSize.sku, colorName, sizeName)}
                             >
                               <i className='tabler-qrcode' />
                             </IconButton>
@@ -195,6 +202,7 @@ const VariantsList = ({ variants, isLoading, editingVariantId, onVariantClick, p
           open={qrModalOpen}
           onClose={handleCloseQR}
           variantId={selectedVariant.id}
+          sku={selectedVariant.sku}
           colorName={selectedVariant.colorName}
           sizeName={selectedVariant.sizeName}
           productName={productName}
