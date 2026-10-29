@@ -26,16 +26,18 @@ import CustomTextField from '@core/components/mui/TextField'
 import tableStyles from '@core/styles/table.module.css'
 import { useBranchContext } from '@/contexts/BranchContext'
 import { useAuthContext } from '@/contexts/AuthContext'
-import type { DispatchNote } from '@/utils/receptionReceipt'
+import type { DispatchNote, IncomingNote } from '@/utils/receptionReceipt'
 import { useCentralWarehouse, useCentralDispatch } from '@/hooks/useBranchTransfers'
 import { useVariantProducts, useSubtractStockBulk } from '@/hooks/useVariants'
 import { variantService } from '@/services/variantService'
 import type { Variant, VariantSize } from '@/types/api/variants'
 import { prendas, variantes } from './units'
 import ConfirmWarehouseChangesModal from './ConfirmWarehouseChangesModal'
+import type { VariantQrInfo } from './ConfirmWarehouseChangesModal'
 import ExportMenu from './ExportMenu'
 import ExcelImportModal from './ExcelImportModal'
 import DispatchCreatedModal from './DispatchCreatedModal'
+import IncomingCreatedModal from './IncomingCreatedModal'
 import type { ImportMode } from './ExcelImportModal'
 import LowStockPanel from './LowStockPanel'
 import MovementsModal from './MovementsModal'
@@ -49,6 +51,7 @@ import type { ShortcutEntry } from './DispatchShortcuts'
 export type SizeRow = {
   variantSizeId: number
   sizeName: string
+  sku?: string
   warehouseStock: number
 }
 
@@ -77,6 +80,7 @@ const groupByProduct = (variants: Variant[]): ProductGroup[] => {
     const sizes: SizeRow[] = (variant.variants || []).map((size: VariantSize) => ({
       variantSizeId: Number(size.id),
       sizeName: typeof size.size === 'object' ? size.size.name : String(size.size ?? ''),
+      sku: size.sku,
 
       // La bodega solo tiene deposito: su stock real es warehouseStock (availableStock siempre es 0)
       warehouseStock: size.warehouseStock || 0
@@ -124,6 +128,10 @@ const CentralWarehouseTable = () => {
   // El remito se ofrece DESPUES de confirmar, con el envio ya creado: asi lleva
   // su numero y refleja lo que quedo registrado
   const [dispatchNote, setDispatchNote] = useState<DispatchNote | null>(null)
+
+  // Lo mismo para lo que se ingresa a la bodega: la lista de lo que entro, para
+  // imprimirla y sacar las etiquetas de cada prenda nueva
+  const [incomingNote, setIncomingNote] = useState<IncomingNote | null>(null)
   const [movementsTarget, setMovementsTarget] = useState<MovementsTarget | null>(null)
 
   // Dar de baja varias de una: el icono de basurero abre un input ahi mismo en
@@ -188,6 +196,30 @@ const CentralWarehouseTable = () => {
   }, [selectedBranch?.id, outgoing])
 
   const groups = useMemo(() => groupByProduct(data?.data || []), [data])
+
+  // Datos para la etiqueta de cada variante (el QR del modal de confirmacion).
+  // Se acumulan al pasar de pagina: lo que se carga para enviar puede venir de
+  // varias paginas y tiene que poder imprimirse igual
+  const [qrInfo, setQrInfo] = useState<Record<number, VariantQrInfo>>({})
+
+  useEffect(() => {
+    const fromGroups: Record<number, VariantQrInfo> = {}
+
+    groups.forEach(group =>
+      group.colors.forEach(color =>
+        color.sizes.forEach(size => {
+          fromGroups[size.variantSizeId] = {
+            productName: group.productName,
+            colorName: color.colorName,
+            sizeName: size.sizeName,
+            sku: size.sku
+          }
+        })
+      )
+    )
+
+    setQrInfo(prev => ({ ...prev, ...fromGroups }))
+  }, [groups])
 
   const stockById = useMemo(() => {
     const map: Record<number, number> = {}
@@ -280,8 +312,7 @@ const CentralWarehouseTable = () => {
   const toSubtractUnits = toSubtractEntries.reduce((sum, [, quantity]) => sum + quantity, 0)
   const subtractOverStock = toSubtractEntries.some(([id, qty]) => qty > (stockById[Number(id)] ?? 0))
 
-  const openSubtractRow = (variantSizeId: number) =>
-    setSubtractOpenRows(prev => ({ ...prev, [variantSizeId]: true }))
+  const openSubtractRow = (variantSizeId: number) => setSubtractOpenRows(prev => ({ ...prev, [variantSizeId]: true }))
 
   const closeSubtractRow = (variantSizeId: number) => {
     setSubtractOpenRows(prev => {
@@ -312,6 +343,26 @@ const CentralWarehouseTable = () => {
         reason
       })
 
+      // La baja es todo o nada: si llego aca entro entera. Se lista con su motivo
+      setIncomingNote({
+        kind: 'baja',
+        registeredBy: user?.name || 'Bodega Central',
+        reason,
+        lines: toSubtractEntries.map(([variantSizeId, quantity]) => {
+          const id = Number(variantSizeId)
+          const info = qrInfo[id]
+
+          return {
+            variantId: id,
+            label: info
+              ? `${info.productName} · ${info.colorName} · Talla ${info.sizeName}`
+              : labels[id] || `Variante ${variantSizeId}`,
+            sku: info?.sku,
+            quantity
+          }
+        })
+      })
+
       setToSubtract({})
       setSubtractOpenRows({})
       setConfirmSubtractOpen(false)
@@ -329,17 +380,33 @@ const CentralWarehouseTable = () => {
     let saved = 0
     let savedUnits = 0
 
+    // Lo que entro de verdad: es lo que lista e imprime el comprobante de ingreso
+    const savedLines: IncomingNote['lines'] = []
+
     for (const [variantSizeId, quantity] of incomingEntries) {
       try {
         await variantService.addStock({ variantId: Number(variantSizeId), quantity })
         saved++
         savedUnits += quantity
+
+        const id = Number(variantSizeId)
+
+        savedLines.push({
+          variantId: id,
+          label: labels[id] || `Variante ${variantSizeId}`,
+          sku: qrInfo[id]?.sku,
+          quantity
+        })
       } catch {
         failedIncoming[Number(variantSizeId)] = quantity
       }
     }
 
     setIncoming(failedIncoming)
+
+    if (savedLines.length > 0) {
+      setIncomingNote({ registeredBy: user?.name || 'Bodega Central', lines: savedLines })
+    }
 
     const messages: string[] = []
     let severity: 'success' | 'error' = 'success'
@@ -488,12 +555,7 @@ const CentralWarehouseTable = () => {
 
             {toSubtractEntries.length > 0 && (
               <>
-                <Chip
-                  label={`-${prendas(toSubtractUnits)} a dar de baja`}
-                  color='error'
-                  variant='tonal'
-                  size='small'
-                />
+                <Chip label={`-${prendas(toSubtractUnits)} a dar de baja`} color='error' variant='tonal' size='small' />
                 <Button
                   variant='outlined'
                   color='error'
@@ -557,9 +619,6 @@ const CentralWarehouseTable = () => {
                 <Accordion
                   key={group.key}
                   disableGutters
-
-                  // Las filas cerradas no se montan: con muchos productos eran cientos de inputs invisibles.
-                  // Las cantidades viven en incoming/outgoing, no en los inputs, asi que no se pierden.
                   slotProps={{ transition: { unmountOnExit: true } }}
                   expanded={isOpen}
                   onChange={(_, isExpanded) => setExpanded(prev => ({ ...prev, [group.key]: isExpanded }))}
@@ -614,7 +673,7 @@ const CentralWarehouseTable = () => {
                             <th>Color</th>
                             <th>Talla</th>
                             <th>Añadir stock</th>
-                            <th>En bodega</th>
+                            <th>En bodega central</th>
                             <th>
                               {selectedBranch ? (
                                 <Chip
@@ -781,7 +840,10 @@ const CentralWarehouseTable = () => {
 
       <MovementsModal target={movementsTarget} warehouseId={warehouse?.id} onClose={() => setMovementsTarget(null)} />
 
-      <DispatchCreatedModal note={dispatchNote} onClose={() => setDispatchNote(null)} />
+      {/* Con ingreso y envio a la vez, primero el ingreso y despues el remito:
+          los dos modales juntos se tapaban */}
+      <IncomingCreatedModal note={incomingNote} qrInfo={qrInfo} onClose={() => setIncomingNote(null)} />
+      <DispatchCreatedModal note={incomingNote ? null : dispatchNote} onClose={() => setDispatchNote(null)} />
 
       <ExcelImportModal
         mode={importMode}
@@ -810,11 +872,7 @@ const CentralWarehouseTable = () => {
       />
 
       {shortcutsGroup && (
-        <DispatchShortcuts
-          group={shortcutsGroup}
-          onApply={applyShortcut}
-          onClose={() => setShortcutsGroup(null)}
-        />
+        <DispatchShortcuts group={shortcutsGroup} onApply={applyShortcut} onClose={() => setShortcutsGroup(null)} />
       )}
 
       <ConfirmWarehouseChangesModal
@@ -823,6 +881,7 @@ const CentralWarehouseTable = () => {
         onConfirm={handleConfirm}
         branchName={selectedBranch?.name}
         labels={labels}
+        qrInfo={qrInfo}
         incoming={incomingEntries}
         outgoing={outgoingEntries}
       />

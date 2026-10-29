@@ -10,12 +10,26 @@ import Button from '@mui/material/Button'
 import Box from '@mui/material/Box'
 import Alert from '@mui/material/Alert'
 import Divider from '@mui/material/Divider'
+import IconButton from '@mui/material/IconButton'
+import Tooltip from '@mui/material/Tooltip'
 import Typography from '@mui/material/Typography'
 
 import CustomTextField from '@core/components/mui/TextField'
+import VariantQRModal from '@/views/Dashboard/products/add/components/VariantQRModal'
 import { prendas } from './units'
 
 type Entry = [string, number]
+
+// Lo que necesita la etiqueta de una variante: el mismo QR y los mismos datos
+// que en Productos → Variantes
+export type VariantQrInfo = {
+  productName: string
+  colorName: string
+  sizeName: string
+  sku?: string
+}
+
+type QrTarget = VariantQrInfo & { variantId: number }
 
 type Props = {
   open: boolean
@@ -26,11 +40,22 @@ type Props = {
   onConfirm: (note: string) => void
   branchName?: string
   labels: Record<number, string>
+  qrInfo?: Record<number, VariantQrInfo>
   incoming: Entry[]
   outgoing: Entry[]
 }
 
 const sumUnits = (entries: Entry[]) => entries.reduce((sum, [, quantity]) => sum + quantity, 0)
+
+// Respaldo para variantes que no pasaron por la tabla (por ejemplo, cargadas por
+// Excel): el texto de la linea siempre es "Producto · Color · Talla X"
+const parseLabel = (label?: string): VariantQrInfo | null => {
+  const parts = (label || '').split(' · ')
+
+  if (parts.length !== 3 || !parts[2].startsWith('Talla ')) return null
+
+  return { productName: parts[0], colorName: parts[1], sizeName: parts[2].slice('Talla '.length) }
+}
 
 const ConfirmWarehouseChangesModal = ({
   open,
@@ -38,10 +63,14 @@ const ConfirmWarehouseChangesModal = ({
   onConfirm,
   branchName,
   labels,
+  qrInfo = {},
   incoming,
   outgoing
 }: Props) => {
   const [note, setNote] = useState('')
+
+  // Variante cuya etiqueta se va a imprimir (abre el modal del QR encima de este)
+  const [qrTarget, setQrTarget] = useState<QrTarget | null>(null)
 
   useEffect(() => {
     if (open) setNote('')
@@ -49,17 +78,29 @@ const ConfirmWarehouseChangesModal = ({
 
   const renderLines = (entries: Entry[], sign: string) => (
     <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
-      {entries.map(([variantSizeId, quantity]) => (
-        <Box key={variantSizeId} className='flex items-center gap-2'>
-          <Typography variant='body2' sx={{ flex: 1 }}>
-            {labels[Number(variantSizeId)] || `Variante #${variantSizeId}`}
-          </Typography>
-          <Typography variant='body2' className='font-medium'>
-            {sign}
-            {quantity}
-          </Typography>
-        </Box>
-      ))}
+      {entries.map(([variantSizeId, quantity]) => {
+        const id = Number(variantSizeId)
+        const info = qrInfo[id] || parseLabel(labels[id])
+
+        return (
+          <Box key={variantSizeId} className='flex items-center gap-2'>
+            <Typography variant='body2' sx={{ flex: 1 }}>
+              {labels[id] || `Variante #${variantSizeId}`}
+            </Typography>
+            <Typography variant='body2' className='font-medium'>
+              {sign}
+              {quantity}
+            </Typography>
+            {info && (
+              <Tooltip title='Ver QR e imprimir etiquetas'>
+                <IconButton size='small' onClick={() => setQrTarget({ ...info, variantId: id })}>
+                  <i className='tabler-qrcode' />
+                </IconButton>
+              </Tooltip>
+            )}
+          </Box>
+        )
+      })}
     </Box>
   )
 
@@ -119,6 +160,20 @@ const ConfirmWarehouseChangesModal = ({
           Confirmar
         </Button>
       </DialogActions>
+
+      {/* El mismo modal de Productos → Variantes: QR, descarga y etiquetas por
+          web o Bluetooth en las cuatro medidas */}
+      {qrTarget && (
+        <VariantQRModal
+          open
+          onClose={() => setQrTarget(null)}
+          variantId={qrTarget.variantId}
+          sku={qrTarget.sku}
+          productName={qrTarget.productName}
+          colorName={qrTarget.colorName}
+          sizeName={qrTarget.sizeName}
+        />
+      )}
     </Dialog>
   )
 }
