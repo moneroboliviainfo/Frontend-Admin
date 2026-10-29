@@ -1,4 +1,5 @@
 import type { Factura } from '@/types/api/sales'
+import { normalizeFactura } from './normalizeFactura'
 
 // ============================================
 // Tipos de Web Bluetooth API
@@ -143,6 +144,11 @@ export const connectBluetoothPrinter = async (): Promise<boolean> => {
   if (!isBluetoothAvailable()) {
     throw new Error('Web Bluetooth no está disponible en este navegador. Usa Chrome en Android.')
   }
+
+  // Se arranca limpio: si quedaba la caracteristica de una conexion anterior (la
+  // impresora se apago o se alejo), la busqueda de abajo la daba por buena y se
+  // escribia en una conexion muerta ("GATT server is disconnected") hasta recargar
+  printerCharacteristic = null
 
   try {
     bluetoothDevice = await navigator.bluetooth.requestDevice({
@@ -411,7 +417,10 @@ const generateQRCommand = (data: string): Uint8Array => {
   return combineBytes(modelCmd, sizeCmd, errorCmd, storeCmd, printCmd)
 }
 
-export const printInvoiceBluetooth = async (factura: Factura): Promise<void> => {
+export const printInvoiceBluetooth = async (raw: Factura): Promise<void> => {
+  // Decimales del back como numeros, detalles incluidos (ver normalizeFactura)
+  const factura = normalizeFactura(raw)
+
   if (!isBluetoothConnected()) {
     await connectBluetoothPrinter()
   }

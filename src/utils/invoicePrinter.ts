@@ -1,4 +1,5 @@
 import type { Factura } from '@/types/api/sales'
+import { normalizeFactura } from './normalizeFactura'
 
 // Convertir número a palabras en español boliviano
 const unidades = ['', 'UN', 'DOS', 'TRES', 'CUATRO', 'CINCO', 'SEIS', 'SIETE', 'OCHO', 'NUEVE']
@@ -646,7 +647,8 @@ export const generateInvoiceHTML = (factura: Factura): string => {
 }
 
 export const printInvoice = (factura: Factura): void => {
-  const html = generateInvoiceHTML(factura)
+  // Decimales del back como numeros, detalles incluidos (ver normalizeFactura)
+  const html = generateInvoiceHTML(normalizeFactura(factura))
 
   const width = 1200
   const height = 700
@@ -668,15 +670,23 @@ export const printInvoice = (factura: Factura): void => {
   printWindow.document.write(html)
   printWindow.document.close()
 
-  printWindow.onload = () => {
+  printWindow.addEventListener('afterprint', () => printWindow.close())
+
+  const print = () => {
     printWindow.focus()
     printWindow.print()
-    printWindow.close()
+  }
+
+  if (printWindow.document.readyState === 'complete') {
+    setTimeout(print, 300)
+  } else {
+    printWindow.addEventListener('load', () => setTimeout(print, 300))
   }
 }
 
 export const openInvoicePreview = (factura: Factura): void => {
-  const html = generateInvoiceHTML(factura)
+  // Decimales del back como numeros, detalles incluidos (ver normalizeFactura)
+  const html = generateInvoiceHTML(normalizeFactura(factura))
 
   const width = 1200
   const height = 700
