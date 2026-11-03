@@ -3,8 +3,9 @@
 // vistazo en la percha y lo que escanea el POS.
 //
 // Dos salidas, igual que la facturación: hoja (ventana de impresión del
-// navegador) y formato POS por Bluetooth (ESC/POS). Las dos usan el mismo
-// diseño (labelParts), asi la etiqueta sale igual desde la PC y desde el celular.
+// navegador, via labelParts) y formato POS por Bluetooth (ESC/POS, via drawLabel).
+// Las dos siguen las mismas medidas y tipografias (layoutFor), asi la etiqueta
+// sale igual desde la PC y desde el celular.
 
 import { ESC_POS, connectBluetoothPrinter, isBluetoothConnected, writeToprinter } from './bluetoothPrinter'
 
@@ -107,8 +108,8 @@ const layoutFor = (size: LabelSize): LabelLayout => {
 const sentenceCase = (text: string) =>
   text ? text.charAt(0).toLocaleUpperCase('es') + text.slice(1).toLocaleLowerCase('es') : text
 
-// Los nombres vienen del catalogo: un "&" o un "<" romperia el armado (y en el
-// formato POS, el XML del SVG)
+// Los nombres vienen del catalogo: un "&" o un "<" romperia el armado de la hoja
+// (el formato POS no pasa por HTML: dibuja el texto tal cual en el canvas)
 const escapeText = (text: string) =>
   text.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;')
 
@@ -295,8 +296,8 @@ export const printVariantLabel = (label: VariantLabel, size: LabelSize): void =>
 // bluetoothPrinter.ts), pero la etiqueta no se arma con renglones de texto: con
 // texto la impresora solo escribe un renglon debajo del otro y no puede poner
 // el QR al costado ni usar las tipografias de cada medida. Se dibuja el MISMO
-// diseño de la hoja (labelParts) a la resolucion de la impresora y se manda
-// como imagen ESC/POS, asi sale igual que desde la PC.
+// diseño de la hoja (mismas medidas de layoutFor, ver drawLabel) a la resolucion
+// de la impresora y se manda como imagen ESC/POS, asi sale igual que desde la PC.
 
 // ---------------------------------------------------------------------------
 // CALIBRACION DE LA IMPRESORA TERMICA
@@ -319,9 +320,6 @@ const ANCHO_CABEZAL_MM = 48
 // Acepta negativos para mover a la izquierda.
 const OFFSET_IZQUIERDO_MM = 0
 
-// CSS trabaja a 96 px por pulgada: los mm y pt del diseño se resuelven sobre esto
-const PX_PER_MM = 96 / 25.4
-
 type LabelBitmap = {
   widthBytes: number
   height: number
@@ -330,31 +328,237 @@ type LabelBitmap = {
   data: Uint8Array
 }
 
-// Dibuja el HTML de la etiqueta en un canvas sin librerias: el navegador pinta
-// HTML dentro de un SVG (foreignObject) y el SVG se dibuja como cualquier imagen
-export const renderLabelBitmap = async (label: VariantLabel, size: LabelSize): Promise<LabelBitmap> => {
-  const { css, markup } = labelParts(label, size)
+// 1 pt = 1/72 pulgada: las tipografias del diseño estan en pt y el canvas de la
+// impresora trabaja en puntos de cabezal
+const MM_PER_PT = 25.4 / 72
 
-  const cssWidth = size.width * PX_PER_MM
-  const cssHeight = size.height * PX_PER_MM
+const ptToDots = (pt: number) => pt * MM_PER_PT * DOTS_PER_MM
 
-  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${cssWidth}" height="${cssHeight}">
-  <foreignObject x="0" y="0" width="100%" height="100%">
-    <div xmlns="http://www.w3.org/1999/xhtml">
-      <style>${css}</style>
-      <div class="etiqueta">${markup}</div>
-    </div>
-  </foreignObject>
-</svg>`
+const fontOf = (px: number) => `bold ${px}px Arial, Helvetica, sans-serif`
 
-  const image = new Image()
+// Parte un texto en renglones que entren en `maxWidth`, igual que el diseño de
+// la hoja (overflow-wrap: anywhere): primero por palabras y, si una palabra sola
+// no entra, por letras. `maxLines` es el mismo resguardo del -webkit-line-clamp
+const wrapLines = (
+  ctx: CanvasRenderingContext2D,
+  text: string,
+  px: number,
+  maxWidth: number,
+  maxLines: number
+): string[] => {
+  ctx.font = fontOf(px)
 
-  await new Promise<void>((resolve, reject) => {
-    image.onload = () => resolve()
-    image.onerror = () => reject(new Error('No se pudo dibujar la etiqueta'))
-    image.src = 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(svg)
+  const lines: string[] = []
+  let current = ''
+
+  const flush = () => {
+    if (current) lines.push(current)
+    current = ''
+  }
+
+  for (const word of text.split(/\s+/).filter(Boolean)) {
+    if (ctx.measureText(word).width > maxWidth) {
+      flush()
+
+      let piece = ''
+
+      for (const char of word) {
+        if (piece && ctx.measureText(piece + char).width > maxWidth) {
+          lines.push(piece)
+          piece = char
+        } else {
+          piece += char
+        }
+      }
+
+      current = piece
+      continue
+    }
+
+    const tentative = current ? `${current} ${word}` : word
+
+    if (!current || ctx.measureText(tentative).width <= maxWidth) {
+      current = tentative
+    } else {
+      flush()
+      current = word
+    }
+  }
+
+  flush()
+
+  return lines.slice(0, maxLines)
+}
+
+// Un renglon ya resuelto: el texto, su tipografia, el alto de su renglon y el
+// aire que va debajo (los margenes del diseño)
+type DrawLine = { text: string; px: number; height: number; gapAfter: number }
+
+// Talla, color y SKU: cada uno es un parrafo y el SKU va en un solo renglon,
+// igual que en la hoja
+const detalleLines = (
+  ctx: CanvasRenderingContext2D,
+  label: VariantLabel,
+  layout: LabelLayout,
+  maxWidth: number
+): DrawLine[] => {
+  const detallePx = ptToDots(layout.detalle)
+  const idPx = ptToDots(layout.id)
+  const parrafo = layout.parrafo * DOTS_PER_MM
+  const lines: DrawLine[] = []
+
+  for (const texto of [`Talla: ${label.sizeName}`, `Color: ${sentenceCase(label.colorName)}`]) {
+    const wrapped = wrapLines(ctx, texto, detallePx, maxWidth, layout.detalleLineas)
+
+    wrapped.forEach((text, i) => {
+      lines.push({
+        text,
+        px: detallePx,
+        height: detallePx * 1.15,
+        gapAfter: i === wrapped.length - 1 ? parrafo : 0
+      })
+    })
+  }
+
+  // Margenes adyacentes: el de abajo del color y el de arriba del SKU se
+  // colapsan al mayor, como en el diseño de la hoja
+  if (lines.length) {
+    lines[lines.length - 1].gapAfter = Math.max(parrafo, layout.antesDelSku * DOTS_PER_MM)
+  }
+
+  lines.push({ text: label.sku || String(label.variantId), px: idPx, height: idPx, gapAfter: 0 })
+
+  return lines
+}
+
+const blockHeight = (lines: DrawLine[]) => lines.reduce((acc, line) => acc + line.height + line.gapAfter, 0)
+
+const blockWidth = (ctx: CanvasRenderingContext2D, lines: DrawLine[]) =>
+  lines.reduce((acc, line) => {
+    ctx.font = fontOf(line.px)
+
+    return Math.max(acc, ctx.measureText(line.text).width)
+  }, 0)
+
+// Escribe un bloque de renglones. `align` decide si `x` es el borde izquierdo
+// del bloque o su centro
+const drawBlock = (
+  ctx: CanvasRenderingContext2D,
+  lines: DrawLine[],
+  x: number,
+  top: number,
+  align: 'left' | 'center'
+) => {
+  let y = top
+
+  ctx.textAlign = align === 'center' ? 'center' : 'left'
+
+  for (const line of lines) {
+    ctx.font = fontOf(line.px)
+    ctx.fillText(line.text, x, y + line.height / 2)
+    y += line.height + line.gapAfter
+  }
+}
+
+const loadImage = (src: string): Promise<HTMLImageElement | null> =>
+  new Promise(resolve => {
+    if (!src) return resolve(null)
+
+    const image = new Image()
+
+    image.onload = () => resolve(image)
+    image.onerror = () => resolve(null)
+    image.src = src
   })
 
+// Dibuja la etiqueta directo en el canvas, a la resolucion del cabezal.
+//
+// Antes se armaba el HTML de `labelParts` dentro de un <foreignObject> de un SVG
+// y se dibujaba ese SVG como imagen. Funciona en la PC, pero Chrome de Android
+// NO pinta el HTML de un foreignObject cuando el SVG se usa como imagen: el
+// canvas salia todo blanco, la impresora recibia la altura correcta y por eso
+// avanzaba el papel y la etiqueta salia vacia. Aca se pinta con la API del
+// canvas (texto + el PNG del QR), que se comporta igual en celular y en PC.
+//
+// El diseño es el mismo de la hoja: medidas y tipografias salen de `layoutFor`.
+const drawLabel = async (ctx: CanvasRenderingContext2D, label: VariantLabel, size: LabelSize) => {
+  const layout = layoutFor(size)
+  const compactHorizontal = size.id === '30x20'
+  const stack = layout.mode === 'stack'
+
+  const width = size.width * DOTS_PER_MM
+  const height = size.height * DOTS_PER_MM
+  const padding = 1.5 * DOTS_PER_MM
+  const innerWidth = width - padding * 2
+  const columnGap = (compactHorizontal ? 0.25 : 0.5) * DOTS_PER_MM
+  const qrSide = layout.qrSide * DOTS_PER_MM
+
+  const qr = await loadImage(label.qrDataUrl)
+
+  ctx.fillStyle = '#000'
+  ctx.textBaseline = 'middle'
+
+  // El QR se escala sin suavizado: con interpolacion los modulos salen grises y
+  // el umbral de blanco/negro se los come (equivale al image-rendering: pixelated)
+  ctx.imageSmoothingEnabled = false
+
+  let y = padding
+
+  // Nombre del producto: a todo el ancho y centrado, en las dos variantes
+  if (label.productName) {
+    const px = ptToDots(layout.producto)
+    const lines = wrapLines(ctx, label.productName, px, innerWidth, layout.productoLineas)
+
+    drawBlock(
+      ctx,
+      lines.map(text => ({ text, px, height: px * 1.3, gapAfter: 0 })),
+      padding + innerWidth / 2,
+      y,
+      'center'
+    )
+
+    if (lines.length) {
+      y += lines.length * px * 1.3 + (compactHorizontal ? 0.15 : 0.3) * DOTS_PER_MM + columnGap
+    }
+  }
+
+  const resto = Math.max(0, height - padding - y)
+
+  if (stack) {
+    // Cuadradas: talla/color/SKU centrados debajo del nombre y el QR centrado
+    // en el alto que sobra
+    const lines = detalleLines(ctx, label, layout, innerWidth)
+
+    drawBlock(ctx, lines, padding + innerWidth / 2, y, 'center')
+
+    const textoAlto = blockHeight(lines)
+    const libre = Math.max(0, resto - textoAlto)
+
+    if (qr) {
+      ctx.drawImage(qr, padding + (innerWidth - qrSide) / 2, y + textoAlto + (libre - qrSide) / 2, qrSide, qrSide)
+    }
+
+    return
+  }
+
+  // Bajas: talla/color/SKU a la izquierda y el QR a su derecha, el conjunto
+  // centrado en la etiqueta y centrado verticalmente en el alto que sobra
+  const rowGap = (compactHorizontal ? 1.5 : 3) * DOTS_PER_MM
+  const textoMaxWidth = Math.max(0, innerWidth - rowGap - qrSide)
+  const lines = detalleLines(ctx, label, layout, textoMaxWidth)
+  const textoWidth = blockWidth(ctx, lines)
+  const textoAlto = blockHeight(lines)
+  const grupoWidth = textoWidth + rowGap + qrSide
+  const x = padding + Math.max(0, (innerWidth - grupoWidth) / 2)
+
+  drawBlock(ctx, lines, x, y + Math.max(0, (resto - textoAlto) / 2), 'left')
+
+  if (qr) {
+    ctx.drawImage(qr, x + textoWidth + rowGap, y + Math.max(0, (resto - qrSide) / 2), qrSide, qrSide)
+  }
+}
+
+export const renderLabelBitmap = async (label: VariantLabel, size: LabelSize): Promise<LabelBitmap> => {
   const etiquetaDots = Math.round(size.width * DOTS_PER_MM)
 
   // Margen izquierdo: lo que sobra del cabezal, repartido a la mitad, mas el
@@ -378,23 +582,38 @@ export const renderLabelBitmap = async (label: VariantLabel, size: LabelSize): P
   ctx.fillStyle = '#fff'
   ctx.fillRect(0, 0, width, height)
 
-  // La etiqueta conserva SU ancho y se corre a la derecha. Estirarla hasta
-  // `width` la deformaba cuando hay margen.
-  ctx.drawImage(image, margenDots, 0, etiquetaDots, height)
+  // La etiqueta conserva SU ancho y se corre a la derecha
+  ctx.save()
+  ctx.translate(margenDots, 0)
+  ctx.beginPath()
+  ctx.rect(0, 0, etiquetaDots, height)
+  ctx.clip()
+  await drawLabel(ctx, label, size)
+  ctx.restore()
 
   // Termica = blanco o negro. El corte va por encima del gris medio: el borde
   // suavizado de las letras cuenta como negro y la negrita no sale finita
   const pixels = ctx.getImageData(0, 0, width, height).data
   const widthBytes = width / 8
   const data = new Uint8Array(widthBytes * height)
+  let negros = 0
 
   for (let y = 0; y < height; y++) {
     for (let x = 0; x < width; x++) {
       const i = (y * width + x) * 4
       const luminance = pixels[i] * 0.299 + pixels[i + 1] * 0.587 + pixels[i + 2] * 0.114
 
-      if (luminance < 170) data[y * widthBytes + (x >> 3)] |= 0x80 >> (x & 7)
+      if (luminance < 170) {
+        data[y * widthBytes + (x >> 3)] |= 0x80 >> (x & 7)
+        negros++
+      }
     }
+  }
+
+  // Red de seguridad: antes, si el dibujo fallaba, se mandaba una imagen vacia y
+  // la impresora gastaba una etiqueta en blanco sin avisar nada
+  if (negros === 0) {
+    throw new Error('La etiqueta se dibujo vacia: no se envio nada a la impresora')
   }
 
   return { widthBytes, height, data }
