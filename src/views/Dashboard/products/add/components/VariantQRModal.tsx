@@ -48,9 +48,9 @@ const VariantQRModal = ({ open, onClose, variantId, sku, colorName, sizeName, pr
   const [isPrinting, setIsPrinting] = useState(false)
   const [snackbar, setSnackbar] = useState<{ message: string; severity: 'success' | 'error' } | null>(null)
 
-  // Panel de diagnostico: la etiqueta se arma igual que para imprimir, asi la
+  // Panel de calibracion: la etiqueta se arma igual que para imprimir, asi la
   // vista previa muestra exactamente lo que se le manda a la impresora
-  const [diagnostico, setDiagnostico] = useState<VariantLabel | null>(null)
+  const [calibracion, setCalibracion] = useState<VariantLabel | null>(null)
 
   // El QR va como PNG: el SVG de pantalla no se imprime de forma confiable
   const qrToDataUrl = (): Promise<string> =>
@@ -287,12 +287,12 @@ const VariantQRModal = ({ open, onClose, variantId, sku, colorName, sizeName, pr
             variant='text'
             size='small'
             color='secondary'
-            startIcon={<i className='tabler-stethoscope' />}
+            startIcon={<i className='tabler-adjustments' />}
             onClick={async () =>
-              setDiagnostico({ variantId, sku, productName, colorName, sizeName, qrDataUrl: await qrToDataUrl() })
+              setCalibracion({ variantId, sku, productName, colorName, sizeName, qrDataUrl: await qrToDataUrl() })
             }
           >
-            Diagnóstico
+            Calibrar
           </Button>
         )}
 
@@ -317,7 +317,7 @@ const VariantQRModal = ({ open, onClose, variantId, sku, colorName, sizeName, pr
         </Button>
       </DialogActions>
 
-      <PrinterDiagnosticsDialog open={!!diagnostico} onClose={() => setDiagnostico(null)} label={diagnostico} />
+      <PrinterDiagnosticsDialog open={!!calibracion} onClose={() => setCalibracion(null)} label={calibracion} />
 
       <Snackbar
         open={!!snackbar}

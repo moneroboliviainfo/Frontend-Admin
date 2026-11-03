@@ -1,22 +1,27 @@
 'use client'
 
-// Panel de diagnostico de la impresora de etiquetas (DP30).
+// Calibracion de la impresora de etiquetas (DP30 y similares).
 //
-// Sirve para contestar dos preguntas sin tener la impresora al lado:
-//   1. ¿El dibujo sale bien en ESTE celular? → la vista previa es el bitmap
+// Dos cosas, las que hay que repetir cada vez que cambia una impresora o un rollo:
+//   1. Ver que se dibuja en ESTE dispositivo → la vista previa es el bitmap
 //      exacto que se manda, ya binarizado.
-//   2. ¿Que lenguaje entiende la impresora? → cada prueba manda lo minimo para
-//      distinguir un dialecto del otro (ver printerDiagnostics.ts).
+//   2. Corregir la posicion → el corrimiento se ajusta en mm desde aca y queda
+//      guardado en el dispositivo, sin recompilar ni desplegar.
+//
+// ESC/POS imprime siempre desde el borde izquierdo del cabezal, asi que cuando
+// el rollo es mas angosto hay que rellenar con blanco hasta donde apoya el papel.
+// Ese relleno es lo que se calibra aca (ver margenIzquierdo en variantLabel.ts).
 //
 // No toca la facturacion: la MTP-4C sigue por su camino de siempre.
 
-import { useEffect, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 
 import Dialog from '@mui/material/Dialog'
 import DialogTitle from '@mui/material/DialogTitle'
 import DialogContent from '@mui/material/DialogContent'
 import DialogActions from '@mui/material/DialogActions'
 import Button from '@mui/material/Button'
+import ButtonGroup from '@mui/material/ButtonGroup'
 import Box from '@mui/material/Box'
 import Typography from '@mui/material/Typography'
 import Alert from '@mui/material/Alert'
@@ -24,8 +29,15 @@ import Divider from '@mui/material/Divider'
 import CircularProgress from '@mui/material/CircularProgress'
 
 import { getConnectedDeviceName } from '@/utils/bluetoothPrinter'
-import { PRINTER_TESTS } from '@/utils/printerDiagnostics'
-import { LABEL_SIZES, renderLabelPreview } from '@/utils/variantLabel'
+import {
+  ANCHO_CABEZAL_MM,
+  LABEL_SIZES,
+  getOffsetEtiquetaMm,
+  margenIzquierdoMm,
+  printVariantLabelBluetooth,
+  renderLabelPreview,
+  setOffsetEtiquetaMm
+} from '@/utils/variantLabel'
 import type { VariantLabel } from '@/utils/variantLabel'
 
 interface Props {
@@ -36,17 +48,26 @@ interface Props {
   label: VariantLabel | null
 }
 
+// Pasos de calibracion: 1 mm para encontrar la zona, 0.5 para afinar
+const PASOS = [-1, -0.5, 0.5, 1]
+
 const PrinterDiagnosticsDialog = ({ open, onClose, label }: Props) => {
   const [preview, setPreview] = useState<string>('')
   const [previewError, setPreviewError] = useState<string>('')
-  const [corriendo, setCorriendo] = useState<string>('')
+  const [offset, setOffset] = useState<number>(0)
+  const [imprimiendo, setImprimiendo] = useState(false)
   const [resultado, setResultado] = useState<{ texto: string; ok: boolean } | null>(null)
 
-  // La vista previa usa la medida que esta fallando
+  // La calibracion se hace sobre la medida que se esta usando
   const size = LABEL_SIZES[0]
 
+  // El valor guardado se lee en el cliente: en el servidor no hay localStorage
   useEffect(() => {
-    if (!open || !label) return
+    if (open) setOffset(getOffsetEtiquetaMm())
+  }, [open])
+
+  const dibujarPreview = useCallback(() => {
+    if (!label) return
 
     setPreview('')
     setPreviewError('')
@@ -54,32 +75,47 @@ const PrinterDiagnosticsDialog = ({ open, onClose, label }: Props) => {
     renderLabelPreview(label, size)
       .then(setPreview)
       .catch((error: any) => setPreviewError(error?.message || 'No se pudo dibujar la vista previa'))
-  }, [open, label, size])
+  }, [label, size])
 
-  const correr = async (id: string, run: () => Promise<void>) => {
-    setCorriendo(id)
+  useEffect(() => {
+    if (open) dibujarPreview()
+  }, [open, offset, dibujarPreview])
+
+  const mover = (paso: number) => {
+    const nuevo = Math.round((offset + paso) * 10) / 10
+
+    setOffsetEtiquetaMm(nuevo)
+    setOffset(nuevo)
+  }
+
+  const imprimirPrueba = async () => {
+    if (!label) return
+
+    setImprimiendo(true)
     setResultado(null)
 
     try {
-      await run()
-      setResultado({ texto: 'Enviado. Mira que salio por la impresora.', ok: true })
+      await printVariantLabelBluetooth(label, size)
+      setResultado({ texto: 'Enviado. Mira como salio la etiqueta.', ok: true })
     } catch (error: any) {
-      setResultado({ texto: error?.message || 'No se pudo enviar', ok: false })
+      setResultado({ texto: error?.message || 'No se pudo imprimir', ok: false })
     } finally {
-      setCorriendo('')
+      setImprimiendo(false)
     }
   }
 
+  const ocupado = margenIzquierdoMm(size) + size.width
+
   return (
     <Dialog open={open} onClose={onClose} maxWidth='sm' fullWidth>
-      <DialogTitle>Diagnóstico de impresora térmica</DialogTitle>
+      <DialogTitle>Calibración de impresora térmica</DialogTitle>
       <DialogContent>
         <Typography variant='subtitle2' sx={{ mb: 1 }}>
           1 · Lo que se dibuja en este dispositivo
         </Typography>
         <Typography variant='caption' color='text.secondary' sx={{ display: 'block', mb: 1.5 }}>
-          Es el bitmap exacto que se envía ({size.label}), con el relleno blanco de la izquierda incluido. Si acá se ve
-          la etiqueta, el dibujo está bien y el problema es de la impresora.
+          Es el bitmap exacto que se envía ({size.label}). La franja blanca de la izquierda es el relleno que corre la
+          etiqueta hasta donde apoya el rollo.
         </Typography>
 
         <Box
@@ -102,7 +138,12 @@ const PrinterDiagnosticsDialog = ({ open, onClose, label }: Props) => {
               {previewError}
             </Alert>
           ) : preview ? (
-            <Box component='img' src={preview} alt='Vista previa' sx={{ maxWidth: '100%', imageRendering: 'pixelated' }} />
+            <Box
+              component='img'
+              src={preview}
+              alt='Vista previa'
+              sx={{ maxWidth: '100%', imageRendering: 'pixelated' }}
+            />
           ) : (
             <CircularProgress size={22} />
           )}
@@ -111,32 +152,57 @@ const PrinterDiagnosticsDialog = ({ open, onClose, label }: Props) => {
         <Divider sx={{ my: 2 }} />
 
         <Typography variant='subtitle2' sx={{ mb: 1 }}>
-          2 · Qué lenguaje entiende la impresora
+          2 · Ajuste fino de posición
         </Typography>
         <Typography variant='caption' color='text.secondary' sx={{ display: 'block', mb: 1.5 }}>
-          Corré las pruebas en orden y anotá cuáles imprimen algo. Cada una gasta una etiqueta.
+          Si la etiqueta sale corrida a la izquierda, sumá milímetros; si se pasa a la derecha, restá. Queda guardado en
+          este dispositivo y lo usa el botón &quot;Térmica&quot;.
           {getConnectedDeviceName() ? ` Conectada: ${getConnectedDeviceName()}.` : ''}
         </Typography>
 
-        <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1.5 }}>
-          {PRINTER_TESTS.map(test => (
-            <Box key={test.id} sx={{ display: 'flex', alignItems: 'flex-start', gap: 1.5 }}>
-              <Button
-                variant='outlined'
-                size='small'
-                disabled={!!corriendo}
-                onClick={() => correr(test.id, test.run)}
-                sx={{ minWidth: 190, flexShrink: 0, justifyContent: 'flex-start' }}
-                startIcon={corriendo === test.id ? <CircularProgress size={14} /> : <i className='tabler-printer' />}
-              >
-                {test.label}
+        <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, flexWrap: 'wrap', mb: 1.5 }}>
+          <ButtonGroup size='small' variant='outlined'>
+            {PASOS.map(paso => (
+              <Button key={paso} onClick={() => mover(paso)}>
+                {paso > 0 ? `+${paso}` : paso} mm
               </Button>
-              <Typography variant='caption' color='text.secondary' sx={{ pt: 0.5 }}>
-                {test.significa}
-              </Typography>
-            </Box>
-          ))}
+            ))}
+          </ButtonGroup>
+
+          <Typography variant='body2'>
+            Corrimiento: <strong>{offset} mm</strong>
+          </Typography>
+
+          {offset !== 0 && (
+            <Button size='small' color='secondary' onClick={() => mover(-offset)}>
+              Volver a 0
+            </Button>
+          )}
         </Box>
+
+        <Typography variant='caption' color='text.secondary' sx={{ display: 'block', mb: 1.5 }}>
+          Relleno total a la izquierda: {margenIzquierdoMm(size)} mm. Con etiqueta de {size.width} mm, la imagen ocupa{' '}
+          {ocupado} mm del cabezal.
+        </Typography>
+
+        {ocupado > ANCHO_CABEZAL_MM && (
+          <Alert severity='warning' sx={{ mb: 1.5 }}>
+            La imagen ya ocupa más de los {ANCHO_CABEZAL_MM} mm imprimibles configurados. Si de golpe deja de imprimir
+            del todo, es por esto: el cabezal real es más angosto de lo que estamos asumiendo. En ese caso hay que subir{' '}
+            <code>ANCHO_CABEZAL_MM</code> solo si tu cabezal de verdad es más ancho; si no, el rollo no se puede
+            alcanzar más a la derecha.
+          </Alert>
+        )}
+
+        <Button
+          variant='contained'
+          size='small'
+          disabled={!label || imprimiendo}
+          startIcon={imprimiendo ? <CircularProgress size={14} /> : <i className='tabler-printer' />}
+          onClick={imprimirPrueba}
+        >
+          Imprimir etiqueta de prueba
+        </Button>
 
         {resultado && (
           <Alert severity={resultado.ok ? 'info' : 'error'} sx={{ mt: 2 }}>

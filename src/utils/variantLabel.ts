@@ -325,9 +325,39 @@ type AlineacionRollo = 'izquierda' | 'centro' | 'derecha'
 
 const ALINEACION_ROLLO = 'derecha' as AlineacionRollo
 
-// Corrimiento fino a la derecha, en mm, por si la alineacion no queda exacta.
-// Acepta negativos para mover a la izquierda.
+// Corrimiento fino a la derecha, en mm, sobre la alineacion de arriba. Es el
+// ajuste que depende de como quedo puesta la guia del rollo en cada impresora,
+// asi que se calibra desde el panel de diagnostico y queda guardado en el
+// dispositivo (ver OFFSET_STORAGE_KEY). Este valor es solo el punto de partida.
 const OFFSET_IZQUIERDO_MM = 0
+
+const OFFSET_STORAGE_KEY = 'monero.etiqueta.offsetDerechaMm'
+
+// Guardado por dispositivo: cada celular/PC puede tener su propia impresora con
+// la guia del rollo en otra posicion
+export const getOffsetEtiquetaMm = (): number => {
+  if (typeof window === 'undefined') return OFFSET_IZQUIERDO_MM
+
+  try {
+    const guardado = window.localStorage.getItem(OFFSET_STORAGE_KEY)
+    const valor = guardado === null ? NaN : Number(guardado)
+
+    return Number.isFinite(valor) ? valor : OFFSET_IZQUIERDO_MM
+  } catch {
+    // Modo privado o almacenamiento bloqueado: se usa el valor por defecto
+    return OFFSET_IZQUIERDO_MM
+  }
+}
+
+export const setOffsetEtiquetaMm = (mm: number): void => {
+  if (typeof window === 'undefined') return
+
+  try {
+    window.localStorage.setItem(OFFSET_STORAGE_KEY, String(mm))
+  } catch {
+    // Si no se puede guardar, el ajuste igual vale para esta sesion
+  }
+}
 
 // Relleno blanco a la izquierda de la etiqueta, en puntos de cabezal
 const margenIzquierdo = (size: LabelSize): number => {
@@ -336,8 +366,11 @@ const margenIzquierdo = (size: LabelSize): number => {
   const base = ALINEACION_ROLLO === 'izquierda' ? 0 : ALINEACION_ROLLO === 'centro' ? sobra / 2 : sobra
 
   // Nunca negativo: la imagen no puede empezar fuera del papel
-  return Math.max(0, Math.round((base + OFFSET_IZQUIERDO_MM) * DOTS_PER_MM))
+  return Math.max(0, Math.round((base + getOffsetEtiquetaMm()) * DOTS_PER_MM))
 }
+
+// Cuanto se esta corriendo la etiqueta, para mostrarlo en el panel de calibracion
+export const margenIzquierdoMm = (size: LabelSize): number => margenIzquierdo(size) / DOTS_PER_MM
 
 type LabelBitmap = {
   widthBytes: number
