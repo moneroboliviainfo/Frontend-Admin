@@ -19,7 +19,8 @@ import { QRCodeSVG } from 'qrcode.react'
 
 import { isBluetoothAvailable } from '@/utils/bluetoothPrinter'
 import { LABEL_SIZES, printVariantLabel, printVariantLabelBluetooth } from '@/utils/variantLabel'
-import type { LabelSize } from '@/utils/variantLabel'
+import type { LabelSize, VariantLabel } from '@/utils/variantLabel'
+import PrinterDiagnosticsDialog from './PrinterDiagnosticsDialog'
 
 interface VariantQRModalProps {
   open: boolean
@@ -46,6 +47,10 @@ const VariantQRModal = ({ open, onClose, variantId, sku, colorName, sizeName, pr
   const [viaBluetooth, setViaBluetooth] = useState(false)
   const [isPrinting, setIsPrinting] = useState(false)
   const [snackbar, setSnackbar] = useState<{ message: string; severity: 'success' | 'error' } | null>(null)
+
+  // Panel de diagnostico: la etiqueta se arma igual que para imprimir, asi la
+  // vista previa muestra exactamente lo que se le manda a la impresora
+  const [diagnostico, setDiagnostico] = useState<VariantLabel | null>(null)
 
   // El QR va como PNG: el SVG de pantalla no se imprime de forma confiable
   const qrToDataUrl = (): Promise<string> =>
@@ -277,6 +282,20 @@ const VariantQRModal = ({ open, onClose, variantId, sku, colorName, sizeName, pr
           </Button>
         )}
 
+        {isBluetoothAvailable() && (
+          <Button
+            variant='text'
+            size='small'
+            color='secondary'
+            startIcon={<i className='tabler-stethoscope' />}
+            onClick={async () =>
+              setDiagnostico({ variantId, sku, productName, colorName, sizeName, qrDataUrl: await qrToDataUrl() })
+            }
+          >
+            Diagnóstico
+          </Button>
+        )}
+
         <Menu anchorEl={anchorEl} open={!!anchorEl} onClose={() => setAnchorEl(null)}>
           <MenuItem disabled sx={{ opacity: '1 !important', fontSize: '0.75rem' }}>
             Tamaño de la etiqueta
@@ -297,6 +316,8 @@ const VariantQRModal = ({ open, onClose, variantId, sku, colorName, sizeName, pr
           Descargar QR
         </Button>
       </DialogActions>
+
+      <PrinterDiagnosticsDialog open={!!diagnostico} onClose={() => setDiagnostico(null)} label={diagnostico} />
 
       <Snackbar
         open={!!snackbar}

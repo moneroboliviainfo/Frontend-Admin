@@ -302,23 +302,42 @@ export const printVariantLabel = (label: VariantLabel, size: LabelSize): void =>
 // ---------------------------------------------------------------------------
 // CALIBRACION DE LA IMPRESORA TERMICA
 //
-// Estos tres valores solo afectan al boton "Termica". La impresion por hoja
+// Estos valores solo afectan al boton "Termica". La impresion por hoja
 // (boton "Imprimir etiqueta") no pasa por aca y ya esta calibrada: no tocarla.
 // ---------------------------------------------------------------------------
 
 // Resolucion del cabezal. 203 dpi = 8 puntos/mm (lo habitual); una de 300 dpi
 // usa 11.81. Si la etiqueta sale mas chica o mas grande que el rollo, es esto.
-const DOTS_PER_MM = 8
+export const DOTS_PER_MM = 8
 
-// Ancho FISICO del cabezal, en mm — no el de la etiqueta. ESC/POS imprime la
-// imagen pegada al borde izquierdo del cabezal, asi que con un cabezal mas
-// ancho que el rollo la etiqueta sale corrida a la izquierda. Con este valor
-// la imagen se centra sola. En 0 no se centra nada.
-const ANCHO_CABEZAL_MM = 48
+// Ancho FISICO del cabezal, en mm — no el de la etiqueta. ESC/POS siempre empieza
+// a imprimir en el borde IZQUIERDO del cabezal, asi que cuando el rollo es mas
+// angosto que el cabezal hay que rellenar con blanco hasta donde apoya el papel.
+// En 0 no se corre nada (la imagen queda pegada al borde izquierdo).
+export const ANCHO_CABEZAL_MM = 48
 
-// Corrimiento fino a la derecha, en mm, por si el centrado no queda exacto.
+// Donde apoya el rollo dentro del cabezal, mirando la impresora de frente.
+// La DP30 lleva el rollo contra la guia DERECHA: con 'centro' (lo que habia
+// antes) la etiqueta se imprimia 9 mm a la izquierda del papel y salia en blanco.
+//   'izquierda' → sin relleno      'centro' → la mitad de lo que sobra
+//   'derecha'   → todo lo que sobra
+type AlineacionRollo = 'izquierda' | 'centro' | 'derecha'
+
+const ALINEACION_ROLLO = 'derecha' as AlineacionRollo
+
+// Corrimiento fino a la derecha, en mm, por si la alineacion no queda exacta.
 // Acepta negativos para mover a la izquierda.
 const OFFSET_IZQUIERDO_MM = 0
+
+// Relleno blanco a la izquierda de la etiqueta, en puntos de cabezal
+const margenIzquierdo = (size: LabelSize): number => {
+  const sobra = Math.max(0, ANCHO_CABEZAL_MM - size.width)
+
+  const base = ALINEACION_ROLLO === 'izquierda' ? 0 : ALINEACION_ROLLO === 'centro' ? sobra / 2 : sobra
+
+  // Nunca negativo: la imagen no puede empezar fuera del papel
+  return Math.max(0, Math.round((base + OFFSET_IZQUIERDO_MM) * DOTS_PER_MM))
+}
 
 type LabelBitmap = {
   widthBytes: number
@@ -560,11 +579,7 @@ const drawLabel = async (ctx: CanvasRenderingContext2D, label: VariantLabel, siz
 
 export const renderLabelBitmap = async (label: VariantLabel, size: LabelSize): Promise<LabelBitmap> => {
   const etiquetaDots = Math.round(size.width * DOTS_PER_MM)
-
-  // Margen izquierdo: lo que sobra del cabezal, repartido a la mitad, mas el
-  // ajuste fino. Nunca negativo: la imagen no puede empezar fuera del papel.
-  const centrado = ANCHO_CABEZAL_MM > size.width ? ((ANCHO_CABEZAL_MM - size.width) * DOTS_PER_MM) / 2 : 0
-  const margenDots = Math.max(0, Math.round(centrado + OFFSET_IZQUIERDO_MM * DOTS_PER_MM))
+  const margenDots = margenIzquierdo(size)
 
   // El ancho en puntos tiene que ser multiplo de 8: cada byte son 8 puntos
   const width = Math.ceil((etiquetaDots + margenDots) / 8) * 8
@@ -617,6 +632,37 @@ export const renderLabelBitmap = async (label: VariantLabel, size: LabelSize): P
   }
 
   return { widthBytes, height, data }
+}
+
+// Vista previa de lo que REALMENTE se manda a la impresora: el bitmap ya
+// binarizado, con el relleno blanco de la izquierda incluido. Asi se ve en el
+// celular si el dibujo salio bien, sin gastar etiquetas adivinando.
+export const renderLabelPreview = async (label: VariantLabel, size: LabelSize, escala = 3): Promise<string> => {
+  const { widthBytes, height, data } = await renderLabelBitmap(label, size)
+  const width = widthBytes * 8
+
+  const canvas = document.createElement('canvas')
+
+  canvas.width = width * escala
+  canvas.height = height * escala
+
+  const ctx = canvas.getContext('2d')
+
+  if (!ctx) throw new Error('No se pudo dibujar la vista previa')
+
+  ctx.fillStyle = '#fff'
+  ctx.fillRect(0, 0, canvas.width, canvas.height)
+  ctx.fillStyle = '#000'
+
+  for (let y = 0; y < height; y++) {
+    for (let x = 0; x < width; x++) {
+      if (data[y * widthBytes + (x >> 3)] & (0x80 >> (x & 7))) {
+        ctx.fillRect(x * escala, y * escala, escala, escala)
+      }
+    }
+  }
+
+  return canvas.toDataURL('image/png')
 }
 
 // Imagen raster ESC/POS (GS v 0), por franjas: una imagen entera de una vez puede
