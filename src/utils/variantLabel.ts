@@ -312,9 +312,13 @@ export const DOTS_PER_MM = 8
 
 // Ancho FISICO del cabezal, en mm — no el de la etiqueta. ESC/POS siempre empieza
 // a imprimir en el borde IZQUIERDO del cabezal, asi que cuando el rollo es mas
-// angosto que el cabezal hay que rellenar con blanco hasta donde apoya el papel.
+// angosto que el cabezal hay que correr la imagen hasta donde apoya el papel.
 // En 0 no se corre nada (la imagen queda pegada al borde izquierdo).
-export const ANCHO_CABEZAL_MM = 48
+//
+// 72 mm = 576 puntos: la DP30 es de 3 pulgadas. Al principio estaba en 48 (el
+// valor de una de 58 mm) y por eso la etiqueta caia 22 mm a la izquierda del
+// papel y salia en blanco.
+export const ANCHO_CABEZAL_MM = 72
 
 // Donde apoya el rollo dentro del cabezal, mirando la impresora de frente.
 // La DP30 lleva el rollo contra la guia DERECHA: con 'centro' (lo que habia
@@ -327,11 +331,18 @@ const ALINEACION_ROLLO = 'derecha' as AlineacionRollo
 
 // Corrimiento fino a la derecha, en mm, sobre la alineacion de arriba. Es el
 // ajuste que depende de como quedo puesta la guia del rollo en cada impresora,
-// asi que se calibra desde el panel de diagnostico y queda guardado en el
+// asi que se calibra desde el panel de calibracion y queda guardado en el
 // dispositivo (ver OFFSET_STORAGE_KEY). Este valor es solo el punto de partida.
-const OFFSET_IZQUIERDO_MM = 0
+//
+// -2 mm: calibrando en la DP30, el relleno que dejo la etiqueta centrada fue de
+// 40 mm, 2 menos que los 42 que da el cabezal de 72 con el rollo a la derecha.
+// Es lo que separa a la guia del rollo del borde del cabezal.
+const OFFSET_IZQUIERDO_MM = -2
 
-const OFFSET_STORAGE_KEY = 'monero.etiqueta.offsetDerechaMm'
+// La version va en la clave: al corregir ANCHO_CABEZAL_MM cambio el punto de
+// partida, y un valor viejo guardado en el celular se sumaria encima y lo
+// mandaria todo fuera del papel
+const OFFSET_STORAGE_KEY = 'monero.etiqueta.offsetDerechaMm.v2'
 
 // Guardado por dispositivo: cada celular/PC puede tener su propia impresora con
 // la guia del rollo en otra posicion
@@ -372,9 +383,55 @@ const margenIzquierdo = (size: LabelSize): number => {
 // Cuanto se esta corriendo la etiqueta, para mostrarlo en el panel de calibracion
 export const margenIzquierdoMm = (size: LabelSize): number => margenIzquierdo(size) / DOTS_PER_MM
 
+// Correr la etiqueta con GS L (margen izquierdo por comando) en vez de mandar el
+// relleno como puntos blancos. En 30x20 sobre este cabezal, el relleno eran 40 de
+// los 70 bytes de cada fila: 11.200 bytes contra 4.800. Por Bluetooth, a 20 bytes
+// por paquete, eso es 3,4 s contra 1,4 s de envio — y el motor avanzando a
+// tirones mientras espera datos es justo el "zapateo".
+//
+// Si alguna impresora ignorara GS L, la etiqueta volveria a salir pegada al borde
+// izquierdo: en ese caso, poner esto en false y vuelve el relleno blanco.
+const MARGEN_POR_COMANDO = true
+
+// Avance entre etiquetas, en mm. null = GS FF, que usa el sensor de gap y es lo
+// que conviene mientras el papel quede bien parado. Un numero lo reemplaza por un
+// avance fijo: sirve cuando GS FF deja el papel pasado y la etiqueta siguiente
+// se imprime corrida hacia abajo (ver printVariantLabelBluetooth).
+const AVANCE_STORAGE_KEY = 'monero.etiqueta.avanceMm'
+
+export const getAvanceEtiquetaMm = (): number | null => {
+  if (typeof window === 'undefined') return null
+
+  try {
+    const guardado = window.localStorage.getItem(AVANCE_STORAGE_KEY)
+
+    if (guardado === null || guardado === 'sensor') return null
+
+    const valor = Number(guardado)
+
+    return Number.isFinite(valor) ? valor : null
+  } catch {
+    return null
+  }
+}
+
+export const setAvanceEtiquetaMm = (mm: number | null): void => {
+  if (typeof window === 'undefined') return
+
+  try {
+    window.localStorage.setItem(AVANCE_STORAGE_KEY, mm === null ? 'sensor' : String(mm))
+  } catch {
+    // Si no se puede guardar, el ajuste igual vale para esta sesion
+  }
+}
+
 type LabelBitmap = {
   widthBytes: number
   height: number
+
+  // Puntos a correr con GS L antes de imprimir. En 0, el corrimiento ya viene
+  // dentro de `data` como puntos blancos (ver MARGEN_POR_COMANDO)
+  margenDots: number
 
   // 1 bit por punto, 1 = negro, filas de arriba hacia abajo
   data: Uint8Array
@@ -614,8 +671,12 @@ export const renderLabelBitmap = async (label: VariantLabel, size: LabelSize): P
   const etiquetaDots = Math.round(size.width * DOTS_PER_MM)
   const margenDots = margenIzquierdo(size)
 
+  // Con GS L el corrimiento lo hace la impresora y el bitmap lleva solo la
+  // etiqueta; si no, hay que dibujarlo como puntos blancos a la izquierda
+  const relleno = MARGEN_POR_COMANDO ? 0 : margenDots
+
   // El ancho en puntos tiene que ser multiplo de 8: cada byte son 8 puntos
-  const width = Math.ceil((etiquetaDots + margenDots) / 8) * 8
+  const width = Math.ceil((etiquetaDots + relleno) / 8) * 8
   const height = Math.round(size.height * DOTS_PER_MM)
 
   const canvas = document.createElement('canvas')
@@ -632,7 +693,7 @@ export const renderLabelBitmap = async (label: VariantLabel, size: LabelSize): P
 
   // La etiqueta conserva SU ancho y se corre a la derecha
   ctx.save()
-  ctx.translate(margenDots, 0)
+  ctx.translate(relleno, 0)
   ctx.beginPath()
   ctx.rect(0, 0, etiquetaDots, height)
   ctx.clip()
@@ -664,19 +725,21 @@ export const renderLabelBitmap = async (label: VariantLabel, size: LabelSize): P
     throw new Error('La etiqueta se dibujo vacia: no se envio nada a la impresora')
   }
 
-  return { widthBytes, height, data }
+  return { widthBytes, height, data, margenDots: MARGEN_POR_COMANDO ? margenDots : 0 }
 }
 
 // Vista previa de lo que REALMENTE se manda a la impresora: el bitmap ya
 // binarizado, con el relleno blanco de la izquierda incluido. Asi se ve en el
 // celular si el dibujo salio bien, sin gastar etiquetas adivinando.
 export const renderLabelPreview = async (label: VariantLabel, size: LabelSize, escala = 3): Promise<string> => {
-  const { widthBytes, height, data } = await renderLabelBitmap(label, size)
+  const { widthBytes, height, data, margenDots } = await renderLabelBitmap(label, size)
   const width = widthBytes * 8
 
   const canvas = document.createElement('canvas')
 
-  canvas.width = width * escala
+  // El corrimiento se dibuja aunque viaje como comando GS L: en la impresora
+  // ocupa ese lugar igual, y verlo es justamente lo que se esta calibrando
+  canvas.width = (width + margenDots) * escala
   canvas.height = height * escala
 
   const ctx = canvas.getContext('2d')
@@ -690,7 +753,7 @@ export const renderLabelPreview = async (label: VariantLabel, size: LabelSize, e
   for (let y = 0; y < height; y++) {
     for (let x = 0; x < width; x++) {
       if (data[y * widthBytes + (x >> 3)] & (0x80 >> (x & 7))) {
-        ctx.fillRect(x * escala, y * escala, escala, escala)
+        ctx.fillRect((x + margenDots) * escala, y * escala, escala, escala)
       }
     }
   }
@@ -723,9 +786,27 @@ const rasterCommands = ({ widthBytes, height, data }: LabelBitmap): Uint8Array[]
   return commands
 }
 
-// GS FF: avanza hasta el inicio de la etiqueta siguiente (impresoras de etiquetas
-// en modo ESC/POS). Si la impresora no lo entiende lo ignora
+// GS FF: avanza hasta el inicio de la etiqueta siguiente usando el sensor de gap
+// (impresoras de etiquetas en modo ESC/POS). Si la impresora no lo entiende lo ignora
 const FEED_TO_NEXT_LABEL = new Uint8Array([0x1d, 0x0c])
+
+// GS L: margen izquierdo, en puntos. Corre la impresion sin gastar bytes en blanco
+const margenCommand = (dots: number) => new Uint8Array([0x1d, 0x4c, dots & 0xff, dots >> 8])
+
+// ESC J n: avanza n puntos. n no pasa de 255, asi que un avance largo va por partes
+const feedCommand = (dots: number): Uint8Array[] => {
+  const commands: Uint8Array[] = []
+  let restante = Math.max(0, Math.round(dots))
+
+  while (restante > 0) {
+    const paso = Math.min(255, restante)
+
+    commands.push(new Uint8Array([0x1b, 0x4a, paso]))
+    restante -= paso
+  }
+
+  return commands
+}
 
 export const printVariantLabelBluetooth = async (label: VariantLabel, size: LabelSize): Promise<void> => {
   // Se dibuja antes de conectar: si falla el dibujo no se ocupa la impresora
@@ -736,11 +817,28 @@ export const printVariantLabelBluetooth = async (label: VariantLabel, size: Labe
   await writeToprinter(ESC_POS.INIT)
   await new Promise(resolve => setTimeout(resolve, 100))
 
+  // El corrimiento horizontal, como comando: INIT lo deja en cero, asi que va
+  // despues y no hace falta devolverlo al final
+  if (bitmap.margenDots > 0) await writeToprinter(margenCommand(bitmap.margenDots))
+
   // Una etiqueta son miles de bytes (50x50 = 20.000): con la pausa de 20 ms de la
   // factura tardaria unos 20 s. La imagen va con pausas cortas entre paquetes
   for (const command of rasterCommands(bitmap)) {
     await writeToprinter(command, RASTER_PAUSE_MS)
   }
 
-  await writeToprinter(FEED_TO_NEXT_LABEL)
+  // Avance hasta la etiqueta siguiente. Por defecto manda GS FF y el sensor de
+  // gap se encarga; el problema es que algunas impresoras dejan el papel en la
+  // posicion de corte, pasada del inicio de la etiqueta, y entonces lo que se
+  // imprime despues sale corrido hacia abajo. Con un avance fijo mas corto se
+  // controla exactamente donde arranca la proxima (ver panel de calibracion).
+  const avance = getAvanceEtiquetaMm()
+
+  if (avance === null) {
+    await writeToprinter(FEED_TO_NEXT_LABEL)
+  } else {
+    for (const command of feedCommand(avance * DOTS_PER_MM)) {
+      await writeToprinter(command)
+    }
+  }
 }

@@ -32,10 +32,12 @@ import { getConnectedDeviceName } from '@/utils/bluetoothPrinter'
 import {
   ANCHO_CABEZAL_MM,
   LABEL_SIZES,
+  getAvanceEtiquetaMm,
   getOffsetEtiquetaMm,
   margenIzquierdoMm,
   printVariantLabelBluetooth,
   renderLabelPreview,
+  setAvanceEtiquetaMm,
   setOffsetEtiquetaMm
 } from '@/utils/variantLabel'
 import type { VariantLabel } from '@/utils/variantLabel'
@@ -55,6 +57,9 @@ const PrinterDiagnosticsDialog = ({ open, onClose, label }: Props) => {
   const [preview, setPreview] = useState<string>('')
   const [previewError, setPreviewError] = useState<string>('')
   const [offset, setOffset] = useState<number>(0)
+
+  // null = avance por sensor de gap (GS FF); un numero = avance fijo en mm
+  const [avance, setAvance] = useState<number | null>(null)
   const [imprimiendo, setImprimiendo] = useState(false)
   const [resultado, setResultado] = useState<{ texto: string; ok: boolean } | null>(null)
 
@@ -63,7 +68,10 @@ const PrinterDiagnosticsDialog = ({ open, onClose, label }: Props) => {
 
   // El valor guardado se lee en el cliente: en el servidor no hay localStorage
   useEffect(() => {
-    if (open) setOffset(getOffsetEtiquetaMm())
+    if (!open) return
+
+    setOffset(getOffsetEtiquetaMm())
+    setAvance(getAvanceEtiquetaMm())
   }, [open])
 
   const dibujarPreview = useCallback(() => {
@@ -86,6 +94,15 @@ const PrinterDiagnosticsDialog = ({ open, onClose, label }: Props) => {
 
     setOffsetEtiquetaMm(nuevo)
     setOffset(nuevo)
+  }
+
+  // El avance arranca en el alto de la etiqueta mas un gap tipico: desde ahi se
+  // sube o se baja hasta que la proxima etiqueta caiga en su lugar
+  const cambiarAvance = (paso: number | null) => {
+    const nuevo = paso === null ? null : Math.round(((avance ?? size.height + 2) + paso) * 10) / 10
+
+    setAvanceEtiquetaMm(nuevo)
+    setAvance(nuevo)
   }
 
   const imprimirPrueba = async () => {
@@ -193,6 +210,37 @@ const PrinterDiagnosticsDialog = ({ open, onClose, label }: Props) => {
             alcanzar más a la derecha.
           </Alert>
         )}
+
+        <Divider sx={{ my: 2 }} />
+
+        <Typography variant='subtitle2' sx={{ mb: 1 }}>
+          3 · Posición vertical
+        </Typography>
+        <Typography variant='caption' color='text.secondary' sx={{ display: 'block', mb: 1.5 }}>
+          Por defecto la impresora busca el corte con su sensor, pero algunas dejan el papel pasado y la etiqueta
+          siguiente sale corrida hacia abajo. Con avance fijo se controla dónde arranca: menos milímetros la suben,
+          más la bajan. El efecto se ve en la etiqueta <strong>siguiente</strong>, no en la que estás mirando.
+        </Typography>
+
+        <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, flexWrap: 'wrap', mb: 2 }}>
+          <ButtonGroup size='small' variant='outlined'>
+            {PASOS.map(paso => (
+              <Button key={paso} onClick={() => cambiarAvance(paso)}>
+                {paso > 0 ? `+${paso}` : paso} mm
+              </Button>
+            ))}
+          </ButtonGroup>
+
+          <Typography variant='body2'>
+            Avance: <strong>{avance === null ? 'sensor de gap' : `${avance} mm`}</strong>
+          </Typography>
+
+          {avance !== null && (
+            <Button size='small' color='secondary' onClick={() => cambiarAvance(null)}>
+              Volver al sensor
+            </Button>
+          )}
+        </Box>
 
         <Button
           variant='contained'
