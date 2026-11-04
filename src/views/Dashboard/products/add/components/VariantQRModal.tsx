@@ -17,7 +17,7 @@ import Snackbar from '@mui/material/Snackbar'
 import Alert from '@mui/material/Alert'
 import { QRCodeSVG } from 'qrcode.react'
 
-import { isBluetoothAvailable } from '@/utils/bluetoothPrinter'
+import { isLabelPrinterAvailable } from '@/utils/labelPrinter'
 import { LABEL_SIZES, printVariantLabel, printVariantLabelBluetooth } from '@/utils/variantLabel'
 import type { LabelSize, VariantLabel } from '@/utils/variantLabel'
 import PrinterDiagnosticsDialog from './PrinterDiagnosticsDialog'
@@ -268,7 +268,7 @@ const VariantQRModal = ({ open, onClose, variantId, sku, colorName, sizeName, pr
           Imprimir etiqueta
         </Button>
 
-        {isBluetoothAvailable() && (
+        {isLabelPrinterAvailable() && (
           <Button
             variant='outlined'
             disabled={isPrinting}
@@ -282,7 +282,7 @@ const VariantQRModal = ({ open, onClose, variantId, sku, colorName, sizeName, pr
           </Button>
         )}
 
-        {isBluetoothAvailable() && (
+        {isLabelPrinterAvailable() && (
           <Button
             variant='text'
             size='small'

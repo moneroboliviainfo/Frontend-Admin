@@ -28,7 +28,7 @@ import Alert from '@mui/material/Alert'
 import Divider from '@mui/material/Divider'
 import CircularProgress from '@mui/material/CircularProgress'
 
-import { getConnectedDeviceName } from '@/utils/bluetoothPrinter'
+import { getLabelPrinterName } from '@/utils/labelPrinter'
 import {
   ANCHO_CABEZAL_MM,
   LABEL_SIZES,
@@ -174,7 +174,7 @@ const PrinterDiagnosticsDialog = ({ open, onClose, label }: Props) => {
         <Typography variant='caption' color='text.secondary' sx={{ display: 'block', mb: 1.5 }}>
           Si la etiqueta sale corrida a la izquierda, sumá milímetros; si se pasa a la derecha, restá. Queda guardado en
           este dispositivo y lo usa el botón &quot;Térmica&quot;.
-          {getConnectedDeviceName() ? ` Conectada: ${getConnectedDeviceName()}.` : ''}
+          {getLabelPrinterName() ? ` Conectada: ${getLabelPrinterName()}.` : ''}
         </Typography>
 
         <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, flexWrap: 'wrap', mb: 1.5 }}>

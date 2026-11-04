@@ -7,7 +7,7 @@
 // Las dos siguen las mismas medidas y tipografias (layoutFor), asi la etiqueta
 // sale igual desde la PC y desde el celular.
 
-import { ESC_POS, connectBluetoothPrinter, isBluetoothConnected, writeToprinter } from './bluetoothPrinter'
+import { LABEL_INIT, connectLabelPrinter, isLabelPrinterConnected, writeToLabelPrinter } from './labelPrinter'
 
 export type LabelSize = {
   id: string
@@ -292,8 +292,8 @@ export const printVariantLabel = (label: VariantLabel, size: LabelSize): void =>
 
 // ------------------------------------------------- formato POS (Bluetooth)
 //
-// Mismo protocolo y misma conexion que la factura termica (ESC/POS por
-// bluetoothPrinter.ts), pero la etiqueta no se arma con renglones de texto: con
+// Mismo protocolo que la factura termica (ESC/POS) pero con conexion propia
+// (labelPrinter.ts: otra impresora). La etiqueta no se arma con renglones: con
 // texto la impresora solo escribe un renglon debajo del otro y no puede poner
 // el QR al costado ni usar las tipografias de cada medida. Se dibuja el MISMO
 // diseño de la hoja (mismas medidas de layoutFor, ver drawLabel) a la resolucion
@@ -389,9 +389,14 @@ export const margenIzquierdoMm = (size: LabelSize): number => margenIzquierdo(si
 // por paquete, eso es 3,4 s contra 1,4 s de envio — y el motor avanzando a
 // tirones mientras espera datos es justo el "zapateo".
 //
-// Si alguna impresora ignorara GS L, la etiqueta volveria a salir pegada al borde
-// izquierdo: en ese caso, poner esto en false y vuelve el relleno blanco.
-const MARGEN_POR_COMANDO = true
+// PROBADO EN LA DP30: no funciona. La impresora acepta GS L pero GS v 0 lo
+// ignora y dibuja igual desde el borde del cabezal, o sea fuera del papel: la
+// etiqueta volvio a salir en blanco. Queda en false — el relleno blanco es la
+// unica forma de correr la imagen en esta impresora.
+//
+// El ahorro de bytes se consiguio por el otro lado: mandando paquetes grandes
+// por Bluetooth en vez de 20 bytes con pausa (ver writeToLabelPrinter).
+const MARGEN_POR_COMANDO = false
 
 // Avance entre etiquetas, en mm. null = GS FF, que usa el sensor de gap y es lo
 // que conviene mientras el papel quede bien parado. Un numero lo reemplaza por un
@@ -765,9 +770,11 @@ export const renderLabelPreview = async (label: VariantLabel, size: LabelSize, e
 // pasar el buffer de la impresora
 const BAND_ROWS = 48
 
-// Pausa entre paquetes Bluetooth al mandar la imagen. Si la impresora pierde
-// datos (sale cortada o con rayas), subirla hacia los 20 ms de la factura
-const RASTER_PAUSE_MS = 6
+// Pausa entre paquetes Bluetooth al mandar la imagen. En 0, writeToLabelPrinter
+// manda sin tiempo muerto y la impresora recibe a la velocidad del enlace, que es
+// lo que hace falta para que el motor no se quede esperando datos. Si la etiqueta
+// saliera cortada o con rayas (datos perdidos), subir a 2 o 4 ms.
+const RASTER_PAUSE_MS = 0
 
 const rasterCommands = ({ widthBytes, height, data }: LabelBitmap): Uint8Array[] => {
   const commands: Uint8Array[] = []
@@ -812,19 +819,22 @@ export const printVariantLabelBluetooth = async (label: VariantLabel, size: Labe
   // Se dibuja antes de conectar: si falla el dibujo no se ocupa la impresora
   const bitmap = await renderLabelBitmap(label, size)
 
-  if (!isBluetoothConnected()) await connectBluetoothPrinter()
+  if (!isLabelPrinterConnected()) await connectLabelPrinter()
 
-  await writeToprinter(ESC_POS.INIT)
+  await writeToLabelPrinter(LABEL_INIT)
   await new Promise(resolve => setTimeout(resolve, 100))
 
   // El corrimiento horizontal, como comando: INIT lo deja en cero, asi que va
   // despues y no hace falta devolverlo al final
-  if (bitmap.margenDots > 0) await writeToprinter(margenCommand(bitmap.margenDots))
+  if (bitmap.margenDots > 0) await writeToLabelPrinter(margenCommand(bitmap.margenDots))
 
-  // Una etiqueta son miles de bytes (50x50 = 20.000): con la pausa de 20 ms de la
-  // factura tardaria unos 20 s. La imagen va con pausas cortas entre paquetes
+  // Una etiqueta son miles de bytes (30x20 con el relleno son 11.200): de a 20
+  // bytes con pausa son unos 3 KB/s, bastante menos de lo que consume el motor,
+  // y el papel avanza a los tirones esperando datos. Va por writeToLabelPrinter,
+  // que manda el paquete mas grande que acepte la conexion. La facturacion no
+  // pasa por aca: tiene su propio archivo y su propia conexion.
   for (const command of rasterCommands(bitmap)) {
-    await writeToprinter(command, RASTER_PAUSE_MS)
+    await writeToLabelPrinter(command, RASTER_PAUSE_MS)
   }
 
   // Avance hasta la etiqueta siguiente. Por defecto manda GS FF y el sensor de
@@ -835,10 +845,10 @@ export const printVariantLabelBluetooth = async (label: VariantLabel, size: Labe
   const avance = getAvanceEtiquetaMm()
 
   if (avance === null) {
-    await writeToprinter(FEED_TO_NEXT_LABEL)
+    await writeToLabelPrinter(FEED_TO_NEXT_LABEL)
   } else {
     for (const command of feedCommand(avance * DOTS_PER_MM)) {
-      await writeToprinter(command)
+      await writeToLabelPrinter(command)
     }
   }
 }
