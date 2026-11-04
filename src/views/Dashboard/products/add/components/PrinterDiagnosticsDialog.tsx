@@ -32,13 +32,13 @@ import { getLabelPrinterName } from '@/utils/labelPrinter'
 import {
   ANCHO_CABEZAL_MM,
   LABEL_SIZES,
-  getAvanceEtiquetaMm,
   getOffsetEtiquetaMm,
+  getOffsetVerticalMm,
   margenIzquierdoMm,
   printVariantLabelBluetooth,
   renderLabelPreview,
-  setAvanceEtiquetaMm,
-  setOffsetEtiquetaMm
+  setOffsetEtiquetaMm,
+  setOffsetVerticalMm
 } from '@/utils/variantLabel'
 import type { VariantLabel } from '@/utils/variantLabel'
 
@@ -58,8 +58,8 @@ const PrinterDiagnosticsDialog = ({ open, onClose, label }: Props) => {
   const [previewError, setPreviewError] = useState<string>('')
   const [offset, setOffset] = useState<number>(0)
 
-  // null = avance por sensor de gap (GS FF); un numero = avance fijo en mm
-  const [avance, setAvance] = useState<number | null>(null)
+  // Corrimiento vertical del contenido dentro de la etiqueta: negativo lo sube
+  const [vertical, setVertical] = useState<number>(0)
   const [imprimiendo, setImprimiendo] = useState(false)
   const [resultado, setResultado] = useState<{ texto: string; ok: boolean } | null>(null)
 
@@ -71,7 +71,7 @@ const PrinterDiagnosticsDialog = ({ open, onClose, label }: Props) => {
     if (!open) return
 
     setOffset(getOffsetEtiquetaMm())
-    setAvance(getAvanceEtiquetaMm())
+    setVertical(getOffsetVerticalMm())
   }, [open])
 
   const dibujarPreview = useCallback(() => {
@@ -87,7 +87,7 @@ const PrinterDiagnosticsDialog = ({ open, onClose, label }: Props) => {
 
   useEffect(() => {
     if (open) dibujarPreview()
-  }, [open, offset, dibujarPreview])
+  }, [open, offset, vertical, dibujarPreview])
 
   const mover = (paso: number) => {
     const nuevo = Math.round((offset + paso) * 10) / 10
@@ -96,13 +96,11 @@ const PrinterDiagnosticsDialog = ({ open, onClose, label }: Props) => {
     setOffset(nuevo)
   }
 
-  // El avance arranca en el alto de la etiqueta mas un gap tipico: desde ahi se
-  // sube o se baja hasta que la proxima etiqueta caiga en su lugar
-  const cambiarAvance = (paso: number | null) => {
-    const nuevo = paso === null ? null : Math.round(((avance ?? size.height + 2) + paso) * 10) / 10
+  const moverVertical = (paso: number) => {
+    const nuevo = Math.round((vertical + paso) * 10) / 10
 
-    setAvanceEtiquetaMm(nuevo)
-    setAvance(nuevo)
+    setOffsetVerticalMm(nuevo)
+    setVertical(nuevo)
   }
 
   const imprimirPrueba = async () => {
@@ -217,27 +215,26 @@ const PrinterDiagnosticsDialog = ({ open, onClose, label }: Props) => {
           3 · Posición vertical
         </Typography>
         <Typography variant='caption' color='text.secondary' sx={{ display: 'block', mb: 1.5 }}>
-          Por defecto la impresora busca el corte con su sensor, pero algunas dejan el papel pasado y la etiqueta
-          siguiente sale corrida hacia abajo. Con avance fijo se controla dónde arranca: menos milímetros la suben,
-          más la bajan. El efecto se ve en la etiqueta <strong>siguiente</strong>, no en la que estás mirando.
+          Mueve el contenido dentro de la etiqueta: valores negativos lo suben. Se ve en la vista previa de arriba. El
+          tope es el blanco que queda sobre el contenido — pasado ese punto empieza a recortarse.
         </Typography>
 
         <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, flexWrap: 'wrap', mb: 2 }}>
           <ButtonGroup size='small' variant='outlined'>
             {PASOS.map(paso => (
-              <Button key={paso} onClick={() => cambiarAvance(paso)}>
+              <Button key={paso} onClick={() => moverVertical(paso)}>
                 {paso > 0 ? `+${paso}` : paso} mm
               </Button>
             ))}
           </ButtonGroup>
 
           <Typography variant='body2'>
-            Avance: <strong>{avance === null ? 'sensor de gap' : `${avance} mm`}</strong>
+            Vertical: <strong>{vertical} mm</strong>
           </Typography>
 
-          {avance !== null && (
-            <Button size='small' color='secondary' onClick={() => cambiarAvance(null)}>
-              Volver al sensor
+          {vertical !== 0 && (
+            <Button size='small' color='secondary' onClick={() => moverVertical(-vertical)}>
+              Volver a 0
             </Button>
           )}
         </Box>

@@ -398,33 +398,37 @@ export const margenIzquierdoMm = (size: LabelSize): number => margenIzquierdo(si
 // por Bluetooth en vez de 20 bytes con pausa (ver writeToLabelPrinter).
 const MARGEN_POR_COMANDO = false
 
-// Avance entre etiquetas, en mm. null = GS FF, que usa el sensor de gap y es lo
-// que conviene mientras el papel quede bien parado. Un numero lo reemplaza por un
-// avance fijo: sirve cuando GS FF deja el papel pasado y la etiqueta siguiente
-// se imprime corrida hacia abajo (ver printVariantLabelBluetooth).
-const AVANCE_STORAGE_KEY = 'monero.etiqueta.avanceMm'
+// Corrimiento VERTICAL del contenido dentro de la etiqueta, en mm. Negativo sube
+// el dibujo, positivo lo baja.
+//
+// La impresora arranca a imprimir donde quedo el papel, que suele ser unos
+// milimetros pasado el inicio de la etiqueta, y por eso el contenido sale bajo.
+// Mover el avance entre etiquetas no arregla eso —solo expulsa mas o menos
+// papel—; lo que si lo arregla es dibujar el contenido mas arriba dentro de la
+// etiqueta, usando el blanco que queda libre sobre el. El tope es ese blanco:
+// pasado ese punto, el contenido empieza a recortarse por arriba.
+const OFFSET_VERTICAL_MM = 0
 
-export const getAvanceEtiquetaMm = (): number | null => {
-  if (typeof window === 'undefined') return null
+const OFFSET_VERTICAL_KEY = 'monero.etiqueta.offsetVerticalMm'
+
+export const getOffsetVerticalMm = (): number => {
+  if (typeof window === 'undefined') return OFFSET_VERTICAL_MM
 
   try {
-    const guardado = window.localStorage.getItem(AVANCE_STORAGE_KEY)
+    const guardado = window.localStorage.getItem(OFFSET_VERTICAL_KEY)
+    const valor = guardado === null ? NaN : Number(guardado)
 
-    if (guardado === null || guardado === 'sensor') return null
-
-    const valor = Number(guardado)
-
-    return Number.isFinite(valor) ? valor : null
+    return Number.isFinite(valor) ? valor : OFFSET_VERTICAL_MM
   } catch {
-    return null
+    return OFFSET_VERTICAL_MM
   }
 }
 
-export const setAvanceEtiquetaMm = (mm: number | null): void => {
+export const setOffsetVerticalMm = (mm: number): void => {
   if (typeof window === 'undefined') return
 
   try {
-    window.localStorage.setItem(AVANCE_STORAGE_KEY, mm === null ? 'sensor' : String(mm))
+    window.localStorage.setItem(OFFSET_VERTICAL_KEY, String(mm))
   } catch {
     // Si no se puede guardar, el ajuste igual vale para esta sesion
   }
@@ -699,9 +703,14 @@ export const renderLabelBitmap = async (label: VariantLabel, size: LabelSize): P
   // La etiqueta conserva SU ancho y se corre a la derecha
   ctx.save()
   ctx.translate(relleno, 0)
+
+  // El recorte se fija ANTES del corrimiento vertical: asi delimita siempre la
+  // etiqueta y es el contenido el que se mueve dentro, no el recorte junto con el
   ctx.beginPath()
   ctx.rect(0, 0, etiquetaDots, height)
   ctx.clip()
+
+  ctx.translate(0, Math.round(getOffsetVerticalMm() * DOTS_PER_MM))
   await drawLabel(ctx, label, size)
   ctx.restore()
 
@@ -800,21 +809,6 @@ const FEED_TO_NEXT_LABEL = new Uint8Array([0x1d, 0x0c])
 // GS L: margen izquierdo, en puntos. Corre la impresion sin gastar bytes en blanco
 const margenCommand = (dots: number) => new Uint8Array([0x1d, 0x4c, dots & 0xff, dots >> 8])
 
-// ESC J n: avanza n puntos. n no pasa de 255, asi que un avance largo va por partes
-const feedCommand = (dots: number): Uint8Array[] => {
-  const commands: Uint8Array[] = []
-  let restante = Math.max(0, Math.round(dots))
-
-  while (restante > 0) {
-    const paso = Math.min(255, restante)
-
-    commands.push(new Uint8Array([0x1b, 0x4a, paso]))
-    restante -= paso
-  }
-
-  return commands
-}
-
 export const printVariantLabelBluetooth = async (label: VariantLabel, size: LabelSize): Promise<void> => {
   // Se dibuja antes de conectar: si falla el dibujo no se ocupa la impresora
   const bitmap = await renderLabelBitmap(label, size)
@@ -837,18 +831,9 @@ export const printVariantLabelBluetooth = async (label: VariantLabel, size: Labe
     await writeToLabelPrinter(command, RASTER_PAUSE_MS)
   }
 
-  // Avance hasta la etiqueta siguiente. Por defecto manda GS FF y el sensor de
-  // gap se encarga; el problema es que algunas impresoras dejan el papel en la
-  // posicion de corte, pasada del inicio de la etiqueta, y entonces lo que se
-  // imprime despues sale corrido hacia abajo. Con un avance fijo mas corto se
-  // controla exactamente donde arranca la proxima (ver panel de calibracion).
-  const avance = getAvanceEtiquetaMm()
-
-  if (avance === null) {
-    await writeToLabelPrinter(FEED_TO_NEXT_LABEL)
-  } else {
-    for (const command of feedCommand(avance * DOTS_PER_MM)) {
-      await writeToLabelPrinter(command)
-    }
-  }
+  // Avance hasta la etiqueta siguiente, con el sensor de gap. Se probo tambien
+  // un avance fijo calibrable para corregir la altura y no sirve: cambiar cuanto
+  // avanza solo expulsa mas o menos papel, no mueve el contenido dentro de la
+  // etiqueta. Eso se corrige con getOffsetVerticalMm, en el dibujo.
+  await writeToLabelPrinter(FEED_TO_NEXT_LABEL)
 }
