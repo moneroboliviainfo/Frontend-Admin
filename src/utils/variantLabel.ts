@@ -406,7 +406,7 @@ const MARGEN_POR_COMANDO = false
 // se adelanta desde donde deja el papel el GS FF hasta el inicio real de la
 // etiqueta. Se calibra desde el panel y queda guardado por dispositivo; este
 // valor es el punto de partida de un equipo sin calibrar.
-const OFFSET_VERTICAL_MM = -2
+const OFFSET_VERTICAL_MM = -3
 
 const OFFSET_VERTICAL_KEY = 'monero.etiqueta.offsetVerticalMm'
 
@@ -598,17 +598,34 @@ const loadImage = (src: string): Promise<HTMLImageElement | null> =>
 // canvas (texto + el PNG del QR), que se comporta igual en celular y en PC.
 //
 // El diseño es el mismo de la hoja: medidas y tipografias salen de `layoutFor`.
-const drawLabel = async (ctx: CanvasRenderingContext2D, label: VariantLabel, size: LabelSize) => {
+// altoMm: el alto REAL de que se dispone, que no siempre es el de la etiqueta.
+// La impresora arranca unos milimetros pasado el inicio del papel, y esa franja
+// no se puede usar: el diseño tiene que entrar en lo que queda. Antes el dibujo
+// se corria hacia arriba dentro del alto completo y el sobrante se recortaba, que
+// es lo que partia al medio el primer renglon.
+const drawLabel = async (
+  ctx: CanvasRenderingContext2D,
+  label: VariantLabel,
+  size: LabelSize,
+  altoMm: number = size.height
+) => {
+  // El diseño (tipografias, QR, armado) sale SIEMPRE de la medida real de la
+  // etiqueta: lo unico que cambia es el alto donde hay que acomodarlo
   const layout = layoutFor(size)
   const compactHorizontal = size.id === '30x20'
   const stack = layout.mode === 'stack'
 
   const width = size.width * DOTS_PER_MM
-  const height = size.height * DOTS_PER_MM
+  const height = altoMm * DOTS_PER_MM
   const padding = 1.5 * DOTS_PER_MM
   const innerWidth = width - padding * 2
   const columnGap = (compactHorizontal ? 0.25 : 0.5) * DOTS_PER_MM
   const qrSide = layout.qrSide * DOTS_PER_MM
+
+  // Cuando el alto disponible es menor que la etiqueta, la franja que la
+  // impresora no alcanza ya hace de margen superior: sumarle el padding propio
+  // seria aire de mas y empujaria el contenido contra el borde de abajo
+  const paddingTop = altoMm < size.height ? 0 : padding
 
   const qr = await loadImage(label.qrDataUrl)
 
@@ -619,7 +636,7 @@ const drawLabel = async (ctx: CanvasRenderingContext2D, label: VariantLabel, siz
   // el umbral de blanco/negro se los come (equivale al image-rendering: pixelated)
   ctx.imageSmoothingEnabled = false
 
-  let y = padding
+  let y = paddingTop
 
   // Nombre del producto: a todo el ancho y centrado, en las dos variantes
   if (label.productName) {
@@ -651,8 +668,12 @@ const drawLabel = async (ctx: CanvasRenderingContext2D, label: VariantLabel, siz
     const textoAlto = blockHeight(lines)
     const libre = Math.max(0, resto - textoAlto)
 
-    if (qr) {
-      ctx.drawImage(qr, padding + (innerWidth - qrSide) / 2, y + textoAlto + (libre - qrSide) / 2, qrSide, qrSide)
+    // El QR cede solo si no entra en el alto disponible: antes se salia de la
+    // etiqueta y la impresora lo cortaba
+    const lado = Math.min(qrSide, libre)
+
+    if (qr && lado > 0) {
+      ctx.drawImage(qr, padding + (innerWidth - lado) / 2, y + textoAlto + (libre - lado) / 2, lado, lado)
     }
 
     return
@@ -670,8 +691,11 @@ const drawLabel = async (ctx: CanvasRenderingContext2D, label: VariantLabel, siz
 
   drawBlock(ctx, lines, x, y + Math.max(0, (resto - textoAlto) / 2), 'left')
 
-  if (qr) {
-    ctx.drawImage(qr, x + textoWidth + rowGap, y + Math.max(0, (resto - qrSide) / 2), qrSide, qrSide)
+  // Igual que en las cuadradas: el QR cede antes de salirse de la etiqueta
+  const lado = Math.min(qrSide, resto)
+
+  if (qr && lado > 0) {
+    ctx.drawImage(qr, x + textoWidth + rowGap, y + Math.max(0, (resto - lado) / 2), lado, lado)
   }
 }
 
@@ -685,7 +709,16 @@ export const renderLabelBitmap = async (label: VariantLabel, size: LabelSize): P
 
   // El ancho en puntos tiene que ser multiplo de 8: cada byte son 8 puntos
   const width = Math.ceil((etiquetaDots + relleno) / 8) * 8
-  const height = Math.round(size.height * DOTS_PER_MM)
+
+  // Alto REAL de que se dispone. La impresora arranca pasada del inicio de la
+  // etiqueta, asi que esos milimetros de arriba no existen para nosotros: en vez
+  // de dibujar la etiqueta entera y correrla hacia arriba —que recortaba el
+  // primer renglon por la mitad— se dibuja el diseño completo en lo que queda.
+  const offsetVertical = getOffsetVerticalMm()
+  const recorteMm = Math.max(0, -offsetVertical)
+  const bajadaDots = Math.round(Math.max(0, offsetVertical) * DOTS_PER_MM)
+  const altoUtilMm = Math.max(1, size.height - recorteMm)
+  const height = Math.round(altoUtilMm * DOTS_PER_MM)
 
   const canvas = document.createElement('canvas')
 
@@ -703,14 +736,17 @@ export const renderLabelBitmap = async (label: VariantLabel, size: LabelSize): P
   ctx.save()
   ctx.translate(relleno, 0)
 
-  // El recorte se fija ANTES del corrimiento vertical: asi delimita siempre la
-  // etiqueta y es el contenido el que se mueve dentro, no el recorte junto con el
+  // Resguardo por si algun texto desbordara: el recorte se fija antes de bajar
+  // el contenido, asi delimita siempre lo que se imprime
   ctx.beginPath()
   ctx.rect(0, 0, etiquetaDots, height)
   ctx.clip()
 
-  ctx.translate(0, Math.round(getOffsetVerticalMm() * DOTS_PER_MM))
-  await drawLabel(ctx, label, size)
+  // Un offset positivo si es un corrimiento a secas: baja el contenido dentro de
+  // lo que hay. Es el caso raro; lo normal es negativo (la impresora se adelanta)
+  if (bajadaDots > 0) ctx.translate(0, bajadaDots)
+
+  await drawLabel(ctx, label, size, altoUtilMm - bajadaDots / DOTS_PER_MM)
   ctx.restore()
 
   // Termica = blanco o negro. El corte va por encima del gris medio: el borde
