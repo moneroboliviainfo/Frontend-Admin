@@ -43,10 +43,6 @@ export type VariantLabel = {
 // completo arriba, talla y color chicos, y el SKU —el codigo que se busca a
 // ojo— en grande y sin rotulo.
 type LabelLayout = {
-
-  // 'side': el nombre arriba a todo el ancho; debajo talla, color e id a la
-  //   izquierda y el QR pegado a la derecha (etiquetas bajas, apilado no entra)
-  // 'stack': texto arriba y QR abajo (etiquetas cuadradas, sobra alto)
   mode: 'side' | 'stack'
   qrSide: number
   producto: number
@@ -120,9 +116,7 @@ const labelParts = (label: VariantLabel, size: LabelSize) => {
   const stack = layout.mode === 'stack'
   const compactHorizontal = size.id === '30x20'
 
-  const producto = label.productName
-    ? `<div class="producto">${escapeText(label.productName)}</div>`
-    : ''
+  const producto = label.productName ? `<div class="producto">${escapeText(label.productName)}</div>` : ''
 
   const detalles = `
     <div class="detalle">Talla: ${escapeText(label.sizeName)}</div>
@@ -412,7 +406,7 @@ const MARGEN_POR_COMANDO = false
 // se adelanta desde donde deja el papel el GS FF hasta el inicio real de la
 // etiqueta. Se calibra desde el panel y queda guardado por dispositivo; este
 // valor es el punto de partida de un equipo sin calibrar.
-const OFFSET_VERTICAL_MM = -4
+const OFFSET_VERTICAL_MM = -2
 
 const OFFSET_VERTICAL_KEY = 'monero.etiqueta.offsetVerticalMm'
 
