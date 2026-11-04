@@ -331,17 +331,24 @@ const ALINEACION_ROLLO = 'derecha' as AlineacionRollo
 // -2 mm: calibrando en la DP30, el relleno que dejo la etiqueta centrada fue de
 // 40 mm, 2 menos que los 42 que da el cabezal de 72 con el rollo a la derecha.
 // Es lo que separa a la guia del rollo del borde del cabezal.
-const OFFSET_IZQUIERDO_MM = -2
+const OFFSET_IZQUIERDO_MM = -1
 
 // La version va en la clave: al corregir ANCHO_CABEZAL_MM cambio el punto de
 // partida, y un valor viejo guardado en el celular se sumaria encima y lo
 // mandaria todo fuera del papel
+// Mientras el panel de calibracion este oculto (MOSTRAR_CALIBRACION, en
+// VariantQRModal) manda el CODIGO: lo que haya quedado guardado de una
+// calibracion anterior se ignora. Si no fuera asi, cambiar los valores de aca no
+// tendria ningun efecto en un equipo ya calibrado y no habria como borrarlos.
+// Al volver a mostrar el panel, poner esto en true.
+const USAR_CALIBRACION_GUARDADA = false
+
 const OFFSET_STORAGE_KEY = 'monero.etiqueta.offsetDerechaMm.v2'
 
 // Guardado por dispositivo: cada celular/PC puede tener su propia impresora con
 // la guia del rollo en otra posicion
 export const getOffsetEtiquetaMm = (): number => {
-  if (typeof window === 'undefined') return OFFSET_IZQUIERDO_MM
+  if (!USAR_CALIBRACION_GUARDADA || typeof window === 'undefined') return OFFSET_IZQUIERDO_MM
 
   try {
     const guardado = window.localStorage.getItem(OFFSET_STORAGE_KEY)
@@ -411,7 +418,7 @@ const OFFSET_VERTICAL_MM = -3
 const OFFSET_VERTICAL_KEY = 'monero.etiqueta.offsetVerticalMm'
 
 export const getOffsetVerticalMm = (): number => {
-  if (typeof window === 'undefined') return OFFSET_VERTICAL_MM
+  if (!USAR_CALIBRACION_GUARDADA || typeof window === 'undefined') return OFFSET_VERTICAL_MM
 
   try {
     const guardado = window.localStorage.getItem(OFFSET_VERTICAL_KEY)
