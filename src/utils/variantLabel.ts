@@ -407,7 +407,12 @@ const MARGEN_POR_COMANDO = false
 // papel—; lo que si lo arregla es dibujar el contenido mas arriba dentro de la
 // etiqueta, usando el blanco que queda libre sobre el. El tope es ese blanco:
 // pasado ese punto, el contenido empieza a recortarse por arriba.
-const OFFSET_VERTICAL_MM = 0
+//
+// -4 mm es lo calibrado en la DP30 con rollo de 30x20: es lo que la impresora
+// se adelanta desde donde deja el papel el GS FF hasta el inicio real de la
+// etiqueta. Se calibra desde el panel y queda guardado por dispositivo; este
+// valor es el punto de partida de un equipo sin calibrar.
+const OFFSET_VERTICAL_MM = -4
 
 const OFFSET_VERTICAL_KEY = 'monero.etiqueta.offsetVerticalMm'
 

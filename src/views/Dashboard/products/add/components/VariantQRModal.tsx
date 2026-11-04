@@ -22,6 +22,10 @@ import { LABEL_SIZES, printVariantLabel, printVariantLabelBluetooth } from '@/ut
 import type { LabelSize, VariantLabel } from '@/utils/variantLabel'
 import PrinterDiagnosticsDialog from './PrinterDiagnosticsDialog'
 
+// Interruptor del boton "Calibrar" (ver donde se usa, mas abajo). En false el
+// panel sigue compilando y guardando lo suyo, solo que no hay como abrirlo.
+const MOSTRAR_CALIBRACION = false
+
 interface VariantQRModalProps {
   open: boolean
   onClose: () => void
@@ -282,7 +286,12 @@ const VariantQRModal = ({ open, onClose, variantId, sku, colorName, sizeName, pr
           </Button>
         )}
 
-        {isLabelPrinterAvailable() && (
+        {/* Calibracion de la impresora termica. Oculta: la DP30 ya quedo calibrada
+            y sus valores son los de fabrica en variantLabel.ts, asi que en tienda
+            es un boton de mas. Para volver a usarlo —impresora nueva, otro rollo,
+            o alguien movio la guia del papel— cambiar MOSTRAR_CALIBRACION a true.
+            El panel y lo que guarda siguen funcionando igual. */}
+        {MOSTRAR_CALIBRACION && isLabelPrinterAvailable() && (
           <Button
             variant='text'
             size='small'
