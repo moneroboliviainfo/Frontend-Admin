@@ -921,6 +921,35 @@ const rasterCommands = ({ widthBytes, height, data }: LabelBitmap): Uint8Array[]
 // (impresoras de etiquetas en modo ESC/POS). Si la impresora no lo entiende lo ignora
 const FEED_TO_NEXT_LABEL = new Uint8Array([0x1d, 0x0c])
 
+// Papel extra a avanzar despues de cada etiqueta, en mm.
+//
+// Imprimiendo de a una no se nota, pero en lote si: la primera etiqueta salia
+// bien, la segunda un poco mas arriba y la tercera mas todavia. Un error que se
+// ACUMULA significa que entre etiqueta y etiqueta falta avance — el GS FF de
+// arriba no esta parando el papel con el sensor de gap como deberia, asi que hay
+// que completar el paso a mano.
+//
+// Como calibrarlo: imprimir TRES etiquetas seguidas y mirar la tercera. Si sigue
+// subiendo respecto de la primera, subir este valor; si ahora baja, bajarlo. El
+// valor correcto es el que hace que la tercera salga igual que la primera.
+const AVANCE_EXTRA_MM = 2
+
+// ESC J n: avanza n puntos sin imprimir. n no pasa de 255, asi que un avance
+// largo va por partes
+const feedCommand = (dots: number): Uint8Array[] => {
+  const commands: Uint8Array[] = []
+  let restante = Math.max(0, Math.round(dots))
+
+  while (restante > 0) {
+    const paso = Math.min(255, restante)
+
+    commands.push(new Uint8Array([0x1b, 0x4a, paso]))
+    restante -= paso
+  }
+
+  return commands
+}
+
 // GS L: margen izquierdo, en puntos. Corre la impresion sin gastar bytes en blanco
 const margenCommand = (dots: number) => new Uint8Array([0x1d, 0x4c, dots & 0xff, dots >> 8])
 
@@ -946,9 +975,16 @@ export const printVariantLabelBluetooth = async (label: VariantLabel, size: Labe
     await writeToLabelPrinter(command, RASTER_PAUSE_MS)
   }
 
-  // Avance hasta la etiqueta siguiente, con el sensor de gap. Se probo tambien
-  // un avance fijo calibrable para corregir la altura y no sirve: cambiar cuanto
-  // avanza solo expulsa mas o menos papel, no mueve el contenido dentro de la
-  // etiqueta. Eso se corrige con getOffsetVerticalMm, en el dibujo.
+  // Avance hasta la etiqueta siguiente. El GS FF deberia parar en el gap por
+  // sensor, pero no alcanza: en lote cada etiqueta sale mas arriba que la
+  // anterior, asi que se completa el paso con AVANCE_EXTRA_MM.
+  //
+  // Ojo con la diferencia: esto NO mueve el contenido dentro de la etiqueta que
+  // se acaba de imprimir (para eso esta getOffsetVerticalMm) sino donde arranca
+  // la SIGUIENTE.
   await writeToLabelPrinter(FEED_TO_NEXT_LABEL)
+
+  for (const command of feedCommand(AVANCE_EXTRA_MM * DOTS_PER_MM)) {
+    await writeToLabelPrinter(command)
+  }
 }
