@@ -482,10 +482,14 @@ const MARGEN_POR_COMANDO = false
 // etiqueta, usando el blanco que queda libre sobre el. El tope es ese blanco:
 // pasado ese punto, el contenido empieza a recortarse por arriba.
 //
-// -4 mm es lo calibrado en la DP30 con rollo de 30x20: es lo que la impresora
-// se adelanta desde donde deja el papel el GS FF hasta el inicio real de la
-// etiqueta. Se calibra desde el panel y queda guardado por dispositivo; este
-// valor es el punto de partida de un equipo sin calibrar.
+// OJO, esto compensa SOLO el arranque en frio: cuando el papel viene de reposo
+// (recien encendida, o despues de que alguien tiro de la etiqueta anterior)
+// queda adelantado unos milimetros respecto del inicio de la etiqueta.
+//
+// Dentro de un lote NO hace falta: el GS FF del final deja el papel parado por
+// sensor justo en la separacion, asi que de la segunda etiqueta en adelante
+// arranca en su sitio. Aplicarles igual este recorte era lo que las hacia salir
+// mas arriba. Ver el parametro `arranqueEnFrio`.
 const OFFSET_VERTICAL_MM = -3
 
 const OFFSET_VERTICAL_KEY = 'monero.etiqueta.offsetVerticalMm'
@@ -779,7 +783,14 @@ const drawLabel = async (
   }
 }
 
-export const renderLabelBitmap = async (label: VariantLabel, size: LabelSize): Promise<LabelBitmap> => {
+// arranqueEnFrio: si el papel viene de reposo hay que compensar su adelanto
+// (ver OFFSET_VERTICAL_MM). Dentro de un lote, de la segunda en adelante, el
+// papel ya quedo bien parado por el sensor y no se compensa nada.
+export const renderLabelBitmap = async (
+  label: VariantLabel,
+  size: LabelSize,
+  arranqueEnFrio = true
+): Promise<LabelBitmap> => {
   const etiquetaDots = Math.round(size.width * DOTS_PER_MM)
   const margenDots = margenIzquierdo(size)
 
@@ -794,7 +805,7 @@ export const renderLabelBitmap = async (label: VariantLabel, size: LabelSize): P
   // etiqueta, asi que esos milimetros de arriba no existen para nosotros: en vez
   // de dibujar la etiqueta entera y correrla hacia arriba —que recortaba el
   // primer renglon por la mitad— se dibuja el diseño completo en lo que queda.
-  const offsetVertical = getOffsetVerticalMm()
+  const offsetVertical = arranqueEnFrio ? getOffsetVerticalMm() : 0
   const recorteMm = Math.max(0, -offsetVertical)
   const bajadaDots = Math.round(Math.max(0, offsetVertical) * DOTS_PER_MM)
   const altoUtilMm = Math.max(1, size.height - recorteMm)
@@ -917,45 +928,23 @@ const rasterCommands = ({ widthBytes, height, data }: LabelBitmap): Uint8Array[]
   return commands
 }
 
-// GS FF: avanza hasta el inicio de la etiqueta siguiente usando el sensor de gap
-// (impresoras de etiquetas en modo ESC/POS). Si la impresora no lo entiende lo ignora
+// GS FF: avanza hasta la separacion con la etiqueta siguiente usando el sensor
+// de gap. La DP30 SI lo honra —se la ve hacer ese recorrido al terminar— y por
+// eso cada etiqueta queda bien parada para la proxima.
 const FEED_TO_NEXT_LABEL = new Uint8Array([0x1d, 0x0c])
 
-// Papel extra a avanzar despues de cada etiqueta, en mm.
-//
-// Imprimiendo de a una no se nota, pero en lote si: la primera etiqueta salia
-// bien, la segunda un poco mas arriba y la tercera mas todavia. Un error que se
-// ACUMULA significa que entre etiqueta y etiqueta falta avance — el GS FF de
-// arriba no esta parando el papel con el sensor de gap como deberia, asi que hay
-// que completar el paso a mano.
-//
-// Como calibrarlo: imprimir TRES etiquetas seguidas y mirar la tercera. Si sigue
-// subiendo respecto de la primera, subir este valor; si ahora baja, bajarlo. El
-// valor correcto es el que hace que la tercera salga igual que la primera.
-const AVANCE_EXTRA_MM = 2
 
-// ESC J n: avanza n puntos sin imprimir. n no pasa de 255, asi que un avance
-// largo va por partes
-const feedCommand = (dots: number): Uint8Array[] => {
-  const commands: Uint8Array[] = []
-  let restante = Math.max(0, Math.round(dots))
-
-  while (restante > 0) {
-    const paso = Math.min(255, restante)
-
-    commands.push(new Uint8Array([0x1b, 0x4a, paso]))
-    restante -= paso
-  }
-
-  return commands
-}
 
 // GS L: margen izquierdo, en puntos. Corre la impresion sin gastar bytes en blanco
 const margenCommand = (dots: number) => new Uint8Array([0x1d, 0x4c, dots & 0xff, dots >> 8])
 
-export const printVariantLabelBluetooth = async (label: VariantLabel, size: LabelSize): Promise<void> => {
+export const printVariantLabelBluetooth = async (
+  label: VariantLabel,
+  size: LabelSize,
+  arranqueEnFrio = true
+): Promise<void> => {
   // Se dibuja antes de conectar: si falla el dibujo no se ocupa la impresora
-  const bitmap = await renderLabelBitmap(label, size)
+  const bitmap = await renderLabelBitmap(label, size, arranqueEnFrio)
 
   if (!isLabelPrinterConnected()) await connectLabelPrinter()
 
@@ -975,16 +964,6 @@ export const printVariantLabelBluetooth = async (label: VariantLabel, size: Labe
     await writeToLabelPrinter(command, RASTER_PAUSE_MS)
   }
 
-  // Avance hasta la etiqueta siguiente. El GS FF deberia parar en el gap por
-  // sensor, pero no alcanza: en lote cada etiqueta sale mas arriba que la
-  // anterior, asi que se completa el paso con AVANCE_EXTRA_MM.
-  //
-  // Ojo con la diferencia: esto NO mueve el contenido dentro de la etiqueta que
-  // se acaba de imprimir (para eso esta getOffsetVerticalMm) sino donde arranca
-  // la SIGUIENTE.
+  // Deja el papel en la separacion con la etiqueta siguiente, por sensor
   await writeToLabelPrinter(FEED_TO_NEXT_LABEL)
-
-  for (const command of feedCommand(AVANCE_EXTRA_MM * DOTS_PER_MM)) {
-    await writeToLabelPrinter(command)
-  }
 }

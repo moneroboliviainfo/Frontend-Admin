@@ -252,7 +252,10 @@ const BulkLabelPrintDialog = ({ open, onClose, variants, productName }: Props) =
           return
         }
 
-        await printVariantLabelBluetooth(etiqueta, size)
+        // Solo la primera arranca en frio: de ahi en mas el papel queda parado
+        // por el sensor de la impresora, y compensarlo igual las corria hacia
+        // arriba (ver OFFSET_VERTICAL_MM en variantLabel.ts)
+        await printVariantLabelBluetooth(etiqueta, size, hechas === 0)
         hechas++
         setProgreso(hechas)
       }
