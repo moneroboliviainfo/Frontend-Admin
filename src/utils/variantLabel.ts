@@ -37,7 +37,11 @@ export type VariantLabel = {
   qrDataUrl: string
 }
 
-// --------------------------------------------------------------- hoja / PDF
+// ------------------------------------------------- impresion desde la PC
+//
+// Mismo destino que la termica —la DP30— pero por el otro camino: la ventana de
+// impresion del navegador y el driver de Windows, en vez de Bluetooth directo.
+// Por eso el diseño se arma en HTML y cada etiqueta ocupa su propia pagina.
 
 // Armado y tipografias de cada medida, en pt. Jerarquia en todas: el producto
 // completo arriba, talla y color chicos, y el SKU —el codigo que se busca a
@@ -282,6 +286,75 @@ export const printVariantLabel = (label: VariantLabel, size: LabelSize): void =>
 
   // La imagen tiene que estar cargada antes de imprimir o sale la etiqueta vacía
   setTimeout(() => printWindow.print(), 500)
+}
+
+// Varias etiquetas en UNA sola ventana de impresion, cada una en su pagina. Es
+// la version para lote de printVariantLabel: abrir una ventana por etiqueta
+// seria inusable (y el navegador bloquearia las ventanas a partir de la segunda).
+//
+// El CSS sale una sola vez porque es identico para todas las de una misma
+// medida; lo unico que cambia por etiqueta es el contenido.
+export const generateLabelsSheetHTML = (labels: VariantLabel[], size: LabelSize): string => {
+  const { css } = labelParts(labels[0], size)
+  const etiquetas = labels.map(label => `<div class="etiqueta">${labelParts(label, size).markup}</div>`).join('')
+
+  return `<!DOCTYPE html>
+<html lang="es">
+  <head>
+    <meta charset="UTF-8">
+    <title>Etiquetas (${labels.length})</title>
+    <style>
+      @page {
+        size: ${size.width}mm ${size.height}mm;
+        margin: 0;
+      }
+
+      html, body { margin: 0; padding: 0; }
+      ${css}
+
+      /* Una etiqueta por pagina: en el rollo, cada pagina es una etiqueta.
+         La ultima sin salto, o la impresora expulsaria una de mas */
+      @media print {
+        .etiqueta { page-break-after: always; break-after: page; }
+        .etiqueta:last-child { page-break-after: auto; break-after: auto; }
+      }
+
+      /* En pantalla se ven todas seguidas, para revisar el lote antes de mandarlo */
+      @media screen {
+        body {
+          background: #f5f5f5;
+          padding: 16px;
+          display: flex;
+          flex-wrap: wrap;
+          gap: 8px;
+        }
+        .etiqueta {
+          box-shadow: 0 2px 10px rgba(0, 0, 0, 0.25);
+          border: 1px solid #ddd;
+        }
+      }
+    </style>
+  </head>
+  <body>${etiquetas}</body>
+</html>`
+}
+
+// `labels` ya viene expandido: una entrada por etiqueta a imprimir, asi que una
+// talla con 5 unidades aparece 5 veces
+export const printVariantLabels = (labels: VariantLabel[], size: LabelSize): void => {
+  if (!labels.length) return
+
+  const printWindow = window.open('', '_blank', 'width=700,height=600')
+
+  if (!printWindow) throw new Error('El navegador bloqueo la ventana de impresion. Habilita las ventanas emergentes.')
+
+  printWindow.document.write(generateLabelsSheetHTML(labels, size))
+  printWindow.document.close()
+  printWindow.focus()
+
+  // Los QR tienen que estar cargados antes de imprimir o salen etiquetas vacias.
+  // Con muchas etiquetas conviene dar mas tiempo que en la de una sola
+  setTimeout(() => printWindow.print(), Math.min(3000, 500 + labels.length * 20))
 }
 
 // ------------------------------------------------- formato POS (Bluetooth)

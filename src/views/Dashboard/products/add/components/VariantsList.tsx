@@ -13,9 +13,11 @@ import TableHead from '@mui/material/TableHead'
 import TableRow from '@mui/material/TableRow'
 import CircularProgress from '@mui/material/CircularProgress'
 import IconButton from '@mui/material/IconButton'
+import Button from '@mui/material/Button'
 
 import type { Variant } from '@/types/api/variants'
 import VariantQRModal from './VariantQRModal'
+import BulkLabelPrintDialog from './BulkLabelPrintDialog'
 
 type Props = {
   variants: Variant[]
@@ -27,6 +29,7 @@ type Props = {
 
 const VariantsList = ({ variants, isLoading, editingVariantId, onVariantClick, productName }: Props) => {
   const [qrModalOpen, setQrModalOpen] = useState(false)
+  const [bulkOpen, setBulkOpen] = useState(false)
 
   const [selectedVariant, setSelectedVariant] = useState<{
     id: number
@@ -58,6 +61,22 @@ const VariantsList = ({ variants, isLoading, editingVariantId, onVariantClick, p
         title={`Variantes Creadas (${variants?.length || 0})`}
         subheader='Click para editar'
         titleTypographyProps={{ variant: 'h6' }}
+        action={
+
+          // Va en PC y en celular: las dos salidas terminan en la DP30. Desde la
+          // PC por el driver (ventana de impresion) y desde el celular por
+          // Bluetooth. El dialogo muestra el boton de termica solo donde hay BLE
+          variants?.length ? (
+            <Button
+              size='small'
+              variant='outlined'
+              startIcon={<i className='tabler-printer' />}
+              onClick={() => setBulkOpen(true)}
+            >
+              Imprimir todo
+            </Button>
+          ) : null
+        }
       />
       <CardContent sx={{ p: 0, maxHeight: '500px', overflow: 'auto' }}>
         {isLoading ? (
@@ -74,6 +93,7 @@ const VariantsList = ({ variants, isLoading, editingVariantId, onVariantClick, p
                 <TableRow>
                   <TableCell>Color</TableCell>
                   <TableCell>Talla</TableCell>
+                  <TableCell align='center'>Bodega</TableCell>
 
                   <TableCell>Imagen</TableCell>
                   <TableCell align='center'>QR</TableCell>
@@ -119,6 +139,15 @@ const VariantsList = ({ variants, isLoading, editingVariantId, onVariantClick, p
 
                         <TableCell>
                           <Typography variant='caption'>{sizeName}</Typography>
+                        </TableCell>
+
+                        <TableCell align='center'>
+                          <Typography
+                            variant='caption'
+                            color={variantSize.centralWarehouseStock ? 'text.primary' : 'text.disabled'}
+                          >
+                            {variantSize.centralWarehouseStock ?? 0}
+                          </Typography>
                         </TableCell>
 
                         {sizeIndex === 0 ? (
@@ -196,6 +225,13 @@ const VariantsList = ({ variants, isLoading, editingVariantId, onVariantClick, p
           </Box>
         )}
       </CardContent>
+
+      <BulkLabelPrintDialog
+        open={bulkOpen}
+        onClose={() => setBulkOpen(false)}
+        variants={variants || []}
+        productName={productName}
+      />
 
       {selectedVariant && (
         <VariantQRModal
