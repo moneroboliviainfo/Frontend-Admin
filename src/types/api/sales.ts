@@ -80,11 +80,21 @@ export interface OrderItemVariant {
 export interface OrderItem {
   id: number
   quantity: number
+
+  // Lo que falta para completar la cantidad pedida
+  missingQuantity?: number
+
   unit_price: string
   discountValue: number
   totalPrice: string
   createdAt?: string
   variant: OrderItemVariant
+
+  // De donde sale fisicamente cada prenda al despachar. Lo reparte el back: un
+  // pedido sale primero del deposito y solo lo que falta del piso (ver el
+  // comentario de pendingDispatch* en types/api/variants.ts). Suman `quantity`.
+  fromWarehouse?: number
+  fromSalesFloor?: number
 }
 
 export interface OrderBilling {

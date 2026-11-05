@@ -16,16 +16,11 @@ import CardContent from '@mui/material/CardContent'
 import Box from '@mui/material/Box'
 import Chip from '@mui/material/Chip'
 import Grid from '@mui/material/Grid2'
-import Table from '@mui/material/Table'
-import TableBody from '@mui/material/TableBody'
-import TableCell from '@mui/material/TableCell'
-import TableContainer from '@mui/material/TableContainer'
-import TableHead from '@mui/material/TableHead'
-import TableRow from '@mui/material/TableRow'
 import Paper from '@mui/material/Paper'
 import TextField from '@mui/material/TextField'
 import CircularProgress from '@mui/material/CircularProgress'
 import Alert from '@mui/material/Alert'
+import AlertTitle from '@mui/material/AlertTitle'
 import Snackbar from '@mui/material/Snackbar'
 import FormControl from '@mui/material/FormControl'
 import InputLabel from '@mui/material/InputLabel'
@@ -57,7 +52,27 @@ import {
 import { printInvoice } from '@/utils/invoicePrinter'
 import { useUserRole } from '@/hooks/useUserRole'
 import { useBranchContext } from '@/contexts/BranchContext'
-import type { Order, Branch, Cafc, Factura, BillingInfo, TipoDocumentoIdentidad, OrderFacturaDetalle, EventoSignificativo } from '@/types/api/sales'
+import OrderCustomerData from './components/OrderCustomerData'
+import OrderCustomerInfo from './components/OrderCustomerInfo'
+import OrderFedexShipping from './components/OrderFedexShipping'
+import OrderGeneralInfo from './components/OrderGeneralInfo'
+import OrderInvoiceCard from './components/OrderInvoiceCard'
+import OrderItemsTable from './components/OrderItemsTable'
+import OrderPreviousInvoices from './components/OrderPreviousInvoices'
+import OrderShippingAddress from './components/OrderShippingAddress'
+import OrderShippingInfo from './components/OrderShippingInfo'
+import { getFedexPdfUrl, getFedexTrackingNumber } from './components/orderFormatters'
+import type {
+  Order,
+  OrderItem,
+  Branch,
+  Cafc,
+  Factura,
+  BillingInfo,
+  TipoDocumentoIdentidad,
+  OrderFacturaDetalle,
+  EventoSignificativo
+} from '@/types/api/sales'
 
 interface SnackbarMessage {
   message: string
@@ -71,90 +86,6 @@ type OrderDetailsModalProps = {
   order: Order | null
 }
 
-const getEstadoColor = (estado: string): 'primary' | 'error' | 'success' | 'warning' => {
-  switch (estado) {
-    case 'pending':
-      return 'warning'
-    case 'cancelled':
-      return 'error'
-    case 'paid':
-    case 'completed':
-      return 'success'
-    case 'confirmed':
-      return 'primary'
-    case 'sent':
-      return 'primary'
-    case 'expired':
-      return 'error'
-    case 'cancelled_for_edit':
-      return 'warning'
-    default:
-      return 'primary'
-  }
-}
-
-const getEstadoLabel = (estado: string): string => {
-  const labels: Record<string, string> = {
-    pending: 'Pendiente',
-    cancelled: 'Cancelado',
-    paid: 'Pagado',
-    completed: 'Completado',
-    confirmed: 'Confirmado',
-    sent: 'Enviado',
-    expired: 'Expirado',
-    cancelled_for_edit: 'En Edición'
-  }
-
-  return labels[estado] || estado
-}
-
-const getPaymentLabel = (paymentType: string): string => {
-  const labels: Record<string, string> = {
-    cash: 'Efectivo',
-    card: 'Tarjeta',
-    qr: 'QR',
-    card_online: 'Tarjeta Online'
-  }
-
-  return labels[paymentType] || paymentType
-}
-
-// trackingCode puede venir null aunque el envio exista: ahi vale el de la respuesta de FedEx
-const getFedexTrackingNumber = (order: Order): string | null => {
-  return (
-    order.trackingCode || order.fedex_shipment_response?.output?.transactionShipments?.[0]?.masterTrackingNumber || null
-  )
-}
-
-const getFedexPdfUrl = (order: Order): string | null => {
-  const shipment = order.fedex_shipment_response?.output?.transactionShipments?.[0]
-
-  if (!shipment) return null
-
-  const merged = shipment.shipmentDocuments?.find(doc => doc.contentType === 'MERGED_LABEL_DOCUMENTS')
-
-  if (merged?.url) return merged.url
-  if (shipment.shipmentDocuments?.[0]?.url) return shipment.shipmentDocuments[0].url
-
-  // Con un solo bulto no hay documento combinado
-  return shipment.pieceResponses?.[0]?.packageDocuments?.[0]?.url || null
-}
-
-const getTipoLabel = (tipo: string): string => {
-  return tipo === 'in_store' ? 'En Tienda' : 'En Línea'
-}
-
-const formatDate = (dateString: string): string => {
-  const date = new Date(dateString)
-
-  return date.toLocaleDateString('es-BO', {
-    year: 'numeric',
-    month: '2-digit',
-    day: '2-digit',
-    hour: '2-digit',
-    minute: '2-digit'
-  })
-}
 
 const OrderDetailsModal = ({ open, onClose, order: orderProp }: OrderDetailsModalProps) => {
   const router = useRouter()
@@ -168,7 +99,19 @@ const OrderDetailsModal = ({ open, onClose, order: orderProp }: OrderDetailsModa
 
   const [trackingCode, setTrackingCode] = useState('')
   const [showTrackingInput, setShowTrackingInput] = useState(false)
+
+  // Que la orden ya se envio desde este modal. Va aparte de `despacho` a
+  // proposito: el prop `order` sigue diciendo 'paid' hasta que el padre
+  // refresque, y si esto dependiera de los items de la respuesta, una respuesta
+  // sin `items` dejaria el boton de enviar en pantalla.
+  const [enviadaLocal, setEnviadaLocal] = useState(false)
+
+  // Lo que el back devuelve al pasar la orden a enviada: trae por item de donde
+  // sale cada prenda. Se guarda para mostrarlo, porque es la instruccion de que
+  // sacar de cada lugar y se perderia al cerrar el modal. Puede venir vacio.
+  const [despacho, setDespacho] = useState<OrderItem[] | null>(null)
   const [showCancelConfirm, setShowCancelConfirm] = useState(false)
+  const [showSendConfirm, setShowSendConfirm] = useState(false)
   const [showEditConfirm, setShowEditConfirm] = useState(false)
   const [snackPack, setSnackPack] = useState<SnackbarMessage[]>([])
   const [messageInfo, setMessageInfo] = useState<SnackbarMessage | undefined>(undefined)
@@ -340,6 +283,10 @@ const OrderDetailsModal = ({ open, onClose, order: orderProp }: OrderDetailsModa
     setShowEmitirConfirm(false)
     setShowAnularConfirm(false)
     setShowRevertirConfirm(false)
+    setEnviadaLocal(false)
+    setDespacho(null)
+    setShowSendConfirm(false)
+    setShowTrackingInput(false)
   }, [orderProp?.id])
 
   // Verificar NIT automáticamente cuando se ingresa
@@ -468,19 +415,56 @@ const OrderDetailsModal = ({ open, onClose, order: orderProp }: OrderDetailsModa
     }
   }
 
+  // Reglas de PUT /orders/change-status, para no mandar algo que el back va a
+  // rechazar con un 400 que el usuario no sabria como resolver:
+  //
+  //   nacional (la orden tiene shipment) -> pasa a SENT sin pedir nada
+  //   FedEx sin tracking guardado        -> 400 hasta que se mande uno
+  //   FedEx con la guia cancelada        -> 400 hasta que se mande uno DISTINTO
+  //                                         del guardado (caso del pago tardio
+  //                                         con tarjeta)
+  //   FedEx con tracking guardado        -> el body puede ir vacio
+  const esEnvioNacional = !!order.shipment
+  const trackingGuardado = getFedexTrackingNumber(order)
+  const guiaCancelada = order.fedexShipmentCancelled
+
+  const trackingObligatorio = !esEnvioNacional && (!trackingGuardado || guiaCancelada)
+
+  const trackingInvalido =
+    trackingObligatorio &&
+    (!trackingCode.trim() || (guiaCancelada && trackingCode.trim() === trackingGuardado))
+
   const handleSendOrder = async () => {
     try {
-      await sendOrderMutation.mutateAsync({
+      const enviada = await sendOrderMutation.mutateAsync({
         orderId: order.id,
         trackingCode: trackingCode.trim() || undefined
       })
+
       showMessage('Orden enviada exitosamente', 'success')
-      queryClient.invalidateQueries({ queryKey: ['orders'] })
+
+      // La tabla de atras seguia mostrando "pagado" hasta recargar la pagina.
+      // Invalidar sola no alcanzaba, asi que primero se parchea la fila en el
+      // cache con lo que devolvio el PUT —el estado nuevo ya viene ahi— y
+      // despues se revalida contra el servidor.
+      queryClient.setQueriesData({ queryKey: ['orders'] }, (previo: any) => {
+        if (!previo?.data) return previo
+
+        return {
+          ...previo,
+          data: previo.data.map((o: Order) => (o.id === order.id ? { ...o, ...enviada } : o))
+        }
+      })
+
+      queryClient.invalidateQueries({ queryKey: ['orders'], refetchType: 'all' })
       setShowTrackingInput(false)
       setTrackingCode('')
-      setTimeout(() => {
-        onClose()
-      }, 1500)
+
+      // El modal NO se cierra solo: la respuesta dice de donde sacar cada
+      // prenda y hay que poder leerlo antes de ir a armar el paquete
+      setShowSendConfirm(false)
+      setEnviadaLocal(true)
+      setDespacho(enviada?.items ?? null)
     } catch (error: any) {
       showMessage(error?.response?.data?.message || 'Error al enviar la orden', 'error')
     }
@@ -779,487 +763,54 @@ const OrderDetailsModal = ({ open, onClose, order: orderProp }: OrderDetailsModa
 
       <DialogContent className='p-0'>
         <Box className='p-6 space-y-6'>
-          <Card variant='outlined'>
-            <CardContent>
-              <Typography variant='h6' className='mb-4 text-textPrimary'>
-                Información General
-              </Typography>
+          {/* Que sacar y de donde, con lo que devolvio el cambio de estado */}
+          {despacho && (
+            <Alert severity='success' icon={<i className='tabler-package' />}>
+              <AlertTitle>Orden enviada · qué sacar</AlertTitle>
+              {despacho.map(item => {
+                const deBodega = item.fromWarehouse || 0
+                const deTienda = item.fromSalesFloor || 0
 
-              <Grid container spacing={3}>
-                <Grid size={{ xs: 12, sm: 6 }}>
-                  <Box className='space-y-4'>
-                    <Box>
-                      <Typography variant='overline' className='text-textSecondary text-xs font-medium'>
-                        ID de Orden
-                      </Typography>
-                      <Typography variant='h6' className='font-bold mt-1'>
-                        #{order.inherited_id || order.id}
-                      </Typography>
-                    </Box>
+                return (
+                  <Typography key={item.id} variant='body2' className='block'>
+                    <strong>{item.variant?.productColor?.product?.name || 'Producto'}</strong>
+                    {item.variant?.size?.name ? ` · Talla ${item.variant.size.name}` : ''}
+                    {item.variant?.productColor?.color?.name ? ` · ${item.variant.productColor.color.name}` : ''}
+                    {' — '}
+                    {deBodega > 0 && `${deBodega} de bodega`}
+                    {deBodega > 0 && deTienda > 0 && ' y '}
+                    {deTienda > 0 && `${deTienda} de tienda`}
+                    {deBodega === 0 && deTienda === 0 && 'sin stock asignado'}
+                    {!!item.missingQuantity && ` · faltan ${item.missingQuantity}`}
+                  </Typography>
+                )
+              })}
+            </Alert>
+          )}
 
-                    <Box>
-                      <Typography variant='overline' className='text-textSecondary text-xs font-medium'>
-                        Tipo de Venta
-                      </Typography>
-                      <Typography variant='body1' className='font-semibold mt-1'>
-                        {getTipoLabel(order.type)}
-                      </Typography>
-                    </Box>
-
-                    <Box>
-                      <Typography variant='overline' className='text-textSecondary text-xs font-medium'>
-                        Método de Pago
-                      </Typography>
-                      <Typography variant='body1' className='font-semibold mt-1'>
-                        {order.payment_type ? getPaymentLabel(order.payment_type) : 'N/A'}
-                      </Typography>
-                    </Box>
-
-                    <Box>
-                      <Typography variant='overline' className='text-textSecondary text-xs font-medium'>
-                        Fecha de Creación
-                      </Typography>
-                      <Typography variant='body1' className='font-medium mt-1'>
-                        {order.createdAt ? formatDate(order.createdAt) : 'N/A'}
-                        {order.createdBy && ` · por ${order.createdBy.name}`}
-                      </Typography>
-                    </Box>
-
-                    {order.paidAt && (
-                      <Box>
-                        <Typography variant='overline' className='text-textSecondary text-xs font-medium'>
-                          Pagada
-                        </Typography>
-                        <Typography variant='body1' className='font-medium mt-1'>
-                          {formatDate(order.paidAt)}
-                        </Typography>
-                      </Box>
-                    )}
-
-                    {(order.sentAt || order.sentBy) && (
-                      <Box>
-                        <Typography variant='overline' className='text-textSecondary text-xs font-medium'>
-                          Despachada
-                        </Typography>
-                        <Typography variant='body1' className='font-medium mt-1'>
-                          {order.sentAt ? formatDate(order.sentAt) : ''}
-                          {order.sentBy && ` · por ${order.sentBy.name}`}
-                        </Typography>
-                      </Box>
-                    )}
-
-                    {(order.cancelledAt || order.cancelledBy) && (
-                      <Box>
-                        <Typography variant='overline' className='text-textSecondary text-xs font-medium'>
-                          Cancelada
-                        </Typography>
-                        <Typography variant='body1' className='font-medium mt-1 text-error'>
-                          {order.cancelledAt ? formatDate(order.cancelledAt) : ''}
-                          {order.cancelledBy ? ` · por ${order.cancelledBy.name}` : ' · por el sistema'}
-                        </Typography>
-                      </Box>
-                    )}
-
-                    {order.editedBy && (
-                      <Box>
-                        <Typography variant='overline' className='text-textSecondary text-xs font-medium'>
-                          Editada por
-                        </Typography>
-                        <Typography variant='body1' className='font-medium mt-1'>
-                          {order.editedBy.name}
-                        </Typography>
-                      </Box>
-                    )}
-
-                    {order.expiresAt && (
-                      <Box>
-                        <Typography variant='overline' className='text-textSecondary text-xs font-medium'>
-                          Expira en
-                        </Typography>
-                        <Typography variant='body1' className='font-medium mt-1 text-error'>
-                          {formatDate(order.expiresAt)}
-                        </Typography>
-                      </Box>
-                    )}
-                  </Box>
-                </Grid>
-
-                <Grid size={{ xs: 12, sm: 6 }}>
-                  <Box className='space-y-4'>
-                    <Box>
-                      <Typography variant='overline' className='text-textSecondary text-xs font-medium'>
-                        Total
-                      </Typography>
-                      <Typography variant='h5' className='font-bold text-primary mt-1'>
-                        Bs. {parseFloat(order.totalPrice).toFixed(2)}
-                      </Typography>
-                    </Box>
-
-                    {order.shipment_price !== undefined && order.shipment_price > 0 && (
-                      <Box>
-                        <Typography variant='overline' className='text-textSecondary text-xs font-medium'>
-                          Costo de Envío
-                        </Typography>
-                        <Typography variant='body1' className='font-semibold text-warning mt-1'>
-                          Bs. {parseFloat(String(order.shipment_price)).toFixed(2)}
-                        </Typography>
-                      </Box>
-                    )}
-
-                    <Box>
-                      <Typography variant='overline' className='text-textSecondary text-xs font-medium'>
-                        Estado
-                      </Typography>
-                      <Box className='mt-1'>
-                        <Chip
-                          label={getEstadoLabel(order.status)}
-                          variant='tonal'
-                          color={getEstadoColor(order.status)}
-                          size='medium'
-                        />
-                      </Box>
-                    </Box>
-
-                    <Box>
-                      <Typography variant='overline' className='text-textSecondary text-xs font-medium'>
-                        Orden Editada
-                      </Typography>
-                      <Box className='mt-1'>
-                        {order.edited ? (
-                          <Chip label='Sí' color='warning' variant='tonal' size='small' />
-                        ) : (
-                          <Typography variant='body1' className='font-medium'>
-                            No
-                          </Typography>
-                        )}
-                      </Box>
-                    </Box>
-                  </Box>
-                </Grid>
-              </Grid>
-            </CardContent>
-          </Card>
+          <OrderGeneralInfo order={order} />
 
           {order.billing && (
-            <Card variant='outlined'>
-              <CardContent>
-                <Typography variant='h6' className='mb-4 text-textPrimary'>
-                  Datos del Cliente
-                </Typography>
-                <Grid container spacing={3}>
-                  <Grid size={{ xs: 12, sm: 6 }}>
-                    <Typography variant='overline' className='text-textSecondary text-xs font-medium block'>
-                      CI / NIT
-                    </Typography>
-                    <Typography variant='body1' className='font-semibold mt-1'>
-                      {order.billing.ci}
-                    </Typography>
-                  </Grid>
-                  {order.billing.name && (
-                    <Grid size={{ xs: 12, sm: 6 }}>
-                      <Typography variant='overline' className='text-textSecondary text-xs font-medium block'>
-                        Nombre
-                      </Typography>
-                      <Typography variant='body1' className='font-semibold mt-1'>
-                        {order.billing.name}
-                      </Typography>
-                    </Grid>
-                  )}
-                  {order.billing.phone && (
-                    <Grid size={{ xs: 12, sm: 6 }}>
-                      <Typography variant='overline' className='text-textSecondary text-xs font-medium block'>
-                        Teléfono
-                      </Typography>
-                      <Typography variant='body1' className='font-medium mt-1'>
-                        {order.billing.phone}
-                      </Typography>
-                    </Grid>
-                  )}
-                  {order.billing.email && (
-                    <Grid size={{ xs: 12, sm: 6 }}>
-                      <Typography variant='overline' className='text-textSecondary text-xs font-medium block'>
-                        Email
-                      </Typography>
-                      <Typography variant='body1' className='font-medium mt-1'>
-                        {order.billing.email}
-                      </Typography>
-                    </Grid>
-                  )}
-                  {order.billing.complemento && (
-                    <Grid size={{ xs: 12, sm: 6 }}>
-                      <Typography variant='overline' className='text-textSecondary text-xs font-medium block'>
-                        Complemento
-                      </Typography>
-                      <Typography variant='body1' className='font-medium mt-1'>
-                        {order.billing.complemento}
-                      </Typography>
-                    </Grid>
-                  )}
-                </Grid>
-              </CardContent>
-            </Card>
+            <OrderCustomerData order={order} />
           )}
 
           {order.factura && (
-            <Card variant='outlined'>
-              <CardContent>
-                <Box className='flex justify-between items-start mb-4'>
-                  <Typography variant='h6' className='text-textPrimary'>
-                    Factura SIAT
-                  </Typography>
-                  <Chip
-                    label={order.factura.estado}
-                    color={
-                      order.factura.estado === 'VALIDADA' || order.factura.estado === 'REVERTIDA'
-                        ? 'success'
-                        : order.factura.estado === 'PENDIENTE'
-                          ? 'warning'
-                          : order.factura.estado === 'ANULADA'
-                            ? 'error'
-                            : 'default'
-                    }
-                    variant='tonal'
-                    size='small'
-                  />
-                </Box>
-                <Grid container spacing={3}>
-                  <Grid size={{ xs: 12, sm: 6 }}>
-                    <Typography variant='overline' className='text-textSecondary text-xs font-medium block'>
-                      Número de Factura
-                    </Typography>
-                    <Typography variant='body1' className='font-bold mt-1'>
-                      #{order.factura.numeroFactura}
-                    </Typography>
-                  </Grid>
-                  <Grid size={{ xs: 12, sm: 6 }}>
-                    <Typography variant='overline' className='text-textSecondary text-xs font-medium block'>
-                      Fecha de Emisión
-                    </Typography>
-                    <Typography variant='body1' className='font-medium mt-1'>
-                      {formatDate(order.factura.fechaEmision)}
-                    </Typography>
-                  </Grid>
-                  <Grid size={{ xs: 12 }}>
-                    <Typography variant='overline' className='text-textSecondary text-xs font-medium block'>
-                      CUF
-                    </Typography>
-                    <Typography variant='body2' className='font-mono mt-1' sx={{ wordBreak: 'break-all' }}>
-                      {order.factura.cuf}
-                    </Typography>
-                  </Grid>
-                  <Grid size={{ xs: 12, sm: 6 }}>
-                    <Typography variant='overline' className='text-textSecondary text-xs font-medium block'>
-                      Razón Social
-                    </Typography>
-                    <Typography variant='body1' className='font-semibold mt-1'>
-                      {order.factura.nombreRazonSocial}
-                    </Typography>
-                  </Grid>
-                  <Grid size={{ xs: 12, sm: 6 }}>
-                    <Typography variant='overline' className='text-textSecondary text-xs font-medium block'>
-                      Documento
-                    </Typography>
-                    <Typography variant='body1' className='font-medium mt-1'>
-                      {order.factura.numeroDocumento}
-                      {order.factura.complemento && `-${order.factura.complemento}`}
-                    </Typography>
-                  </Grid>
-                  <Grid size={{ xs: 12, sm: 6 }}>
-                    <Typography variant='overline' className='text-textSecondary text-xs font-medium block'>
-                      Monto Total
-                    </Typography>
-                    <Typography variant='h6' className='font-bold text-primary mt-1'>
-                      Bs. {parseFloat(order.factura.montoTotal).toFixed(2)}
-                    </Typography>
-                  </Grid>
-                  <Grid size={{ xs: 12, sm: 6 }}>
-                    <Typography variant='overline' className='text-textSecondary text-xs font-medium block'>
-                      Tipo de Emisión
-                    </Typography>
-                    <Typography variant='body1' className='font-medium mt-1'>
-                      {order.factura.codigoEmision === '1' ? 'En línea' : 'Contingencia (fuera de línea)'}
-                    </Typography>
-                  </Grid>
-                  {order.factura.codigoRecepcion && (
-                    <Grid size={{ xs: 12 }}>
-                      <Typography variant='overline' className='text-textSecondary text-xs font-medium block'>
-                        Código Recepción SIAT
-                      </Typography>
-                      <Typography variant='body2' className='font-mono mt-1'>
-                        {order.factura.codigoRecepcion}
-                      </Typography>
-                    </Grid>
-                  )}
-                  {order.factura.detalles && order.factura.detalles.length > 0 && (
-                    <Grid size={{ xs: 12 }}>
-                      <Typography variant='overline' className='text-textSecondary text-xs font-medium block mb-2'>
-                        Detalle de Factura
-                      </Typography>
-                      <Box sx={{ border: '1px solid', borderColor: 'divider', borderRadius: 1, overflow: 'hidden' }}>
-                        <table style={{ width: '100%', borderCollapse: 'collapse' }}>
-                          <thead>
-                            <tr style={{ backgroundColor: 'rgba(0,0,0,0.04)' }}>
-                              <th style={{ padding: '8px 12px', textAlign: 'left', fontSize: '12px', fontWeight: 600 }}>Producto</th>
-                              <th style={{ padding: '8px 12px', textAlign: 'center', fontSize: '12px', fontWeight: 600 }}>Cant.</th>
-                              <th style={{ padding: '8px 12px', textAlign: 'right', fontSize: '12px', fontWeight: 600 }}>P. Unit.</th>
-                              <th style={{ padding: '8px 12px', textAlign: 'right', fontSize: '12px', fontWeight: 600 }}>Subtotal</th>
-                            </tr>
-                          </thead>
-                          <tbody>
-                            {order.factura.detalles.map((detalle: OrderFacturaDetalle, index: number) => (
-                              <tr key={detalle.id || index} style={{ borderTop: '1px solid rgba(0,0,0,0.08)' }}>
-                                <td style={{ padding: '8px 12px', fontSize: '13px' }}>{detalle.descripcion}</td>
-                                <td style={{ padding: '8px 12px', textAlign: 'center', fontSize: '13px' }}>{parseFloat(detalle.cantidad).toFixed(0)}</td>
-                                <td style={{ padding: '8px 12px', textAlign: 'right', fontSize: '13px' }}>Bs. {parseFloat(detalle.precioUnitario).toFixed(2)}</td>
-                                <td style={{ padding: '8px 12px', textAlign: 'right', fontSize: '13px', fontWeight: 600 }}>Bs. {parseFloat(detalle.subTotal).toFixed(2)}</td>
-                              </tr>
-                            ))}
-                          </tbody>
-                        </table>
-                      </Box>
-                    </Grid>
-                  )}
-                  <Grid size={{ xs: 12 }}>
-                    <Box sx={{ display: 'flex', gap: 2, flexDirection: 'column' }}>
-                      <Box sx={{ display: 'flex', gap: 2 }}>
-                        <Button
-                          variant='contained'
-                          color='primary'
-                          onClick={handlePrintInvoice}
-                          startIcon={<i className='tabler-printer' />}
-                          fullWidth
-                        >
-                          Imprimir Factura
-                        </Button>
-                        {canAnular && (
-                          <Button
-                            variant='outlined'
-                            color='error'
-                            onClick={() => setShowAnularConfirm(true)}
-                            startIcon={<i className='tabler-x' />}
-                            fullWidth
-                          >
-                            Anular
-                          </Button>
-                        )}
-                        {canRevertir && (
-                          <Button
-                            variant='outlined'
-                            color='warning'
-                            onClick={() => setShowRevertirConfirm(true)}
-                            startIcon={<i className='tabler-restore' />}
-                            fullWidth
-                          >
-                            Revertir Anulación
-                          </Button>
-                        )}
-                      </Box>
-                      {order.factura.estado === 'ANULADA' && order.status === 'sent' && (
-                        <Alert severity='info'>
-                          Esta factura fue anulada. Puede revertir la anulación para restaurarla (solo una vez).
-                        </Alert>
-                      )}
-                      {order.factura.estado === 'ANULADA' && order.status === 'cancelled_for_edit' && (
-                        <Alert severity='warning'>
-                          Esta orden fue editada. La factura anulada pertenece a la orden original. La nueva orden debe
-                          ser facturada por separado.
-                        </Alert>
-                      )}
-                    </Box>
-                  </Grid>
-                </Grid>
-              </CardContent>
-            </Card>
+          <OrderInvoiceCard
+            order={order}
+            canAnular={!!canAnular}
+            canRevertir={!!canRevertir}
+            handlePrintInvoice={handlePrintInvoice}
+            setShowAnularConfirm={setShowAnularConfirm}
+            setShowRevertirConfirm={setShowRevertirConfirm}
+          />
           )}
 
           {(getFedexTrackingNumber(order) || getFedexPdfUrl(order)) && (
-            <Card variant='outlined'>
-              <CardContent>
-                <Typography variant='h6' className='mb-4 text-textPrimary'>
-                  Envío FedEx
-                </Typography>
-                <Grid container spacing={3}>
-                  {getFedexTrackingNumber(order) && (
-                    <Grid size={{ xs: 12, sm: 4 }}>
-                      <Typography variant='overline' className='text-textSecondary text-xs font-medium block'>
-                        Código de Seguimiento
-                      </Typography>
-                      <Typography variant='h6' className='font-bold mt-1'>
-                        {getFedexTrackingNumber(order)}
-                      </Typography>
-                    </Grid>
-                  )}
-                  {order.fedex_shipping_data && (
-                    <>
-                      <Grid size={{ xs: 6, sm: 4 }}>
-                        <Typography variant='overline' className='text-textSecondary text-xs font-medium block'>
-                          Cantidad de Bultos
-                        </Typography>
-                        <Typography variant='h6' className='font-bold mt-1'>
-                          {order.fedex_shipping_data.packageCount}
-                        </Typography>
-                      </Grid>
-                      <Grid size={{ xs: 6, sm: 4 }}>
-                        <Typography variant='overline' className='text-textSecondary text-xs font-medium block'>
-                          Peso
-                        </Typography>
-                        <Typography variant='h6' className='font-bold mt-1'>
-                          {order.fedex_shipping_data.calculatedWeightKg} kg
-                        </Typography>
-                      </Grid>
-                    </>
-                  )}
-                  {getFedexPdfUrl(order) && (
-                    <Grid size={{ xs: 12 }}>
-                      <Button
-                        component='a'
-                        href={getFedexPdfUrl(order)!}
-                        target='_blank'
-                        rel='noopener noreferrer'
-                        variant='outlined'
-                        startIcon={<i className='tabler-file-download' />}
-                      >
-                        Descargar PDF
-                      </Button>
-                    </Grid>
-                  )}
-                </Grid>
-              </CardContent>
-            </Card>
+            <OrderFedexShipping order={order} />
           )}
 
           {!!order.facturasAnteriores?.length && (
-            <Card variant='outlined'>
-              <CardContent>
-                <Typography variant='h6' className='mb-4 text-textPrimary'>
-                  Facturas Anteriores
-                </Typography>
-                <Box className='flex flex-col gap-3'>
-                  {order.facturasAnteriores.map(factura => (
-                    <Box
-                      key={factura.id}
-                      className='flex items-center justify-between gap-3 p-3 rounded'
-                      sx={{ border: '1px solid', borderColor: 'divider' }}
-                    >
-                      <Box>
-                        <Typography variant='body2' className='font-semibold'>
-                          Factura #{factura.numeroFactura} · Bs. {parseFloat(factura.montoTotal).toFixed(2)}
-                        </Typography>
-                        <Typography variant='caption' color='text.secondary'>
-                          {formatDate(factura.fechaEmision)} · {factura.nombreRazonSocial} ({factura.numeroDocumento})
-                        </Typography>
-                      </Box>
-                      <Chip
-                        label={factura.estado}
-                        size='small'
-                        variant='tonal'
-                        color={factura.estado === 'ANULADA' ? 'error' : 'warning'}
-                      />
-                    </Box>
-                  ))}
-                </Box>
-              </CardContent>
-            </Card>
+            <OrderPreviousInvoices order={order} />
           )}
 
           {/* Alerta cuando hay factura activa que bloquea acciones */}
@@ -1704,335 +1255,18 @@ const OrderDetailsModal = ({ open, onClose, order: orderProp }: OrderDetailsModa
           )}
 
           {order.customer && (
-            <Card variant='outlined'>
-              <CardContent>
-                <Typography variant='h6' className='mb-4 text-textPrimary'>
-                  Información del Cliente
-                </Typography>
-                <Grid container spacing={3}>
-                  {(() => {
-                    const isGuestCustomer = order.customer.email === 'guest@moneroget.com'
-
-                    // Si es invitado, usar datos del billing; si no, usar datos del customer
-                    const displayName = isGuestCustomer ? order.billing?.name || '-' : order.customer.name
-
-                    const displayEmail = isGuestCustomer
-                      ? order.billing?.email || order.email || '-'
-                      : order.customer.email
-
-                    const displayPhone = isGuestCustomer ? order.billing?.phone || null : order.customer.phone
-
-                    return (
-                      <>
-                        <Grid size={{ xs: 12, sm: 6 }}>
-                          <Typography variant='overline' className='text-textSecondary text-xs font-medium block'>
-                            Nombre
-                          </Typography>
-                          <Typography variant='body1' className='font-semibold mt-1'>
-                            {displayName || '-'}
-                          </Typography>
-                        </Grid>
-                        <Grid size={{ xs: 12, sm: 6 }}>
-                          <Typography variant='overline' className='text-textSecondary text-xs font-medium block'>
-                            Email
-                          </Typography>
-                          <Typography variant='body1' className='font-medium mt-1'>
-                            {displayEmail || '-'}
-                          </Typography>
-                        </Grid>
-                        <Grid size={{ xs: 12, sm: 6 }}>
-                          <Typography variant='overline' className='text-textSecondary text-xs font-medium block'>
-                            Teléfono
-                          </Typography>
-                          {displayPhone ? (
-                            <Box className='flex items-center gap-2 mt-1'>
-                              <Typography variant='body1' className='font-medium'>
-                                {displayPhone}
-                              </Typography>
-                              <IconButton
-                                size='small'
-                                color='success'
-                                href={`https://wa.me/${displayPhone.replace(/[^0-9]/g, '')}`}
-                                target='_blank'
-                                rel='noopener noreferrer'
-                                sx={{
-                                  bgcolor: '#25D366',
-                                  color: 'white',
-                                  width: 32,
-                                  height: 32,
-                                  '&:hover': {
-                                    bgcolor: '#128C7E'
-                                  }
-                                }}
-                              >
-                                <i className='tabler-brand-whatsapp' style={{ fontSize: '1.25rem' }} />
-                              </IconButton>
-                            </Box>
-                          ) : (
-                            <Typography variant='body1' className='font-medium mt-1'>
-                              -
-                            </Typography>
-                          )}
-                        </Grid>
-                        <Grid size={{ xs: 12, sm: 6 }}>
-                          <Typography variant='overline' className='text-textSecondary text-xs font-medium block'>
-                            Tipo de Cliente
-                          </Typography>
-                          <Typography variant='body1' className='font-medium mt-1'>
-                            {isGuestCustomer
-                              ? 'Invitado'
-                              : order.customer.type === 'registered'
-                                ? 'Registrado'
-                                : 'Suscriptor'}
-                          </Typography>
-                        </Grid>
-                      </>
-                    )
-                  })()}
-                </Grid>
-              </CardContent>
-            </Card>
+            <OrderCustomerInfo order={order} />
           )}
 
           {order.address && (
-            <Card variant='outlined'>
-              <CardContent>
-                <Typography variant='h6' className='mb-4 text-textPrimary'>
-                  Dirección de Envío
-                </Typography>
-                <Grid container spacing={3}>
-                  {order.address.address && (
-                    <Grid size={{ xs: 12 }}>
-                      <Typography variant='overline' className='text-textSecondary text-xs font-medium block'>
-                        Dirección
-                      </Typography>
-                      <Typography variant='body1' className='font-medium mt-1' style={{ whiteSpace: 'pre-line' }}>
-                        {order.address.address}
-                      </Typography>
-                    </Grid>
-                  )}
-                  {order.address.city && (
-                    <Grid size={{ xs: 12, sm: 6 }}>
-                      <Typography variant='overline' className='text-textSecondary text-xs font-medium block'>
-                        Ciudad
-                      </Typography>
-                      <Typography variant='body1' className='font-semibold mt-1'>
-                        {order.address.city}
-                      </Typography>
-                    </Grid>
-                  )}
-                  {order.address.country && (
-                    <Grid size={{ xs: 12, sm: 6 }}>
-                      <Typography variant='overline' className='text-textSecondary text-xs font-medium block'>
-                        País
-                      </Typography>
-                      <Typography variant='body1' className='font-semibold mt-1'>
-                        {order.address.country}
-                      </Typography>
-                    </Grid>
-                  )}
-                  {order.address.postal_code && (
-                    <Grid size={{ xs: 12, sm: 6 }}>
-                      <Typography variant='overline' className='text-textSecondary text-xs font-medium block'>
-                        Código Postal
-                      </Typography>
-                      <Typography variant='body1' className='font-medium mt-1'>
-                        {order.address.postal_code}
-                      </Typography>
-                    </Grid>
-                  )}
-                  {order.address.type && (
-                    <Grid size={{ xs: 12, sm: 6 }}>
-                      <Typography variant='overline' className='text-textSecondary text-xs font-medium block'>
-                        Tipo de Envío
-                      </Typography>
-                      <Typography variant='body1' className='font-medium mt-1'>
-                        {order.address.type === 'national' ? 'Nacional' : 'Internacional'}
-                      </Typography>
-                    </Grid>
-                  )}
-                </Grid>
-              </CardContent>
-            </Card>
+            <OrderShippingAddress order={order} />
           )}
 
           {order.shipment && (
-            <Card variant='outlined'>
-              <CardContent>
-                <Typography variant='h6' className='mb-4 text-textPrimary'>
-                  Información de Envío
-                </Typography>
-                <Grid container spacing={3}>
-                  {order.shipment.name && (
-                    <Grid size={{ xs: 12, sm: 6 }}>
-                      <Typography variant='overline' className='text-textSecondary text-xs font-medium block'>
-                        Tipo de Envío
-                      </Typography>
-                      <Typography variant='body1' className='font-semibold mt-1'>
-                        {order.shipment.name}
-                      </Typography>
-                    </Grid>
-                  )}
-                  {order.shipment.price && (
-                    <Grid size={{ xs: 12, sm: 6 }}>
-                      <Typography variant='overline' className='text-textSecondary text-xs font-medium block'>
-                        Costo de Envío
-                      </Typography>
-                      <Typography variant='h6' className='font-bold text-primary mt-1'>
-                        Bs. {parseFloat(order.shipment.price).toFixed(2)}
-                      </Typography>
-                    </Grid>
-                  )}
-                </Grid>
-              </CardContent>
-            </Card>
+            <OrderShippingInfo order={order} />
           )}
 
-          <Card variant='outlined'>
-            <CardContent>
-              <Typography variant='h6' className='mb-4 text-textPrimary'>
-                Productos de la Orden
-              </Typography>
-
-              <TableContainer component={Paper} variant='outlined'>
-                <Table>
-                  <TableHead>
-                    <TableRow>
-                      <TableCell width='220px'>Imagen</TableCell>
-                      <TableCell>Producto</TableCell>
-                      <TableCell align='center'>Cantidad</TableCell>
-                      <TableCell align='right'>Precio Unit.</TableCell>
-                      <TableCell align='right'>Descuento</TableCell>
-                      <TableCell align='right'>Total</TableCell>
-                    </TableRow>
-                  </TableHead>
-                  <TableBody>
-                    {order.items.map(item => (
-                      <TableRow key={item.id} hover>
-                        <TableCell>
-                          <Box className='w-48 h-48 bg-gray-100 rounded-xl flex items-center justify-center overflow-hidden border-2 border-gray-300 shadow-lg'>
-                            {item.variant?.productColor?.multimedia?.[0] ? (
-                              <img
-                                src={item.variant.productColor.multimedia[0]}
-                                alt={item.variant.productColor.product?.name || 'Producto'}
-                                className='w-full h-full object-cover'
-                              />
-                            ) : (
-                              <Box className='w-full h-full bg-gradient-to-br from-gray-100 to-gray-200 flex items-center justify-center'>
-                                <Typography variant='h2' className='text-gray-400'>
-                                  📦
-                                </Typography>
-                              </Box>
-                            )}
-                          </Box>
-                        </TableCell>
-
-                        <TableCell>
-                          <Typography variant='body1' className='font-bold text-textPrimary'>
-                            {item.variant?.productColor?.product?.name || 'Producto sin nombre'}
-                          </Typography>
-                          {item.variant?.productColor?.product?.description && (
-                            <Typography variant='body2' color='text.secondary' className='block mt-1'>
-                              {item.variant.productColor.product.description}
-                            </Typography>
-                          )}
-                          <Box className='flex gap-3 mt-2'>
-                            {item.variant?.productColor?.color && (
-                              <Box className='flex items-center gap-1'>
-                                <Typography variant='caption' className='text-textSecondary font-medium'>
-                                  Color:
-                                </Typography>
-                                <Chip
-                                  label={item.variant.productColor.color.name}
-                                  size='small'
-                                  variant='tonal'
-                                  sx={{
-                                    height: 20,
-                                    fontSize: '0.75rem',
-                                    fontWeight: 600
-                                  }}
-                                />
-                              </Box>
-                            )}
-                            {item.variant?.size && (
-                              <Box className='flex items-center gap-1'>
-                                <Typography variant='caption' className='text-textSecondary font-medium'>
-                                  Talla:
-                                </Typography>
-                                <Chip
-                                  label={item.variant.size.name}
-                                  size='small'
-                                  variant='tonal'
-                                  sx={{
-                                    height: 20,
-                                    fontSize: '0.75rem',
-                                    fontWeight: 600
-                                  }}
-                                />
-                              </Box>
-                            )}
-                          </Box>
-                        </TableCell>
-
-                        <TableCell align='center'>
-                          <Chip
-                            label={`x${item.quantity}`}
-                            color='primary'
-                            variant='tonal'
-                            sx={{
-                              fontWeight: 700,
-                              fontSize: '0.875rem'
-                            }}
-                          />
-                        </TableCell>
-
-                        <TableCell align='right'>
-                          <Typography variant='body1' className='font-semibold'>
-                            Bs. {parseFloat(item.unit_price).toFixed(2)}
-                          </Typography>
-                        </TableCell>
-
-                        <TableCell align='right'>
-                          {item.discountValue > 0 ? (
-                            <Chip
-                              label={`-${item.discountValue}%`}
-                              color='error'
-                              variant='tonal'
-                              size='small'
-                              sx={{ fontWeight: 600 }}
-                            />
-                          ) : (
-                            <Typography variant='body2' color='text.secondary'>
-                              —
-                            </Typography>
-                          )}
-                        </TableCell>
-
-                        <TableCell align='right'>
-                          <Typography variant='h6' className='font-bold text-primary'>
-                            Bs. {parseFloat(item.totalPrice).toFixed(2)}
-                          </Typography>
-                        </TableCell>
-                      </TableRow>
-                    ))}
-
-                    <TableRow sx={{ bgcolor: 'action.hover' }}>
-                      <TableCell colSpan={5} align='right' sx={{ borderBottom: 'none', py: 3 }}>
-                        <Typography variant='h6' className='font-bold text-textPrimary'>
-                          Total de la Orden:
-                        </Typography>
-                      </TableCell>
-                      <TableCell align='right' sx={{ borderBottom: 'none', py: 3 }}>
-                        <Typography variant='h5' className='font-bold text-primary'>
-                          Bs. {parseFloat(order.totalPrice).toFixed(2)}
-                        </Typography>
-                      </TableCell>
-                    </TableRow>
-                  </TableBody>
-                </Table>
-              </TableContainer>
-            </CardContent>
-          </Card>
+          <OrderItemsTable order={order} />
         </Box>
       </DialogContent>
 
@@ -2074,7 +1308,10 @@ const OrderDetailsModal = ({ open, onClose, order: orderProp }: OrderDetailsModa
               </Button>
             )}
 
-            {order.status === 'paid' && (
+            {/* `order` es un prop: al enviar, el back ya la paso a SENT pero este
+                objeto sigue diciendo 'paid' hasta que el padre refresque. Sin
+                `!despacho` el boton seguia ofreciendo enviar algo ya enviado */}
+            {order.status === 'paid' && !enviadaLocal && (
               <>
                 {canCancelOrder() && (
                   <Button
@@ -2088,12 +1325,28 @@ const OrderDetailsModal = ({ open, onClose, order: orderProp }: OrderDetailsModa
                   </Button>
                 )}
 
-                {puedeOperarLaVenta && !showTrackingInput && (
+                {/* En un envio nacional no hay guia que cargar: el back pasa la
+                    orden a enviada sin body, asi que se confirma de una */}
+                {puedeOperarLaVenta && esEnvioNacional && (
+                  <Button
+                    variant='contained'
+                    color='success'
+                    onClick={() => setShowSendConfirm(true)}
+                    disabled={cancelOrderMutation.isPending || sendOrderMutation.isPending}
+                    startIcon={<i className='tabler-truck' />}
+                  >
+                    Marcar como enviado
+                  </Button>
+                )}
+
+                {puedeOperarLaVenta && !esEnvioNacional && !showTrackingInput && (
                   <Button
                     variant='contained'
                     color='primary'
                     onClick={() => {
-                      setTrackingCode(getFedexTrackingNumber(order) || '')
+                      // Con la guia cancelada el guardado ya no sirve: se arranca
+                      // en blanco para que se cargue el nuevo
+                      setTrackingCode(guiaCancelada ? '' : trackingGuardado || '')
                       setShowTrackingInput(true)
                     }}
                     disabled={cancelOrderMutation.isPending || sendOrderMutation.isPending}
@@ -2103,19 +1356,26 @@ const OrderDetailsModal = ({ open, onClose, order: orderProp }: OrderDetailsModa
                   </Button>
                 )}
 
-                {puedeOperarLaVenta && showTrackingInput && (
+                {puedeOperarLaVenta && !esEnvioNacional && showTrackingInput && (
                   <>
-                    {!order.shipment && (
-                      <TextField
-                        size='small'
-                        label='Código de Seguimiento FedEx'
-                        value={trackingCode}
-                        onChange={e => setTrackingCode(e.target.value)}
-                        placeholder='Ej: 794658135200'
-                        className='max-sm:is-full sm:is-[200px]'
-                        disabled={sendOrderMutation.isPending}
-                      />
-                    )}
+                    <TextField
+                      size='small'
+                      label='Código de Seguimiento FedEx'
+                      value={trackingCode}
+                      onChange={e => setTrackingCode(e.target.value)}
+                      placeholder='Ej: 794658135200'
+                      className='max-sm:is-full sm:is-[200px]'
+                      disabled={sendOrderMutation.isPending}
+                      required={trackingObligatorio}
+                      error={trackingInvalido && trackingCode.trim().length > 0}
+                      helperText={
+                        guiaCancelada
+                          ? 'La guía anterior se canceló: cargá una nueva, distinta de la anterior'
+                          : trackingObligatorio
+                            ? 'Obligatorio: la orden no tiene guía guardada'
+                            : 'Opcional: ya hay una guía guardada'
+                      }
+                    />
                     <Button
                       variant='outlined'
                       onClick={() => {
@@ -2130,7 +1390,7 @@ const OrderDetailsModal = ({ open, onClose, order: orderProp }: OrderDetailsModa
                       variant='contained'
                       color='success'
                       onClick={handleSendOrder}
-                      disabled={sendOrderMutation.isPending}
+                      disabled={sendOrderMutation.isPending || trackingInvalido}
                       startIcon={
                         sendOrderMutation.isPending ? (
                           <CircularProgress size={20} color='inherit' />
@@ -2205,6 +1465,44 @@ const OrderDetailsModal = ({ open, onClose, order: orderProp }: OrderDetailsModa
             fullWidth
           >
             {cancelOrderMutation.isPending ? 'Cancelando...' : 'Sí, Cancelar'}
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      {/* Confirmacion de envio (nacional). El de FedEx no la necesita: ya pasa
+          por el campo de guia y su propio "Confirmar Envio" */}
+      <Dialog open={showSendConfirm} onClose={() => setShowSendConfirm(false)} maxWidth='xs' fullWidth>
+        <DialogTitle>
+          <Typography fontWeight='bold'>¿Marcar como enviado?</Typography>
+        </DialogTitle>
+        <DialogContent>
+          <Typography>
+            La orden #{order.inherited_id || order.id} pasará a <strong>enviada</strong> y se descontará el stock de
+            bodega y de tienda. Esta acción no se puede deshacer desde acá.
+          </Typography>
+
+          <Alert severity='info' sx={{ mt: 3 }}>
+            Al confirmar vas a ver cuántas prendas sacar de cada lugar.
+          </Alert>
+        </DialogContent>
+        <DialogActions sx={{ p: 2, gap: 1 }}>
+          <Button
+            onClick={() => setShowSendConfirm(false)}
+            disabled={sendOrderMutation.isPending}
+            variant='outlined'
+            fullWidth
+          >
+            No, volver
+          </Button>
+          <Button
+            onClick={handleSendOrder}
+            color='success'
+            variant='contained'
+            disabled={sendOrderMutation.isPending}
+            startIcon={sendOrderMutation.isPending ? <CircularProgress size={20} color='inherit' /> : null}
+            fullWidth
+          >
+            {sendOrderMutation.isPending ? 'Enviando...' : 'Sí, enviar'}
           </Button>
         </DialogActions>
       </Dialog>
