@@ -11,6 +11,7 @@ import Grid from '@mui/material/Grid2'
 
 import { useUserRole } from '@/hooks/useUserRole'
 import { useBranchContext } from '@/contexts/BranchContext'
+import { useBranchScope } from '@/contexts/BranchScopeContext'
 
 const roleLabels: Record<string, string> = {
   ADMIN: 'Administrador',
@@ -22,8 +23,17 @@ const roleLabels: Record<string, string> = {
 const BienvenidaAdmin = () => {
   const { user, role, isManager } = useUserRole()
   const { selectedBranch, isAdmin } = useBranchContext()
+  const branchScoped = useBranchScope()
 
-  const branchName = isAdmin ? selectedBranch?.name : user?.branch?.name
+  // Para un ADMIN la sucursal sale del selector de la navbar, y en una vista
+  // general ese selector ni se muestra: `selectedBranch` es solo la primera de
+  // la lista, no algo que el usuario eligio ni que filtre lo que esta viendo.
+  // Mostrarla ahi hace creer que el panel es de esa sucursal. Mismo criterio
+  // que usan BranchSwitcher y BranchIndicator (ver utils/branchScope.ts).
+  //
+  // Un MANAGER o CASHIER si tiene sucursal fija: esa es un dato de su usuario y
+  // se muestra siempre.
+  const branchName = isAdmin ? (branchScoped ? selectedBranch?.name : undefined) : user?.branch?.name
 
   return (
     <Card>

@@ -237,7 +237,21 @@ const OrderDetailsModal = ({ open, onClose, order: orderProp }: OrderDetailsModa
   const { data: cafcsData } = useCafcs()
 
   // Hooks para edición de datos de facturación
-  const { data: tiposDocumentoData } = useTiposDocumentoIdentidad()
+  //
+  // El branchId va SIEMPRE que se tenga: para ADMIN/SUPERVISOR el back no puede
+  // deducir la sucursal de la sesion y responde 403 "La sucursal no pudo ser
+  // determinada". Es la misma sucursal con la que se factura la orden, no la del
+  // selector de la navbar, asi que sale de `selectedBranchId` de este modal.
+  //
+  // Mientras el admin no haya elegido sucursal la consulta ni se dispara; un
+  // MANAGER/CASHIER no manda nada y el back usa la suya.
+  const branchIdFacturacion = typeof selectedBranchId === 'number' ? selectedBranchId : undefined
+
+  const { data: tiposDocumentoData } = useTiposDocumentoIdentidad(
+    branchIdFacturacion,
+    !needsBranchSelector || branchIdFacturacion !== undefined
+  )
+
   const { data: billingSearchData, isFetching: isSearchingBilling } = useSearchBilling(searchCi)
   const verificarNitMutation = useVerificarNit()
 
