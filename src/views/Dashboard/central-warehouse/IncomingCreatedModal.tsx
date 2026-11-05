@@ -17,6 +17,8 @@ import tableStyles from '@core/styles/table.module.css'
 import { isBluetoothAvailable } from '@/utils/bluetoothPrinter'
 import { printIncomingNote, printIncomingNoteBluetooth } from '@/utils/receptionReceipt'
 import type { IncomingNote } from '@/utils/receptionReceipt'
+import { printIncomingNoteA4 } from '@/utils/a4Documents'
+import PrintFormatButton from '@/components/PrintFormatButton'
 import VariantQRModal from '@/views/Dashboard/products/add/components/VariantQRModal'
 import type { VariantQrInfo } from './ConfirmWarehouseChangesModal'
 import { prendas } from './units'
@@ -127,13 +129,12 @@ const IncomingCreatedModal = ({ note, qrInfo, onClose }: Props) => {
           </Button>
         )}
 
-        <Button
+        <PrintFormatButton
           variant='contained'
-          startIcon={<i className='tabler-printer' />}
-          onClick={() => note && printIncomingNote(note)}
-        >
-          Imprimir lista
-        </Button>
+          label='Imprimir lista'
+          onRoll={() => note && printIncomingNote(note)}
+          onA4={() => note && printIncomingNoteA4(note)}
+        />
       </DialogActions>
 
       {/* El mismo modal de Productos → Variantes: etiquetas por web o Bluetooth */}

@@ -24,6 +24,8 @@ import tableStyles from '@core/styles/table.module.css'
 import TransferActionsModal from './TransferActionsModal'
 import { isBluetoothAvailable } from '@/utils/bluetoothPrinter'
 import { printDispatchNote, printDispatchNoteBluetooth } from '@/utils/receptionReceipt'
+import { printDispatchNoteA4 } from '@/utils/a4Documents'
+import PrintFormatButton from '@/components/PrintFormatButton'
 import TransferDetailsModal from './TransferDetailsModal'
 import StageChip, { PendingReviewChip } from './StageChip'
 import { canDo, hasPendingReview, itemLabel, transferUnits } from './transfers'
@@ -267,11 +269,12 @@ const DispatchHistoryTable = () => {
                           </Tooltip>
 
                           {inTransit && (
-                            <Tooltip title='Imprimir el remito que acompaña al paquete'>
-                              <IconButton size='small' onClick={() => printDispatchNote(noteOf(transfer))}>
-                                <i className='tabler-printer' />
-                              </IconButton>
-                            </Tooltip>
+                            <PrintFormatButton
+                              mode='icon'
+                              tooltip='Imprimir el remito que acompaña al paquete (rollo u hoja)'
+                              onRoll={() => printDispatchNote(noteOf(transfer))}
+                              onA4={() => printDispatchNoteA4(noteOf(transfer))}
+                            />
                           )}
                           {inTransit && isBluetoothAvailable() && (
                             <Tooltip title='Remito por impresora térmica'>

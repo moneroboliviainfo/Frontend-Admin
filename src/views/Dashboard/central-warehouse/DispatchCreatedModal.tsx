@@ -12,6 +12,8 @@ import Typography from '@mui/material/Typography'
 import { isBluetoothAvailable } from '@/utils/bluetoothPrinter'
 import { printDispatchNote, printDispatchNoteBluetooth } from '@/utils/receptionReceipt'
 import type { DispatchNote } from '@/utils/receptionReceipt'
+import { printDispatchNoteA4 } from '@/utils/a4Documents'
+import PrintFormatButton from '@/components/PrintFormatButton'
 import { prendas } from './units'
 
 type Props = {
@@ -56,13 +58,12 @@ const DispatchCreatedModal = ({ note, onClose }: Props) => {
           </Button>
         )}
 
-        <Button
+        <PrintFormatButton
           variant='contained'
-          startIcon={<i className='tabler-printer' />}
-          onClick={() => note && printDispatchNote(note)}
-        >
-          Imprimir remito
-        </Button>
+          label='Imprimir remito'
+          onRoll={() => note && printDispatchNote(note)}
+          onA4={() => note && printDispatchNoteA4(note)}
+        />
       </DialogActions>
     </Dialog>
   )

@@ -22,7 +22,9 @@ import tableStyles from '@core/styles/table.module.css'
 import { useReceiveReturn, useReceiveTransfer } from '@/hooks/useBranchTransfers'
 import { useAuthContext } from '@/contexts/AuthContext'
 import { printReceptionReceipt, printReceptionReceiptBluetooth } from '@/utils/receptionReceipt'
+import { printReceptionReceiptA4 } from '@/utils/a4Documents'
 import { isBluetoothAvailable } from '@/utils/bluetoothPrinter'
+import PrintFormatButton from '@/components/PrintFormatButton'
 import type { BranchTransfer, BranchTransferItem } from '@/types/api/branchTransfer'
 import { itemLabel } from '@/views/Dashboard/central-warehouse/transfers'
 import { prendas } from '@/views/Dashboard/central-warehouse/units'
@@ -272,14 +274,11 @@ const ReceiveTransferModal = ({ transfer, onClose, showMessage }: Props) => {
 
         <Box sx={{ flex: 1 }} />
 
-        <Button
-          variant='outlined'
-          startIcon={<i className='tabler-printer' />}
-          onClick={() => printReceptionReceipt(buildReceipt())}
+        <PrintFormatButton
+          onRoll={() => printReceptionReceipt(buildReceipt())}
+          onA4={() => printReceptionReceiptA4(buildReceipt())}
           disabled={(receive.isPending || receiveReturn.isPending)}
-        >
-          Imprimir
-        </Button>
+        />
 
         {isBluetoothAvailable() && (
           <Button
