@@ -42,6 +42,12 @@ export type LabelSize = {
   // positivo a la derecha, negativo a la izquierda. Vale para la hoja y para la
   // termica por igual, porque mueve el dibujo, no el papel.
   contentOffsetMm?: number
+
+  // Corrimiento VERTICAL del contenido, en mm, SOLO en la termica: positivo
+  // abajo, negativo arriba. Se suma al ajuste general (OFFSET_VERTICAL_MM).
+  // Por el driver de la PC la posicion vertical la decide Windows, por eso no
+  // aplica alli.
+  offsetYMm?: number
 }
 
 // Ancho fisico de lo que se imprime de una vez: una etiqueta, o la fila entera
@@ -73,7 +79,13 @@ export const LABEL_SIZES: LabelSize[] = [
     height: 20,
     perRow: 2,
     gapMm: 4,
-    contentOffsetMm: -1.5
+    contentOffsetMm: -1.5,
+
+    // Solo termica: ahi el contenido salia 1.5 mm a la izquierda y 3 mm arriba
+    // de donde corresponde. Por hoja ya sale bien, por eso no se usa
+    // contentOffsetMm para esto
+    offsetMm: 1.5,
+    offsetYMm: 3
   },
   { id: '40x40', label: '40 × 40 mm', width: 40, height: 40 },
   { id: '50x50', label: '50 × 50 mm', width: 50, height: 50 },
@@ -951,6 +963,9 @@ export const renderLabelBitmap = async (
     // para que las dos salidas queden iguales. Va DESPUES del recorte: lo que
     // se pase del borde se corta y no invade la etiqueta de al lado
     if (size.contentOffsetMm) ctx.translate(size.contentOffsetMm * DOTS_PER_MM, 0)
+
+    // Ajuste vertical propio de la termica (ver offsetYMm): la hoja no lo usa
+    if (size.offsetYMm) ctx.translate(0, size.offsetYMm * DOTS_PER_MM)
 
     await drawLabel(ctx, labels[i], size, altoUtilMm - bajadaDots / DOTS_PER_MM)
     ctx.restore()
