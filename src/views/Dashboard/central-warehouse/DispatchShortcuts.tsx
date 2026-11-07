@@ -28,6 +28,13 @@ type Props = {
 const label = (group: ProductGroup, colorName: string, sizeName: string) =>
   `${group.productName} · ${colorName} · Talla ${sizeName}`
 
+// Cuanto se puede enviar de una talla: nunca mas de lo que hay en la bodega.
+// Antes los atajos ponian la cantidad pedida en TODAS las tallas, incluidas las
+// que estan en cero; esas quedaban marcadas como "supera el stock" y, como su
+// input en la tabla se deshabilita cuando no hay stock, no habia forma de
+// borrarlas: ni se podia enviar ni corregir.
+const enviable = (size: { warehouseStock: number }, pedido: number) => Math.min(pedido, size.warehouseStock)
+
 // Tres formas rapidas de llenar la columna "Enviar" de todo un producto de una
 // sola vez, en vez de tipear variante por variante
 const DispatchShortcuts = ({ group, onApply, onClose }: Props) => {
@@ -39,7 +46,10 @@ const DispatchShortcuts = ({ group, onApply, onClose }: Props) => {
   const [multiColorKeys, setMultiColorKeys] = useState<string[]>([])
   const [multiSizeNames, setMultiSizeNames] = useState<string[]>([])
   const [multiQty, setMultiQty] = useState('')
-  const [applied, setApplied] = useState<string | null>(null)
+
+  // El aviso lleva su color: lo que entro completo es un exito, pero algo
+  // recortado por stock —o que no entro— tiene que leerse como advertencia
+  const [applied, setApplied] = useState<{ texto: string; severity: 'success' | 'warning' } | null>(null)
 
   useEffect(() => {
     setAllQty('')
@@ -64,9 +74,32 @@ const DispatchShortcuts = ({ group, onApply, onClose }: Props) => {
 
   if (!group) return null
 
-  const apply = (entries: ShortcutEntry[], message: string) => {
+  const apply = (entries: ShortcutEntry[], message: { texto: string; severity: 'success' | 'warning' }) => {
     onApply(entries)
     setApplied(message)
+  }
+
+  // Decir cuantas entraron y, si alguna quedo por debajo de lo pedido, que fue
+  // por el stock: sin esto el atajo parece no haber funcionado
+  const resumen = (
+    pedido: number,
+    entries: ShortcutEntry[],
+    que: string
+  ): { texto: string; severity: 'success' | 'warning' } => {
+    if (entries.length === 0) {
+      return { texto: `No hay stock en la Bodega Central para ${que}`, severity: 'warning' }
+    }
+
+    const recortadas = entries.filter(entry => entry.quantity < pedido).length
+
+    if (recortadas > 0) {
+      return {
+        texto: `Se llenaron ${entries.length} variante(s) de ${que}; ${recortadas} con menos de ${pedido} por el stock disponible`,
+        severity: 'warning'
+      }
+    }
+
+    return { texto: `Se puso ${pedido} a ${entries.length} variante(s) de ${que}`, severity: 'success' }
   }
 
   const applyAll = () => {
@@ -77,12 +110,20 @@ const DispatchShortcuts = ({ group, onApply, onClose }: Props) => {
     const entries: ShortcutEntry[] = []
 
     group.colors.forEach(color =>
-      color.sizes.forEach(size =>
-        entries.push({ variantSizeId: size.variantSizeId, quantity: qty, label: label(group, color.colorName, size.sizeName) })
-      )
+      color.sizes.forEach(size => {
+        const cantidad = enviable(size, qty)
+
+        if (cantidad > 0) {
+          entries.push({
+            variantSizeId: size.variantSizeId,
+            quantity: cantidad,
+            label: label(group, color.colorName, size.sizeName)
+          })
+        }
+      })
     )
 
-    apply(entries, `Se puso ${qty} a las ${entries.length} variantes de ${group.productName}`)
+    apply(entries, resumen(qty, entries, `las variantes de ${group.productName}`))
     setAllQty('')
   }
 
@@ -96,10 +137,18 @@ const DispatchShortcuts = ({ group, onApply, onClose }: Props) => {
     group.colors.forEach(color => {
       const size = color.sizes.find(s => s.sizeName === sizeName)
 
-      if (size) entries.push({ variantSizeId: size.variantSizeId, quantity: qty, label: label(group, color.colorName, size.sizeName) })
+      const cantidad = size ? enviable(size, qty) : 0
+
+      if (size && cantidad > 0) {
+        entries.push({
+          variantSizeId: size.variantSizeId,
+          quantity: cantidad,
+          label: label(group, color.colorName, size.sizeName)
+        })
+      }
     })
 
-    apply(entries, `Se puso ${qty} a la talla ${sizeName} en ${entries.length} color(es)`)
+    apply(entries, resumen(qty, entries, `la talla ${sizeName}`))
     setSizeQty('')
   }
 
@@ -109,13 +158,15 @@ const DispatchShortcuts = ({ group, onApply, onClose }: Props) => {
 
     if (!qty || qty <= 0 || !color) return
 
-    const entries: ShortcutEntry[] = color.sizes.map(size => ({
-      variantSizeId: size.variantSizeId,
-      quantity: qty,
-      label: label(group, color.colorName, size.sizeName)
-    }))
+    const entries: ShortcutEntry[] = color.sizes
+      .filter(size => enviable(size, qty) > 0)
+      .map(size => ({
+        variantSizeId: size.variantSizeId,
+        quantity: enviable(size, qty),
+        label: label(group, color.colorName, size.sizeName)
+      }))
 
-    apply(entries, `Se puso ${qty} a las ${entries.length} tallas de ${color.colorName}`)
+    apply(entries, resumen(qty, entries, `las tallas de ${color.colorName}`))
     setColorQty('')
   }
 
@@ -131,15 +182,20 @@ const DispatchShortcuts = ({ group, onApply, onClose }: Props) => {
       .forEach(color => {
         color.sizes
           .filter(size => multiSizeNames.includes(size.sizeName))
-          .forEach(size =>
-            entries.push({ variantSizeId: size.variantSizeId, quantity: qty, label: label(group, color.colorName, size.sizeName) })
-          )
+          .forEach(size => {
+            const cantidad = enviable(size, qty)
+
+            if (cantidad > 0) {
+              entries.push({
+                variantSizeId: size.variantSizeId,
+                quantity: cantidad,
+                label: label(group, color.colorName, size.sizeName)
+              })
+            }
+          })
       })
 
-    apply(
-      entries,
-      `Se puso ${qty} a las tallas ${multiSizeNames.join(', ')} en ${multiColorKeys.length} color(es)`
-    )
+    apply(entries, resumen(qty, entries, `las tallas ${multiSizeNames.join(', ')}`))
     setMultiQty('')
   }
 
@@ -154,8 +210,8 @@ const DispatchShortcuts = ({ group, onApply, onClose }: Props) => {
 
       <DialogContent>
         {applied && (
-          <Alert severity='success' sx={{ mb: 4 }} onClose={() => setApplied(null)}>
-            {applied}
+          <Alert severity={applied.severity} sx={{ mb: 4 }} onClose={() => setApplied(null)}>
+            {applied.texto}
           </Alert>
         )}
 

@@ -12,8 +12,45 @@ import { LABEL_INIT, connectLabelPrinter, isLabelPrinterConnected, writeToLabelP
 export type LabelSize = {
   id: string
   label: string
+
+  // Medidas de UNA etiqueta, no del rollo: el diseño se arma sobre estas
   width: number
   height: number
+
+  // Cuantas etiquetas vienen lado a lado en el rollo. Por defecto 1. En un rollo
+  // doble cada avance de papel expone 2, asi que se imprimen DISTINTAS: un lote
+  // de 10 son 5 avances en vez de 10. El ancho fisico de la fila es
+  // width * perRow (ver anchoFilaMm)
+  perRow?: number
+
+  // Separacion entre una etiqueta y la de al lado, en mm. Es una medida del
+  // PAPEL: en el rollo doble las dos no estan pegadas, hay liner en medio.
+  // Medila con regla sobre el rollo. Solo aplica con perRow > 1.
+  gapMm?: number
+
+  // Corrimiento propio de ESTA medida, en mm: positivo a la derecha, negativo a
+  // la izquierda. Se suma al ajuste general (OFFSET_IZQUIERDO_MM), que vale para
+  // todos los rollos. Sirve cuando un rollo apoya distinto que los demas y hay
+  // que moverlo sin descalibrar a los otros cuatro.
+  //
+  // OJO: mueve DONDE EMPIEZA A IMPRIMIR en el cabezal, asi que solo afecta a la
+  // termica. Por el driver de la PC la posicion la decide Windows. Para correr
+  // lo que se ve DENTRO de la etiqueta —en las dos salidas— esta contentOffsetMm.
+  offsetMm?: number
+
+  // Corrimiento del CONTENIDO (texto y QR) dentro de cada etiqueta, en mm:
+  // positivo a la derecha, negativo a la izquierda. Vale para la hoja y para la
+  // termica por igual, porque mueve el dibujo, no el papel.
+  contentOffsetMm?: number
+}
+
+// Ancho fisico de lo que se imprime de una vez: una etiqueta, o la fila entera
+// en un rollo de varias, con la separacion incluida. Es contra esto que se
+// calcula el centrado en el cabezal.
+export const anchoFilaMm = (size: LabelSize): number => {
+  const porFila = size.perRow ?? 1
+
+  return size.width * porFila + (size.gapMm ?? 0) * (porFila - 1)
 }
 
 // Las cuatro medidas de rollo que se usan. Las bajas llevan el QR al costado
@@ -21,6 +58,23 @@ export type LabelSize = {
 // Cada medida tiene que existir tambien como tamaño de papel en el driver.
 export const LABEL_SIZES: LabelSize[] = [
   { id: '30x20', label: '30 × 20 mm', width: 30, height: 20 },
+
+  // Rollo doble, medido con regla: 2 mm de liner | etiqueta 30 | 4 mm | etiqueta
+  // 30 | 1 mm = 67 mm de papel. Lo que se imprime es de borde a borde de las dos
+  // etiquetas: 30 + 4 + 30 = 64 mm, que entra en el cabezal de 72.
+  // Cada fila lleva dos etiquetas distintas
+  // contentOffsetMm: el texto y el QR entraban 1.5 mm a la derecha dentro de cada
+  // etiqueta, asi que el contenido se corre a la izquierda. Es propio de este
+  // rollo: no toca a los otros cuatro
+  {
+    id: '30x20-doble',
+    label: '30 × 20 mm (rollo doble)',
+    width: 30,
+    height: 20,
+    perRow: 2,
+    gapMm: 4,
+    contentOffsetMm: -1.5
+  },
   { id: '40x40', label: '40 × 40 mm', width: 40, height: 40 },
   { id: '50x50', label: '50 × 50 mm', width: 50, height: 50 },
   { id: '50x25', label: '50 × 25 mm', width: 50, height: 25 }
@@ -76,9 +130,11 @@ const layoutFor = (size: LabelSize): LabelLayout => {
 
       // Con el nombre a todo el ancho entran 2 renglones. En 30 mm talla y color
       // van mas chicos para que entren completos en el lado del QR
-      producto: size.id === '30x20' ? 6 : 9.5,
+      // `chica` es width <= 30: da lo mismo que el `id === '30x20'` que habia
+      // antes para las medidas existentes, pero tambien vale para el rollo doble
+      producto: chica ? 6 : 9.5,
       productoLineas: 2,
-      detalle: size.id === '30x20' ? 5 : 7.5,
+      detalle: chica ? 5 : 7.5,
       detalleLineas: chica ? 3 : 2,
       id: chica ? 5 : 7,
       parrafo: chica ? 0.6 : 1,
@@ -118,7 +174,9 @@ const escapeText = (text: string) =>
 const labelParts = (label: VariantLabel, size: LabelSize) => {
   const layout = layoutFor(size)
   const stack = layout.mode === 'stack'
-  const compactHorizontal = size.id === '30x20'
+
+  // Misma regla que layoutFor: baja y angosta. Por id dejaba afuera al rollo doble
+  const compactHorizontal = !stack && size.width <= 30
 
   const producto = label.productName ? `<div class="producto">${escapeText(label.productName)}</div>` : ''
 
@@ -135,6 +193,11 @@ const labelParts = (label: VariantLabel, size: LabelSize) => {
 
   const css = `
       .etiqueta, .etiqueta * { margin: 0; padding: 0; box-sizing: border-box; }
+
+      /* Corrimiento del contenido dentro de la etiqueta (ver contentOffsetMm).
+         El overflow: hidden de .etiqueta recorta lo que se pase, asi nada se
+         mete en la etiqueta de al lado */
+      .etiqueta > * { transform: translateX(${size.contentOffsetMm ?? 0}mm); }
 
       .etiqueta {
         width: ${size.width}mm;
@@ -245,8 +308,10 @@ export const generateLabelHTML = (label: VariantLabel, size: LabelSize): string 
     <meta charset="UTF-8">
     <title>Etiqueta ${label.variantId}</title>
     <style>
+      /* La pagina es la FILA del rollo: en uno doble son 60 mm aunque se
+         imprima una sola etiqueta (la otra mitad queda en blanco) */
       @page {
-        size: ${size.width}mm ${size.height}mm;
+        size: ${anchoFilaMm(size)}mm ${size.height}mm;
         margin: 0;
       }
 
@@ -296,7 +361,27 @@ export const printVariantLabel = (label: VariantLabel, size: LabelSize): void =>
 // medida; lo unico que cambia por etiqueta es el contenido.
 export const generateLabelsSheetHTML = (labels: VariantLabel[], size: LabelSize): string => {
   const { css } = labelParts(labels[0], size)
-  const etiquetas = labels.map(label => `<div class="etiqueta">${labelParts(label, size).markup}</div>`).join('')
+  const porFila = size.perRow ?? 1
+
+  // Cada pagina es una FILA del rollo. Con perRow 1 es una etiqueta, como
+  // siempre; con 2, dos distintas lado a lado, y si la cantidad es impar la
+  // ultima fila lleva una sola
+  const filas: VariantLabel[][] = []
+
+  for (let i = 0; i < labels.length; i += porFila) {
+    filas.push(labels.slice(i, i + porFila))
+  }
+
+  const etiquetas = filas
+    .map(fila => {
+      const contenido = fila
+        .map(label => `<div class="etiqueta">${labelParts(label, size).markup}</div>`)
+        .join('')
+
+      // Con una sola por fila no se envuelve: el HTML queda igual que antes
+      return porFila === 1 ? contenido : `<div class="fila-rollo">${contenido}</div>`
+    })
+    .join('')
 
   return `<!DOCTYPE html>
 <html lang="es">
@@ -305,8 +390,17 @@ export const generateLabelsSheetHTML = (labels: VariantLabel[], size: LabelSize)
     <title>Etiquetas (${labels.length})</title>
     <style>
       @page {
-        size: ${size.width}mm ${size.height}mm;
+        size: ${anchoFilaMm(size)}mm ${size.height}mm;
         margin: 0;
+      }
+
+      /* Rollo de varias por fila: una al lado de la otra, con la separacion
+         real del papel entre ambas */
+      .fila-rollo {
+        display: flex;
+        gap: ${size.gapMm ?? 0}mm;
+        width: ${anchoFilaMm(size)}mm;
+        height: ${size.height}mm;
       }
 
       html, body { margin: 0; padding: 0; }
@@ -315,8 +409,13 @@ export const generateLabelsSheetHTML = (labels: VariantLabel[], size: LabelSize)
       /* Una etiqueta por pagina: en el rollo, cada pagina es una etiqueta.
          La ultima sin salto, o la impresora expulsaria una de mas */
       @media print {
-        .etiqueta { page-break-after: always; break-after: page; }
-        .etiqueta:last-child { page-break-after: auto; break-after: auto; }
+        ${
+          porFila === 1
+            ? `.etiqueta { page-break-after: always; break-after: page; }
+        .etiqueta:last-child { page-break-after: auto; break-after: auto; }`
+            : `.fila-rollo { page-break-after: always; break-after: page; }
+        .fila-rollo:last-child { page-break-after: auto; break-after: auto; }`
+        }
       }
 
       /* En pantalla se ven todas seguidas, para revisar el lote antes de mandarlo */
@@ -446,12 +545,12 @@ export const setOffsetEtiquetaMm = (mm: number): void => {
 
 // Relleno blanco a la izquierda de la etiqueta, en puntos de cabezal
 const margenIzquierdo = (size: LabelSize): number => {
-  const sobra = Math.max(0, ANCHO_CABEZAL_MM - size.width)
+  const sobra = Math.max(0, ANCHO_CABEZAL_MM - anchoFilaMm(size))
 
   const base = ALINEACION_ROLLO === 'izquierda' ? 0 : ALINEACION_ROLLO === 'centro' ? sobra / 2 : sobra
 
   // Nunca negativo: la imagen no puede empezar fuera del papel
-  return Math.max(0, Math.round((base + getOffsetEtiquetaMm()) * DOTS_PER_MM))
+  return Math.max(0, Math.round((base + getOffsetEtiquetaMm() + (size.offsetMm ?? 0)) * DOTS_PER_MM))
 }
 
 // Cuanto se esta corriendo la etiqueta, para mostrarlo en el panel de calibracion
@@ -696,8 +795,8 @@ const drawLabel = async (
   // El diseño (tipografias, QR, armado) sale SIEMPRE de la medida real de la
   // etiqueta: lo unico que cambia es el alto donde hay que acomodarlo
   const layout = layoutFor(size)
-  const compactHorizontal = size.id === '30x20'
   const stack = layout.mode === 'stack'
+  const compactHorizontal = !stack && size.width <= 30
 
   const width = size.width * DOTS_PER_MM
   const height = altoMm * DOTS_PER_MM
@@ -787,11 +886,19 @@ const drawLabel = async (
 // (ver OFFSET_VERTICAL_MM). Dentro de un lote, de la segunda en adelante, el
 // papel ya quedo bien parado por el sensor y no se compensa nada.
 export const renderLabelBitmap = async (
-  label: VariantLabel,
+  label: VariantLabel | VariantLabel[],
   size: LabelSize,
   arranqueEnFrio = true
 ): Promise<LabelBitmap> => {
+  // En un rollo doble entran dos etiquetas DISTINTAS por avance de papel. Si
+  // llega una sola (impresion individual, o la ultima de un lote impar), la otra
+  // mitad queda en blanco: no hay con que llenarla.
+  const porFila = size.perRow ?? 1
+  const labels = (Array.isArray(label) ? label : [label]).slice(0, porFila)
+
   const etiquetaDots = Math.round(size.width * DOTS_PER_MM)
+  const separacionDots = Math.round((size.gapMm ?? 0) * DOTS_PER_MM)
+  const filaDots = Math.round(anchoFilaMm(size) * DOTS_PER_MM)
   const margenDots = margenIzquierdo(size)
 
   // Con GS L el corrimiento lo hace la impresora y el bitmap lleva solo la
@@ -799,7 +906,7 @@ export const renderLabelBitmap = async (
   const relleno = MARGEN_POR_COMANDO ? 0 : margenDots
 
   // El ancho en puntos tiene que ser multiplo de 8: cada byte son 8 puntos
-  const width = Math.ceil((etiquetaDots + relleno) / 8) * 8
+  const width = Math.ceil((filaDots + relleno) / 8) * 8
 
   // Alto REAL de que se dispone. La impresora arranca pasada del inicio de la
   // etiqueta, asi que esos milimetros de arriba no existen para nosotros: en vez
@@ -823,22 +930,31 @@ export const renderLabelBitmap = async (
   ctx.fillStyle = '#fff'
   ctx.fillRect(0, 0, width, height)
 
-  // La etiqueta conserva SU ancho y se corre a la derecha
-  ctx.save()
-  ctx.translate(relleno, 0)
+  // Cada etiqueta en su columna. Con perRow 1 es el caso de siempre: una sola,
+  // corrida a la derecha por el relleno
+  for (let i = 0; i < labels.length; i++) {
+    ctx.save()
+    ctx.translate(relleno + i * (etiquetaDots + separacionDots), 0)
 
-  // Resguardo por si algun texto desbordara: el recorte se fija antes de bajar
-  // el contenido, asi delimita siempre lo que se imprime
-  ctx.beginPath()
-  ctx.rect(0, 0, etiquetaDots, height)
-  ctx.clip()
+    // Resguardo por si algun texto desbordara: el recorte se fija antes de bajar
+    // el contenido, asi delimita siempre lo que se imprime. Ademas evita que una
+    // etiqueta se meta en la de al lado
+    ctx.beginPath()
+    ctx.rect(0, 0, etiquetaDots, height)
+    ctx.clip()
 
-  // Un offset positivo si es un corrimiento a secas: baja el contenido dentro de
-  // lo que hay. Es el caso raro; lo normal es negativo (la impresora se adelanta)
-  if (bajadaDots > 0) ctx.translate(0, bajadaDots)
+    // Un offset positivo si es un corrimiento a secas: baja el contenido dentro
+    // de lo que hay. Es el caso raro; lo normal es negativo (la impresora se adelanta)
+    if (bajadaDots > 0) ctx.translate(0, bajadaDots)
 
-  await drawLabel(ctx, label, size, altoUtilMm - bajadaDots / DOTS_PER_MM)
-  ctx.restore()
+    // El mismo corrimiento horizontal que aplica la hoja (ver contentOffsetMm),
+    // para que las dos salidas queden iguales. Va DESPUES del recorte: lo que
+    // se pase del borde se corta y no invade la etiqueta de al lado
+    if (size.contentOffsetMm) ctx.translate(size.contentOffsetMm * DOTS_PER_MM, 0)
+
+    await drawLabel(ctx, labels[i], size, altoUtilMm - bajadaDots / DOTS_PER_MM)
+    ctx.restore()
+  }
 
   // Termica = blanco o negro. El corte va por encima del gris medio: el borde
   // suavizado de las letras cuenta como negro y la negrita no sale finita
@@ -938,8 +1054,10 @@ const FEED_TO_NEXT_LABEL = new Uint8Array([0x1d, 0x0c])
 // GS L: margen izquierdo, en puntos. Corre la impresion sin gastar bytes en blanco
 const margenCommand = (dots: number) => new Uint8Array([0x1d, 0x4c, dots & 0xff, dots >> 8])
 
+// `label` puede ser una fila entera: en un rollo doble van dos etiquetas
+// distintas en el mismo avance de papel
 export const printVariantLabelBluetooth = async (
-  label: VariantLabel,
+  label: VariantLabel | VariantLabel[],
   size: LabelSize,
   arranqueEnFrio = true
 ): Promise<void> => {

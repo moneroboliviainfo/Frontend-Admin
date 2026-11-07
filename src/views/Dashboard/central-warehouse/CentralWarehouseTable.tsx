@@ -636,7 +636,7 @@ const CentralWarehouseTable = () => {
                         {group.productName}
                       </Typography>
                       <Chip
-                        label={`${group.totalStock} en bodega`}
+                        label={`${group.totalStock} en bodega central`}
                         size='small'
                         variant='tonal'
                         color={group.totalStock > 0 ? 'success' : 'default'}
@@ -750,7 +750,7 @@ const CentralWarehouseTable = () => {
                                           type='number'
                                           size='small'
                                           placeholder='0'
-                                          disabled={!selectedBranch || max === 0}
+                                          disabled={!selectedBranch || (max === 0 && !toSend)}
                                           error={toSend > max}
                                           value={toSend || ''}
                                           onChange={e =>

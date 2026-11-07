@@ -1,15 +1,19 @@
 'use client'
 
 // Boton de imprimir con eleccion de papel: rollo de 80mm (termica, lo de
-// siempre) u hoja A4 (impresora comun). El clic principal usa el ultimo formato
-// elegido en ESTE equipo (por defecto rollo, asi nada cambia para quien no
-// toca la flecha); la flecha abre el menu para elegir y lo recuerda.
+// siempre) u hoja A4 (impresora comun).
+//
+// Un solo boton que abre el menu, igual en tabla que en dialogo. Antes era un
+// split button —el boton imprimia directo y una flecha al lado abria el menu—:
+// ahorraba un clic a quien siempre usa el mismo papel, pero la flecha es un
+// patron raro en el resto del panel y no se entendia que el boton grande ya
+// tenia un formato elegido. Se recuerda el ultimo usado solo para marcarlo en
+// el menu.
 
 import { useEffect, useRef, useState } from 'react'
 import type { ReactNode } from 'react'
 
 import Button from '@mui/material/Button'
-import ButtonGroup from '@mui/material/ButtonGroup'
 import IconButton from '@mui/material/IconButton'
 import ListItemIcon from '@mui/material/ListItemIcon'
 import ListItemText from '@mui/material/ListItemText'
@@ -81,12 +85,10 @@ const PrintFormatButton = ({
   const [open, setOpen] = useState(false)
   const anchorRef = useRef<HTMLDivElement | HTMLButtonElement | null>(null)
 
-  const print = (value: PrintFormat) => (value === 'a4' ? onA4() : onRoll())
-
   const pick = (value: PrintFormat) => {
     choose(value)
     setOpen(false)
-    print(value)
+    value === 'a4' ? onA4() : onRoll()
   }
 
   const menu = (
@@ -131,32 +133,19 @@ const PrintFormatButton = ({
     )
   }
 
-  const current = FORMATS.find(item => item.value === format)!
-
   return (
     <>
-      <ButtonGroup
+      <Button
         variant={variant}
         disabled={disabled}
+        startIcon={<i className='tabler-printer' />}
         ref={el => {
           anchorRef.current = el
         }}
+        onClick={() => setOpen(true)}
       >
-        <Button startIcon={<i className='tabler-printer' />} onClick={() => print(format)}>
-          {label}
-          {format === 'a4' ? ' (hoja)' : ''}
-        </Button>
-        {/* Sin Tooltip envolviendo: rompe los bordes del ButtonGroup */}
-        <Button
-          size='small'
-          aria-label='Elegir formato de impresión'
-          title={`Formato: ${current.label}. Cambiar`}
-          onClick={() => setOpen(true)}
-          sx={{ px: 1 }}
-        >
-          <i className='tabler-chevron-down' />
-        </Button>
-      </ButtonGroup>
+        {label}
+      </Button>
       {menu}
     </>
   )

@@ -27,6 +27,7 @@ import LinearProgress from '@mui/material/LinearProgress'
 import Checkbox from '@mui/material/Checkbox'
 import FormControlLabel from '@mui/material/FormControlLabel'
 import IconButton from '@mui/material/IconButton'
+import Menu from '@mui/material/Menu'
 import MenuItem from '@mui/material/MenuItem'
 import Chip from '@mui/material/Chip'
 import { QRCodeCanvas } from 'qrcode.react'
@@ -59,6 +60,7 @@ const BulkLabelPrintDialog = ({ open, onClose, variants, productName }: Props) =
   const [filas, setFilas] = useState<Fila[]>([])
   const [incluirSinStock, setIncluirSinStock] = useState(false)
   const [size, setSize] = useState<LabelSize>(LABEL_SIZES[0])
+  const [sizeAnchor, setSizeAnchor] = useState<null | HTMLElement>(null)
   const [imprimiendo, setImprimiendo] = useState(false)
   const [progreso, setProgreso] = useState(0)
   const [resultado, setResultado] = useState<{ texto: string; ok: boolean } | null>(null)
@@ -242,21 +244,27 @@ const BulkLabelPrintDialog = ({ open, onClose, variants, productName }: Props) =
     }
 
     const etiquetas = expandir()
+
+    // En un rollo doble entran dos etiquetas distintas por avance de papel: se
+    // mandan de a pares y el lote tarda la mitad. Con rollo simple, de a una
+    const porFila = size.perRow ?? 1
     let hechas = 0
 
     try {
-      for (const etiqueta of etiquetas) {
+      for (let i = 0; i < etiquetas.length; i += porFila) {
         if (cancelar.current) {
           setResultado({ texto: `Cancelado. Se imprimieron ${hechas} de ${total} etiquetas.`, ok: false })
 
           return
         }
 
+        const fila = etiquetas.slice(i, i + porFila)
+
         // Solo la primera arranca en frio: de ahi en mas el papel queda parado
         // por el sensor de la impresora, y compensarlo igual las corria hacia
         // arriba (ver OFFSET_VERTICAL_MM en variantLabel.ts)
-        await printVariantLabelBluetooth(etiqueta, size, hechas === 0)
-        hechas++
+        await printVariantLabelBluetooth(fila, size, hechas === 0)
+        hechas += fila.length
         setProgreso(hechas)
       }
 
@@ -290,21 +298,37 @@ const BulkLabelPrintDialog = ({ open, onClose, variants, productName }: Props) =
         )}
 
         <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, flexWrap: 'wrap', mb: 2 }}>
-          <CustomTextField
-            select
+          {/* Boton + Menu en vez de un <select>: el desplegable de MUI no se
+              abria dentro de este dialogo. Es el mismo patron del modal de una
+              sola etiqueta, que si funciona */}
+          <Button
+            variant='outlined'
             size='small'
-            label='Tamaño de etiqueta'
-            value={size.id}
-            onChange={e => setSize(LABEL_SIZES.find(s => s.id === e.target.value) || LABEL_SIZES[0])}
             disabled={imprimiendo}
-            sx={{ minWidth: 160 }}
+            onClick={e => setSizeAnchor(e.currentTarget)}
+            endIcon={<i className='tabler-chevron-down' />}
           >
+            Tamaño: {size.label}
+          </Button>
+
+          <Menu anchorEl={sizeAnchor} open={!!sizeAnchor} onClose={() => setSizeAnchor(null)}>
+            <MenuItem disabled sx={{ opacity: '1 !important', fontSize: '0.75rem' }}>
+              Tamaño de la etiqueta
+            </MenuItem>
+            <Divider />
             {LABEL_SIZES.map(s => (
-              <MenuItem key={s.id} value={s.id}>
+              <MenuItem
+                key={s.id}
+                selected={s.id === size.id}
+                onClick={() => {
+                  setSize(s)
+                  setSizeAnchor(null)
+                }}
+              >
                 {s.label}
               </MenuItem>
             ))}
-          </CustomTextField>
+          </Menu>
 
           <FormControlLabel
             control={
@@ -473,12 +497,10 @@ const BulkLabelPrintDialog = ({ open, onClose, variants, productName }: Props) =
           </Typography>
 
           {total > 0 && !imprimiendo && (
-
-            // 3 s por etiqueta es lo que tarda la termica entre envio, impresion
-            // y avance; por el driver de la PC va mucho mas rapido
             <Typography variant='caption' color='text.secondary'>
-              Por térmica va a tardar unos {Math.max(1, Math.round((total * 3) / 60))} min. No bloquees la pantalla: al
-              suspenderse se corta el Bluetooth.
+              Por térmica va a tardar unos{' '}
+              {Math.max(1, Math.round((Math.ceil(total / (size.perRow ?? 1)) * 3) / 60))} min. No bloquees la
+              pantalla: al suspenderse se corta el Bluetooth.
             </Typography>
           )}
         </Box>
