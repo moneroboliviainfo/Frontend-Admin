@@ -43,10 +43,15 @@ export type LabelSize = {
   // termica por igual, porque mueve el dibujo, no el papel.
   contentOffsetMm?: number
 
-  // Corrimiento VERTICAL del contenido, en mm, SOLO en la termica: positivo
-  // abajo, negativo arriba. Se suma al ajuste general (OFFSET_VERTICAL_MM).
-  // Por el driver de la PC la posicion vertical la decide Windows, por eso no
-  // aplica alli.
+  // Ajuste VERTICAL propio de esta medida, en mm, SOLO en la termica: positivo
+  // baja el contenido, negativo lo sube. Se suma al general
+  // (OFFSET_VERTICAL_MM), que compensa cuanto se adelanta la impresora al
+  // arrancar: si un rollo se adelanta menos que los demas, aca se corrige sin
+  // descalibrar a los otros.
+  //
+  // Bajar el contenido tambien le da mas alto para armarse, porque se recorta
+  // menos por arriba. Por el driver de la PC la posicion la decide Windows, por
+  // eso no aplica alli.
   offsetYMm?: number
 }
 
@@ -924,7 +929,15 @@ export const renderLabelBitmap = async (
   // etiqueta, asi que esos milimetros de arriba no existen para nosotros: en vez
   // de dibujar la etiqueta entera y correrla hacia arriba —que recortaba el
   // primer renglon por la mitad— se dibuja el diseño completo en lo que queda.
-  const offsetVertical = arranqueEnFrio ? getOffsetVerticalMm() : 0
+  // El ajuste propio de la medida se suma al general y SOLO en el arranque en
+  // frio: de la segunda etiqueta en adelante el papel ya quedo bien parado y no
+  // se compensa nada (ver OFFSET_VERTICAL_MM).
+  //
+  // Va aca y no como una traslacion posterior a proposito: trasladar movia el
+  // contenido sin darle mas lugar, y el QR terminaba cortado contra el borde de
+  // abajo. Entrando por el offset, lo que cambia es cuanto alto hay para armar
+  // el diseño, asi que el contenido baja Y entra completo.
+  const offsetVertical = arranqueEnFrio ? getOffsetVerticalMm() + (size.offsetYMm ?? 0) : 0
   const recorteMm = Math.max(0, -offsetVertical)
   const bajadaDots = Math.round(Math.max(0, offsetVertical) * DOTS_PER_MM)
   const altoUtilMm = Math.max(1, size.height - recorteMm)
@@ -964,8 +977,6 @@ export const renderLabelBitmap = async (
     // se pase del borde se corta y no invade la etiqueta de al lado
     if (size.contentOffsetMm) ctx.translate(size.contentOffsetMm * DOTS_PER_MM, 0)
 
-    // Ajuste vertical propio de la termica (ver offsetYMm): la hoja no lo usa
-    if (size.offsetYMm) ctx.translate(0, size.offsetYMm * DOTS_PER_MM)
 
     await drawLabel(ctx, labels[i], size, altoUtilMm - bajadaDots / DOTS_PER_MM)
     ctx.restore()
