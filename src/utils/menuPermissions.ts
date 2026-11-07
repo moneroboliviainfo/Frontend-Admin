@@ -31,9 +31,13 @@ export const filterMenuByRole = (
       .filter((item: any) => role === 'ADMIN' || item.label !== 'Usuarios')
       .map((item: any) => {
         if (item.label === 'Ventas' && item.children) {
+          // 'Mis cajas' es GET /dailyCash/mine: el admin no abre cajas, asi
+          // que para el siempre estaria vacia. Su vista es 'Caja'
           return {
             ...item,
-            children: item.children.filter((child: any) => child.label !== 'Venta en Tienda')
+            children: item.children.filter(
+              (child: any) => child.label !== 'Venta en Tienda' && child.label !== 'Mis cajas'
+            )
           }
         }
 
@@ -82,7 +86,8 @@ export const filterMenuByRole = (
       'SIAT'
     ]
 
-    // El historial de caja es A/S/M: el cajero ve el submenu pero no esa opcion
+    // El historial de TODA la sucursal es A/S/M: el cajero ve el submenu pero no
+    // esa opcion. 'Mis cajas' si la conserva: son las suyas
     return menuItems
       .filter((item: any) => allowedMenus.includes(item.label))
       .map((item: any) =>
@@ -148,7 +153,16 @@ export const canAccessRoute = (role: Role | null, route: string, isBillingOnly =
   }
 
   if (role === 'CASHIER') {
-    const cashierAllowedRoutes = ['/sales', '/receptions', '/replenishments', '/branch-requests', '/siat']
+    // '/cash/mine' entra, '/cash' no: el historial de toda la sucursal es
+    // A/S/M, pero sus propias cajas si puede verlas (GET /dailyCash/mine)
+    const cashierAllowedRoutes = [
+      '/sales',
+      '/cash/mine',
+      '/receptions',
+      '/replenishments',
+      '/branch-requests',
+      '/siat'
+    ]
 
     // '/siat/cafc' (crear/editar CAFC) sigue siendo solo A/S
     if (route.startsWith('/siat/cafc')) return false

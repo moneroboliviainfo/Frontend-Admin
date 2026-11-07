@@ -123,6 +123,11 @@ DELETE /products/:id                          (A)
   `AddDiscountsDto`/`AddDiscountsAllDto` en Swagger; son operaciones masivas,
   no crean el `Discount` (eso es el módulo `discounts` de abajo), solo
   asocian uno ya existente.
+- **Datos para envíos FedEx**, obligatorios en `POST /products` y opcionales en
+  `PATCH`: `weightGrams` (**texto** con hasta 2 decimales, gramos por prenda,
+  ej. `"250.50"`) y `unitsPerBox` (entero positivo, prendas por caja). Un
+  producto antiguo sin estos datos hace fallar la cotización FedEx de la web
+  (ver [04](04-cart-checkout-payments.md)): pedilos al editarlo.
 
 Lectura pública: `GET /web-page/products(/:id)`.
 
@@ -143,10 +148,66 @@ DELETE /discounts/permanents      (A)   borra TODOS los permanentes — ojo, no 
 DELETE /discounts/seasonals       (A)   borra TODOS los de temporada — ídem
 DELETE /discounts/:id             (A)   borra uno puntual
 ```
-`appliesOnline`/`appliesInStore` viven en el DTO de create/update — ver
-[Discount visibility tradeoff] en el modelo de datos si necesitás fechas de
-vigencia exactas; confirmar en Swagger. Lectura pública:
-`GET /web-page/discounts`, `/first-discount`, `/:id`.
+Lectura pública: `GET /web-page/discounts`, `/first-discount`, `/:id`.
+
+### Dónde aplica: por sucursal y canal (desde el 06/11/2026)
+
+Cada descuento elige en qué **sucursal** y en qué **canal** vale: la
+**tienda física** (POS) y/o la **web** de cada sucursal. Por ejemplo "solo
+tienda física de A", "solo web de B", "tienda de A + web de B" o todo.
+
+```
+POST /discounts/seasonal
+{
+  "description": "Invierno",
+  "value": 20,
+  "startDate": "2026-12-01T00:00:00.000Z",
+  "endDate": "2026-12-31T23:59:59.000Z",
+  "inStoreBranchIds": [1],      // tiendas físicas donde aplica
+  "onlineBranchIds": [1, 2]     // webs (sucursal elegida en la web) donde aplica
+}
+```
+
+- Las dos listas son opcionales. **Al crear**, una lista omitida = **todas
+  las tiendas** en ese canal. **Al editar**, una lista omitida = **no
+  cambia**; la que se manda **reemplaza** la anterior entera.
+- `[]` = en ninguna sucursal de ese canal. Las dos vacías = el descuento no
+  aplica en ningún lado.
+- Solo se aceptan sucursales tipo tienda: un id inexistente, la bodega
+  principal o una de solo facturación → `400` (`Un descuento solo aplica en
+  tiendas; estas sucursales no existen o no son tiendas: [..]`). Ids
+  repetidos → `400`.
+- Una **sucursal nueva no recibe** los descuentos existentes: hay que
+  agregarla a mano en cada descuento.
+- **Respuesta** de create/update/`GET /discounts`/`GET /discounts/:id`: el
+  descuento con `inStoreBranches` y `onlineBranches`, cada una
+  `[{ id, name }]` (ordenadas por id), para precargar el formulario.
+- `appliesOnline`/`appliesInStore` **están obsoletos**:
+  - En la respuesta siguen viniendo como **resumen**: `true` = aplica en ese
+    canal de **alguna** sucursal. No sirven para saber si aplica en una
+    sucursal concreta.
+  - En create/update todavía se aceptan, pero solo si no viene la lista del
+    mismo canal: `true` = todas las tiendas, `false` = ninguna. Dejen de
+    mandarlos.
+- Los descuentos que existían antes del cambio quedaron en **todas las
+  tiendas** de los canales que tenían marcados: los precios no cambiaron con
+  el deploy.
+- Al asignar un descuento a productos (`PUT /products/add-discounts`) no
+  cambia nada: el producto sigue teniendo **un** descuento. No se puede que el
+  mismo producto tenga 10% en A y 20% en B a la vez.
+- `GET /products` y `GET /products/:id` (admin) traen
+  `discount.branches`: `[{ discountId, branchId, channel }]` con `channel`
+  `in_store` | `online`.
+
+Qué sucursal se mira en cada caso:
+
+| Dónde | Sucursal | Canal |
+|---|---|---|
+| Venta POS / reprice `in_store` | la de la venta (`branchId`) | `in_store` |
+| Venta web / reprice `online` | la elegida en la web (`branchId`) | `online` |
+| Anticipo de un pedido entre sucursales | A, la tienda que pide y cobra | `in_store` |
+| Catálogo del POS (`GET /variants…?branchId=`) | esa sucursal | cualquiera de los dos (trae `discount.branches` para decidir) |
+| Catálogo web, `POST /cart`, `web-page/discounts` | `?branchId=` / `branchId` del body | `online` (el carrito: según `type`) |
 
 ## Banners
 

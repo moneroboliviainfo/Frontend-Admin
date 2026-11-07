@@ -18,6 +18,8 @@ import {
   Typography
 } from '@mui/material'
 
+import { useQueryClient } from '@tanstack/react-query'
+
 import {
   useAddToCart,
   useRepriceCart,
@@ -29,8 +31,16 @@ import {
   useGetOrder,
   useUpdateOrder
 } from '@/hooks/useSales'
-import { useDailyCash, useOpenDailyCash, useCloseDailyCash } from '@/hooks/useDailyCash'
+
+import {
+  useDailyCash,
+  useOpenDailyCash,
+  useCloseDailyCash,
+  usePendingCountDailyCash,
+  useCountDailyCash
+} from '@/hooks/useDailyCash'
 import type { DailyCash } from '@/types/api/dailyCash'
+import { tieneDesglosePorMedio } from '@/utils/cashClosingReceipt'
 import { useAwaitingPickupFor } from '@/hooks/useBranchTransfers'
 import { isRestockRequest } from '@/views/Dashboard/central-warehouse/transfers'
 import type { PickupOrder } from './components/ProductCatalog'
@@ -78,6 +88,11 @@ const PointOfSale: React.FC = () => {
   const [closingAmount, setClosingAmount] = useState('')
   const [closingNote, setClosingNote] = useState('')
   const [closeDailyCashError, setCloseDailyCashError] = useState('')
+
+  // El back rechaza el cierre (409) si quedan ventas por cobrar o un QR de
+  // anticipo vivo. Va aparte del error del campo: no es un monto mal escrito
+  // sino algo que resolver antes, y el mensaje explica que falta
+  const [closeBlockedReason, setCloseBlockedReason] = useState('')
   const [closedCash, setClosedCash] = useState<DailyCash | null>(null)
 
   const [searchTerm, setSearchTerm] = useState('')
@@ -128,10 +143,26 @@ const PointOfSale: React.FC = () => {
   // si lo puede usar sin caja abierta (recibir, pedir, ver stock).
   const salidaSinCaja = isCashier ? '/receptions' : '/home'
 
+  // Despues de CERRAR la caja la salida es otra: el turno termino y lo natural
+  // es ver lo que se vendio. No puede volver al POS —es la ruta donde ya esta,
+  // asi que el push no lo desmontaria y el resumen volveria a aparecer— y
+  // ademas el POS, al no encontrar caja, pediria abrir una nueva de inmediato.
+  const salidaTrasCerrar = '/sales/list'
+
   // Un pedido por venta: enlazarlo marca el pedido entero como retirado
   const [linkedTransferId, setLinkedTransferId] = useState<number | null>(null)
+  const queryClient = useQueryClient()
   const openDailyCash = useOpenDailyCash()
   const closeDailyCash = useCloseDailyCash()
+
+  // Una caja que quedo abierta se cierra sola a las 00:00 y su dueño tiene que
+  // contarla antes de abrir otra. Sin esto, "Abrir caja" responde 409 y el
+  // cajero se queda sin poder vender, sin ninguna salida en pantalla.
+  const { data: pendingCount, isLoading: isPendingCountLoading } = usePendingCountDailyCash()
+  const countDailyCash = useCountDailyCash()
+  const [countAmount, setCountAmount] = useState('')
+  const [countNote, setCountNote] = useState('')
+  const [countError, setCountError] = useState('')
 
   const addToCartMutation = useAddToCart()
   const repriceMutation = useRepriceCart()
@@ -145,11 +176,13 @@ const PointOfSale: React.FC = () => {
   const { data: editingOrderData, isLoading: isLoadingEditingOrder } = useGetOrder(editingOrderId, !!editingOrderId)
   const { data: variantsData, isLoading: isLoadingVariants } = useVariants(variantsPage, variantsLimit, debouncedSearch)
 
+  // El modal de apertura espera a saber si hay conteo pendiente: con uno, lo
+  // que corresponde es contar, no abrir (abrir daria 409)
   useEffect(() => {
-    if (!isDailyCashLoading && dailyCashApiError) {
+    if (!isDailyCashLoading && !isPendingCountLoading && dailyCashApiError && !pendingCount && !closedCash) {
       setDailyCashModalOpen(true)
     }
-  }, [isDailyCashLoading, dailyCashApiError])
+  }, [isDailyCashLoading, isPendingCountLoading, dailyCashApiError, pendingCount, closedCash])
 
   useEffect(() => {
     const editOrderIdParam = searchParams.get('editOrderId')
@@ -324,22 +357,24 @@ const PointOfSale: React.FC = () => {
     const map: Record<number, PickupOrder[]> = {}
 
     // Lo pedido para la sucursal no tiene a quien entregarse: se vende como cualquier prenda
-    ;(awaitingPickupData?.data || []).filter(transfer => !isRestockRequest(transfer)).forEach(transfer => {
-      transfer.items.forEach(item => {
-        const orders = (map[item.variantId] ||= [])
+    ;(awaitingPickupData?.data || [])
+      .filter(transfer => !isRestockRequest(transfer))
+      .forEach(transfer => {
+        transfer.items.forEach(item => {
+          const orders = (map[item.variantId] ||= [])
 
-        if (orders.some(order => order.id === transfer.id)) return
+          if (orders.some(order => order.id === transfer.id)) return
 
-        orders.push({
-          id: transfer.id,
-          customerName: transfer.customerName,
-          customerPhone: transfer.customerPhone,
-          customerCi: transfer.customerCi,
-          pickupDeadline: transfer.pickupDeadline,
-          paid: !!transfer.advancePaidAt
+          orders.push({
+            id: transfer.id,
+            customerName: transfer.customerName,
+            customerPhone: transfer.customerPhone,
+            customerCi: transfer.customerCi,
+            pickupDeadline: transfer.pickupDeadline,
+            paid: !!transfer.advancePaidAt
+          })
         })
       })
-    })
 
     return map
   }, [awaitingPickupData])
@@ -633,6 +668,13 @@ const PointOfSale: React.FC = () => {
         setIsVerifyingPayment(true)
       }
     } catch (error: any) {
+      if (esErrorDeCajaCerrada(error)) {
+        setErrorMessage(error.response.data.message)
+        volverAPedirCaja()
+
+        return
+      }
+
       setErrorMessage(error?.response?.data?.message || 'Error al crear la orden')
       setSelectedPayment('')
       setCurrentStep('ORDER_CREATED')
@@ -669,6 +711,13 @@ const PointOfSale: React.FC = () => {
         clearInterval(timerIntervalRef.current)
       }
     } catch (error: any) {
+      if (esErrorDeCajaCerrada(error)) {
+        setErrorMessage(error.response.data.message)
+        volverAPedirCaja()
+
+        return
+      }
+
       setErrorMessage(error?.response?.data?.message || 'Error al procesar el pago')
       setCurrentStep('ORDER_CREATED')
       setActiveStepIndex(2)
@@ -810,6 +859,46 @@ const PointOfSale: React.FC = () => {
 
   const timerProgress = orderExpiresAt ? (timeRemaining / totalDuration) * 100 : 100
 
+  // El back responde 409 "No tienes una caja abierta: abrela para vender |
+  // confirmar la venta" cuando el cajero perdio su caja a mitad del dia (se
+  // cerro sola a la medianoche, o la cerro el). Sin este corte el mensaje se
+  // mostraba como un error cualquiera y el cajero no sabia que hacer.
+  const esErrorDeCajaCerrada = (error: any): boolean =>
+    error?.response?.status === 409 && /caja abierta/i.test(error?.response?.data?.message || '')
+
+  // Vuelve al estado "sin caja": el POS pregunta de nuevo y, segun corresponda,
+  // pide el conteo pendiente o el monto de apertura
+  const volverAPedirCaja = () => {
+    queryClient.invalidateQueries({ queryKey: ['dailyCash'] })
+    setDailyCashModalOpen(true)
+  }
+
+  const handleSubmitCount = async () => {
+    setCountError('')
+
+    const amount = parseInt(countAmount, 10)
+
+    if (isNaN(amount) || amount < 0) {
+      setCountError('Debe ingresar un monto válido (0 o mayor)')
+
+      return
+    }
+
+    if (!pendingCount) return
+
+    try {
+      await countDailyCash.mutateAsync({
+        id: pendingCount.id,
+        data: { closingAmount: String(amount), closingNote: countNote.trim() || undefined }
+      })
+
+      setCountAmount('')
+      setCountNote('')
+    } catch (error: any) {
+      setCountError(error?.response?.data?.message || 'Error al registrar el conteo')
+    }
+  }
+
   const handleSubmitDailyCash = async () => {
     setDailyCashError('')
 
@@ -836,6 +925,7 @@ const PointOfSale: React.FC = () => {
 
   const handleSubmitCloseDailyCash = async () => {
     setCloseDailyCashError('')
+    setCloseBlockedReason('')
 
     if (!closingAmount.trim() || !dailyCashData) {
       setCloseDailyCashError('Debe ingresar el monto de cierre')
@@ -854,11 +944,19 @@ const PointOfSale: React.FC = () => {
       setClosedCash(closed)
     } catch (error: any) {
       console.error('Error al cerrar daily cash:', error)
-      setCloseDailyCashError(error?.response?.data?.message || 'Error al cerrar caja')
+
+      const mensaje = error?.response?.data?.message || 'Error al cerrar caja'
+
+      if (error?.response?.status === 409) {
+        setCloseBlockedReason(mensaje)
+        setCloseDailyCashError('')
+      } else {
+        setCloseDailyCashError(mensaje)
+      }
     }
   }
 
-  if (isDailyCashLoading) {
+  if (isDailyCashLoading || isPendingCountLoading) {
     return (
       <Box
         sx={{
@@ -872,6 +970,113 @@ const PointOfSale: React.FC = () => {
         <CircularProgress size={60} />
         <Typography sx={{ mt: 3 }}>Verificando registro del día...</Typography>
       </Box>
+    )
+  }
+
+  // Caja cerrada sola a la medianoche: hay que contarla antes de abrir otra.
+  // Va antes del modal de apertura porque es lo que el back exige primero
+  // Caja recien cerrada: el resumen manda hasta que el cajero lo cierre. Va
+  // antes que todo lo demas porque cerrar invalida `current`, que pasa a dar
+  // 404, y sin esta guarda el modal de "abrir caja" aparecia encima y tapaba el
+  // comprobante que el cajero tiene que leer e imprimir.
+  if (closedCash) {
+    return (
+      <>
+        <Box
+          sx={{
+            height: 'calc(100vh - 180px)',
+            display: 'flex',
+            justifyContent: 'center',
+            alignItems: 'center',
+            bgcolor: 'background.default'
+          }}
+        >
+          <Typography variant='h6' color='text.secondary'>
+            Caja cerrada
+          </Typography>
+        </Box>
+
+        <CloseCashSummaryModal dailyCash={closedCash} onClose={() => router.push(salidaTrasCerrar)} />
+      </>
+    )
+  }
+
+  if (pendingCount) {
+    return (
+      <>
+        <Box
+          sx={{
+            height: 'calc(100vh - 180px)',
+            display: 'flex',
+            justifyContent: 'center',
+            alignItems: 'center',
+            bgcolor: 'background.default'
+          }}
+        >
+          <Typography variant='h6' color='text.secondary'>
+            Cargando punto de venta...
+          </Typography>
+        </Box>
+
+        <Dialog open disableEscapeKeyDown maxWidth='sm' fullWidth>
+          <DialogTitle>Registrar conteo de la caja anterior</DialogTitle>
+          <DialogContent>
+            <Box sx={{ pt: 2 }}>
+              <Alert severity='warning' sx={{ mb: 3 }}>
+                Tu caja del {new Date(pendingCount.openedAt).toLocaleDateString('es-BO')} se cerró automáticamente a la
+                medianoche y nadie contó el efectivo. Registrá cuánto había para poder abrir una caja nueva y vender.
+              </Alert>
+
+              <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 1 }}>
+                <Typography variant='body2' color='text.secondary'>
+                  Monto de apertura
+                </Typography>
+                <Typography variant='body2'>Bs {pendingCount.openingAmount}</Typography>
+              </Box>
+
+              {/* Conteo a ciegas, igual que en el cierre: el esperado no se
+                  muestra hasta despues de declarar */}
+              {tieneDesglosePorMedio(pendingCount) && (
+                <Typography variant='caption' color='text.secondary' sx={{ display: 'block', mb: 3 }}>
+                  En el turno se cobraron Bs {pendingCount.cardAmount} con tarjeta y Bs {pendingCount.qrAmount} por QR,
+                  que no se cuentan en el cajón.
+                </Typography>
+              )}
+
+              <TextField
+                label='Efectivo contado (Bs)'
+                type='text'
+                inputMode='numeric'
+                value={countAmount}
+                onChange={e => setCountAmount(e.target.value.replace(/[^0-9]/g, ''))}
+                fullWidth
+                autoFocus
+                sx={{ mb: 2 }}
+                slotProps={{ htmlInput: { pattern: '[0-9]*' } }}
+                error={!!countError}
+                helperText={countError}
+              />
+
+              <TextField
+                label='Observación (opcional)'
+                value={countNote}
+                onChange={e => setCountNote(e.target.value)}
+                fullWidth
+                multiline
+                rows={2}
+              />
+            </Box>
+          </DialogContent>
+          <DialogActions>
+            <Button onClick={() => router.push(salidaSinCaja)} color='secondary'>
+              Salir
+            </Button>
+            <Button onClick={handleSubmitCount} variant='contained' color='primary' disabled={countDailyCash.isPending}>
+              {countDailyCash.isPending ? 'Guardando...' : 'Registrar conteo'}
+            </Button>
+          </DialogActions>
+        </Dialog>
+      </>
     )
   }
 
@@ -1068,16 +1273,41 @@ const PointOfSale: React.FC = () => {
         billing={billing}
       />
 
-      <CloseCashSummaryModal dailyCash={closedCash} onClose={() => router.push(salidaSinCaja)} />
-
       <Dialog open={closeDailyCashModalOpen} maxWidth='sm' fullWidth>
         <DialogTitle>Cerrar Caja</DialogTitle>
         <DialogContent>
           <Box sx={{ pt: 2, display: 'flex', flexDirection: 'column', gap: 3 }}>
-            <Alert severity='info'>Monto de apertura: Bs {dailyCashData?.openingAmount}</Alert>
+            {closeBlockedReason && <Alert severity='warning'>{closeBlockedReason}</Alert>}
+
+            {/* CONTEO A CIEGAS: a proposito NO se muestra el efectivo cobrado
+                ni el esperado en el cajon. Viendolos, el cajero puede declarar
+                el esperado exacto y quedarse con un sobrante sin que figure.
+                Los dos salen despues, en el resumen del cierre.
+                Tarjeta y QR si se muestran: no se cuentan en el cajon, y saberlo
+                evita que los sume por error a lo que declara. */}
+            {dailyCashData?.summary && (
+              <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
+                <Typography variant='caption' color='text.secondary'>
+                  COBRADO SIN EFECTIVO (no va en el cajón)
+                </Typography>
+                <Box className='flex items-center justify-between'>
+                  <Typography variant='body2'>Tarjeta</Typography>
+                  <Typography variant='body2'>Bs {dailyCashData.summary.byMethod.card}</Typography>
+                </Box>
+                <Box className='flex items-center justify-between'>
+                  <Typography variant='body2'>QR</Typography>
+                  <Typography variant='body2'>Bs {dailyCashData.summary.byMethod.qr}</Typography>
+                </Box>
+              </Box>
+            )}
+
+            <Alert severity='info'>
+              Contá el efectivo del cajón y registralo. El esperado y la diferencia se muestran al cerrar.
+            </Alert>
 
             <TextField
-              label='Monto de Cierre (Bs)'
+              label='Efectivo contado (Bs)'
+              helperText={closeDailyCashError || 'Solo se registra el efectivo contado'}
               type='text'
               inputMode='decimal'
               value={closingAmount}
@@ -1085,7 +1315,6 @@ const PointOfSale: React.FC = () => {
               fullWidth
               autoFocus
               error={!!closeDailyCashError}
-              helperText={closeDailyCashError}
             />
 
             <TextField

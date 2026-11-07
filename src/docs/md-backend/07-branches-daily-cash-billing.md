@@ -67,48 +67,161 @@ convierten **por SQL** (la API no cambia el `type`).
 
 ## Caja diaria (`dailyCash`)
 
-Un turno de caja por sucursal. Solo puede haber **una caja abierta a la vez**
-por sucursal.
+**Caja por usuario** (desde el 3/11/2026): cada CASHIER y cada MANAGER abre,
+cobra en y cierra **su propia** caja — el encargado es un cajero más, no
+cierra ni cuenta cajas ajenas. En una sucursal puede haber varias abiertas a
+la vez; un usuario, una sola. ADMIN/SUPERVISOR no tienen caja (solo leen el
+historial).
+
+**Sin caja abierta no se cobra**: crear una venta en tienda, confirmarla,
+cobrar un anticipo, generar su QR o devolverlo responden
+`409 No tienes una caja abierta: ábrela para <acción>` (o
+`409 Tu caja abierta (#N) es de otra sucursal: …`).
 
 ```
-POST /dailyCash/open
+POST /dailyCash/open                                                (M, C)
 { "openingAmount": "200.00" }
-→ DailyCash { id, status: "open", openedAt, openedBy, branch }
+→ DailyCash { id, status: "open", openedAt, openedBy: {id, name}, branch, ... }
+  409 si ya tenés una abierta, o si tenés una caja cerrada automáticamente sin
+  conteo (ver abajo)
 
-GET /dailyCash/current
-→ la caja abierta de tu sucursal (o 404/null si no hay ninguna — chequear
-  antes de intentar abrir otra)
+GET /dailyCash/current                                              (M, C)
+→ TU caja abierta (404 si no tenés), con `summary`: el resumen EN VIVO por
+  medio de pago (ver abajo) — para mostrarlo ANTES de contar y cerrar
 
-POST /dailyCash/:id/close
-{ "closingAmount": "1350.00", "closingNote?": "Faltante de 5 Bs, revisado con el cajero" }
-→ DailyCash { status: "closed", expectedAmount, closingAmount, closedBy,
-               salesAmount, advancesAmount, refundsAmount, ... }
+POST /dailyCash/:id/close                                           (M, C, solo la propia)
+{ "closingAmount": "1090.00", "closingNote?": "Faltante de 10 Bs" }
+  closingAmount = SOLO el efectivo contado en el cajón
+→ DailyCash { status: "closed", cashAmount, cardAmount, qrAmount,
+               expectedCashAmount, closingAmount, closedBy,
+               salesAmount, advancesAmount, refundsAmount, expectedAmount, ... }
 ```
-`expectedAmount` se calcula **en el momento del cierre** (desde `openedAt`
-hasta ahora), no es un contador que el frontend tenga que llevar:
+
+### Totales por medio de pago
+
+Lo que ve el cajero al cerrar. Cada medio = ventas + anticipos − devoluciones
+de esa caja (la tarjeta del POS y la online van juntas; las devoluciones son
+siempre en efectivo):
+
+| Campo (guardado al cerrar) | Qué es |
+|---|---|
+| `cashAmount` | total en **efectivo** |
+| `cardAmount` | total con **tarjeta** |
+| `qrAmount` | total por **QR** |
+| `expectedCashAmount` | **efectivo que tiene que haber en el cajón** = apertura + `cashAmount` |
+| `closingAmount` | lo que contó el cajero — **solo efectivo** |
+
+**Sobrante / faltante = `closingAmount − expectedCashAmount`** (el front lo
+calcula). La tarjeta y el QR no se cuentan en el cajón: se controlan contra
+los vouchers / el banco. En cajas cerradas antes del 7/11/2026 estos campos
+vienen `null` (ahí el conteo se comparaba con `expectedAmount`).
+
+En la caja **abierta**, `GET /dailyCash/current` trae lo mismo calculado en
+vivo, con el detalle por concepto:
+
+```json
+"summary": {
+  "sales":    { "cash": "700.00", "card": "300.00", "qr": "150.00", "total": "1150.00" },
+  "advances": { "cash": "80.00",  "card": "0.00",   "qr": "50.00",  "total": "130.00" },
+  "refunds":  { "cash": "50.00",  "card": "0.00",   "qr": "0.00",   "total": "50.00" },
+  "byMethod": { "cash": "730.00", "card": "300.00", "qr": "200.00", "total": "1230.00" },
+  "expectedCash": "930.00",     // apertura (200) + byMethod.cash
+  "expected": "1430.00"         // apertura + todo (= expectedAmount)
+}
+```
+
+El resumen en vivo no incluye la plata que llegó tarde a la sucursal (un
+pago QR/tarjeta cuya caja ya había cerrado): esa entra recién en el cierre,
+así que el cierre puede traer algo más que el último `summary`.
+
+**El cierre a mano se rechaza (`409`) si en la caja queda algo a medio
+cobrar** — el mensaje dice qué y con qué número:
+- ventas en tienda `PENDING` sin vencer (cobrarlas o cancelarlas);
+- un QR de anticipo de pedido generado desde esta caja, sin pagar y sin
+  vencer (esperar el pago o que venza).
+
+`expectedAmount` se calcula **en el momento del cierre** con lo que entró en
+**esta** caja, no es un contador que el frontend tenga que llevar:
 
 **`expectedAmount` = apertura + `salesAmount` + `advancesAmount` − `refundsAmount`**
 
 | Campo | Qué suma |
 |---|---|
-| `salesAmount` | ventas in-store vigentes del turno, por lo **cobrado en caja**: en la venta de retiro de un pedido cobrado, sin la parte del anticipo |
-| `advancesAmount` | anticipos de pedidos entre sucursales cobrados **desde el cierre anterior** de la tienda (no son ventas; un anticipo QR cuenta cuando BNB confirma — si confirmó con la caja cerrada, entre dos turnos, entra en el cierre siguiente) |
-| `refundsAmount` | devoluciones de anticipos pagadas desde el cierre anterior (siempre en efectivo, con caja abierta: en la práctica, las del turno) |
+| `salesAmount` | ventas in-store vigentes de esta caja, por lo **cobrado en caja**: en la venta de retiro de un pedido cobrado, sin la parte del anticipo |
+| `advancesAmount` | anticipos de pedidos cobrados en esta caja (un anticipo QR: en la caja de quien generó el QR) |
+| `refundsAmount` | devoluciones de anticipos pagadas desde esta caja (siempre en efectivo) |
 
-Comparalo contra `closingAmount` para mostrar sobrantes/faltantes, y mostrá
-el desglose. En cajas cerradas antes de este cambio los tres campos vienen
-`null`. Cobrar un anticipo, generar su QR o devolverlo **exige la caja
-abierta** (`409 La caja de esta sucursal no está abierta: ábrela para cobrar|devolver el anticipo`).
-Detalle en [13-prepaid-branch-requests.md](13-prepaid-branch-requests.md).
+En qué caja entra cada cobro:
+- **Venta en tienda**: en la de quien la crea. **Confirmarla a mano**
+  (`POST /orders/confirm/:id`) la pasa a la caja de **quien confirma** (es
+  quien recibe la plata). Las que se confirman solas (QR, tarjeta online)
+  quedan en la de quien la creó.
+- **Editar o cancelar** una venta es **corregir un error de registro** (no
+  se cobra ni se devuelve plata): lo puede hacer cualquier cajero o
+  encargado, sin caja abierta, y la corrección queda en **la caja de la
+  venta original** (donde está la plata). Si esa caja sigue abierta, su
+  esperado se corrige; si ya cerró, su cierre no cambia y el descuadre lo
+  explica la corrección (`editedBy`/`cancelledBy` en la venta).
+- **Anticipo / devolución** de un pedido: en la de quien cobra / devuelve.
+- **Plata que llega con su caja ya cerrada** (un QR o tarjeta que se paga
+  tarde, un anticipo QR pagado después del cierre): entra en el **próximo
+  cierre de esa sucursal**, de cualquier cajero.
 
-> El total no separa por método de pago (efectivo, tarjeta, QR van juntos),
-> igual que antes.
+`expectedAmount` mezcla todos los medios: el conteo del cajón se compara con
+`expectedCashAmount`, no con este. En cajas cerradas antes del 10/2026 los
+tres campos del desglose vienen `null`.
+Detalle de anticipos en [13-prepaid-branch-requests.md](13-prepaid-branch-requests.md).
+
+> Una venta **editada** cuenta con el medio de pago de la venta **original**
+> (la réplica de una edición se guarda como efectivo, pero se pagó como la
+> original).
+
+### Cierre automático a la medianoche y conteo pendiente
+
+Una caja que sigue abierta a las **00:00 (hora de Bolivia)** se cierra sola:
+`autoClosed: true`, `closedBy: null`, los totales calculados (`cashAmount`,
+`cardAmount`, `qrAmount`, `expectedCashAmount`, `expectedAmount`…), pero
+`closingAmount: null` — nadie contó la plata. Viene con
+`countPending: true`. Su dueño **está obligado a registrar el conteo**: hasta
+hacerlo no puede abrir otra caja (y sin caja no puede vender).
 
 ```
-GET /dailyCash?limit=&page=&branchId=(solo ADMIN/SUPERVISOR)      (A, S, M)  historial
+GET /dailyCash/pending-count                                        (M, C)
+→ tu caja cerrada automáticamente que espera conteo, o null
+  (mostrala al entrar al POS, antes de "Abrir caja")
+
+POST /dailyCash/:id/count                                           (M, C, solo la propia)
+{ "closingAmount": "1090.00", "closingNote?": "..." }   // solo el efectivo contado
+  (en la pantalla, mostrar los totales por medio y expectedCashAmount de esa caja)
+→ DailyCash { closingAmount, countedAt, countPending: false, ... }
+  409 si esa caja no se cerró sola o ya se contó
 ```
-MANAGER siempre ve el de su sucursal; ADMIN/SUPERVISOR filtran con
-`?branchId=` o ven todas si lo omiten.
+
+### Historial
+
+**Mis cajas** (cajero o encargado, el usuario sale de la sesión):
+
+```
+GET /dailyCash/mine?limit=&page=&status=open|closed                         (M, C)
+→ { data: DailyCash[], meta } — solo las cajas del usuario logueado, con la
+  misma información que el historial del admin (totales por medio de pago,
+  desglose, conteo, autoClosed/countPending…)
+```
+No acepta `userId` ni `branchId` (mandarlos da `400`). ADMIN/SUPERVISOR no
+tienen caja: `403`.
+
+**Historial de la sucursal / de todas** (admin, supervisor, encargado):
+
+```
+GET /dailyCash?limit=&page=&status=open|closed&userId=&branchId=(solo A/S)   (A, S, M)
+```
+MANAGER siempre ve las de su sucursal; ADMIN/SUPERVISOR filtran con
+`?branchId=` o ven todas. `?status=open` = las cajas abiertas ahora (una por
+cajero); `?userId=` = las de un usuario. Cada caja trae `openedBy`/`closedBy`
+como `{ id, name }`, `autoClosed`, `countedAt` y `countPending`.
+
+No se puede **deshabilitar** a un usuario ni **cambiarlo de sucursal** con su
+caja abierta: `PATCH /users/:id` → `409 … tiene una caja abierta (#N)`.
 
 ## Datos de facturación del cliente (`billing`)
 

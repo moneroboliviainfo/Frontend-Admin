@@ -77,17 +77,49 @@ PATCH /variants/:id      (A,S)     editar (tallas nuevas → también a la bodeg
 | Cada elemento de `data` | un **color** de un producto (`product`, `color`, `variants[]`) | un **producto** (`subcategory.category`, `discount`, `productColors[]` → `color`, `variants[]`) |
 | `limit=10` | 10 colores (un producto con 4 colores ocupa 4) | 10 productos, cada uno con **todos** sus colores |
 | `meta.total` | cantidad de colores | cantidad de productos |
-| `search` | producto, color, talla, `<qr>id</qr>` | producto, subcategoría, categoría, color, talla, `<qr>id</qr>` |
+| `search` | producto, color, talla, SKU, `<qr>id</qr>` | producto, subcategoría, categoría, color, talla, SKU, `<qr>id</qr>` |
 | Con `<qr>id</qr>` | **solo ese color y solo esa variante** | el **producto completo** (todos sus colores y tallas): resaltar la variante buscada |
-| Orden | colores por `id`; variantes sin orden fijo | productos, colores y variantes por `id` |
+| Orden | colores por `id`; variantes **por talla** | productos y colores por `id`; variantes **por talla** |
 | Uso | POS (el cajero agrega un color) | listado de la bodega principal / inventario por producto |
 
 Los dos aceptan `page`, `limit`, `search` y `?branchId=` (también la bodega
 principal), ordenan por `id` y traen en cada variante los mismos campos de
-stock (abajo). En `/variants/products` la búsqueda filtra **productos**:
+stock (abajo). Dentro de cada color las variantes vienen **ordenadas por
+talla**: `XXS, XS, S, M, L, XL, XXL, XXXL` y después las numéricas en orden
+(`36, 38, 40…`); cualquier otra talla, al final (lo mismo en `GET
+/variants/:id`, en los detalles públicos `GET /web-page/products/:id` y
+`/web-page/outfits/:id`, y en las demás respuestas con stock por variante).
+
+**SKU**: cada variante trae `sku` (texto, único), autogenerado al crear el
+color o agregar una talla: `{CÓDIGO DEL PRODUCTO}-{COLOR}-{TALLA}`, p. ej.
+`PAN1-AZUM-36`. El código del producto es la categoría abreviada + un número
+correlativo dentro de esa categoría (`PAN1`, `PAN2`…; sin categoría, `GEN1`).
+Categoría y color se abrevian igual: 3 letras de la primera palabra + la
+inicial de las demás, sin "de/la/con…" (`Azul marino` → `AZUM`); si dos
+colores del mismo producto dan lo mismo, el segundo lleva número: `AZU2`.
+**No cambia nunca**, aunque después se renombre el color o el producto pase a
+otra categoría: no armarlo en el front, mostrar el que llega. Es de solo
+lectura (no se manda en `POST`/`PATCH`). `search` lo encuentra completo o en
+parte (`PAN1`, `PAN1-NEG`, `NEG-36`), siempre que la palabra tenga un número
+o un guion; como la talla, devuelve el color (o el producto) completo.
+
+En `/variants/products` la búsqueda filtra **productos**:
 buscar "rojo" trae el producto con todos sus colores, no solo el rojo. Solo
-lista productos con al menos un color. `discount` viene `null` si no está
-vigente.
+lista productos con al menos un color.
+
+**Descuento en los dos listados** (desde el 06/11/2026, descuentos por
+sucursal — ver [09](09-admin-catalog-crud.md) §Descuentos):
+- `product.discount` viene `null` si no está vigente (inactivo o fuera de
+  fechas) y, con `?branchId=`, también si no aplica en **ningún** canal de esa
+  sucursal.
+- Si viene, trae `branches: [{ discountId, branchId, channel }]` (`channel`
+  `in_store` | `online`). **En el POS mostralo solo si tiene
+  `{ branchId: <la del cajero>, channel: 'in_store' }`**: puede venir un
+  descuento que en esa sucursal solo vale en la web.
+- `appliesInStore`/`appliesOnline` están obsoletos (dicen "en alguna
+  sucursal"), no los uses para decidir.
+- El precio real lo da el reprice con la sucursal de la venta.
+- `GET /variants/:id` trae el descuento con sus `branches` sin filtrar.
 
 Con `limit=10` llegan 10 productos, que pueden ser 10 filas o 40 según
 cuántos colores tenga cada uno. Para reutilizar la tabla "una fila por color"
@@ -105,21 +137,23 @@ El `branchId` del body de `POST /variants` está **deprecado e ignorado**: el
 stock inicial entra siempre a la bodega principal.
 
 Las respuestas de listado/detalle traen, por variante:
-- `availableStock`: vendible (piso − reservas de venta − reservas de pedidos)
-  — **neto**, no es lo que hay físicamente en el piso;
+- `availableStock`: vendible **en el POS** (piso − reservas de venta en el piso −
+  reservas de pedidos) — **neto**, no es lo que hay físicamente en el piso. La web
+  vende además del depósito;
 - `salesFloorStock`: piso **físico** (sin restar reservas ni apartados, que
   también están en el local) — para el conteo, ver "Conteo físico" abajo;
-- `warehouseStock`: en depósito, físico (todavía no vendible);
+- `warehouseStock`: en depósito, físico (vendible en la web, no en el POS);
 - `heldInWarehouse`: de `warehouseStock`, lo apartado por pedidos QR sin
-  pagar — no se puede pasar al piso. Lo que sí se puede mover =
+  pagar y ventas web en curso — no se puede pasar al piso. Lo que sí se puede mover =
   `warehouseStock − heldInWarehouse` (en este endpoint no viene
   `availableWarehouse`: ese campo es de `GET /variants/branch-stock/...`);
 - `pendingDispatchWarehouse` / `pendingDispatchSalesFloor`: pedidos de otras
   tiendas que esta tiene que despachar — ya descontados de su stock, pero
   **físicamente todavía en el local** (salen primero del depósito);
-- `pendingShipmentSalesFloor`: ventas **online pagadas** (`paid`) de esta
-  tienda que todavía no se enviaron — se descontaron del piso al pagarse,
-  pero la prenda sigue en el local hasta el envío (`sent`);
+- `pendingShipmentWarehouse` / `pendingShipmentSalesFloor`: ventas **online
+  pagadas** (`paid`) de esta tienda que todavía no se enviaron — se descontaron
+  de esa ubicación al pagarse, pero la prenda sigue en el local hasta el envío
+  (`sent`);
 - `inTransitStock`: en camino hacia la sucursal;
 - `centralWarehouseStock`: en la bodega principal (ver abajo);
 - `pendingReplenishment` (sí/no): la sucursal ya la pidió a la bodega y la
@@ -145,7 +179,7 @@ sumes al stock de X; con `X = bodega` es el mismo número que
 |---|---|---|
 | `availableStock` | piso de todas las tiendas − reservas | piso de X − reservas |
 | `salesFloorStock` | piso físico de todas las tiendas | piso físico de X (bodega: 0) |
-| `pendingShipmentSalesFloor` | ventas online pagadas sin enviar, todas las tiendas | las de X |
+| `pendingShipmentWarehouse` / `pendingShipmentSalesFloor` | ventas online pagadas sin enviar, todas las tiendas | las de X |
 | `warehouseStock` | depósitos de las **tiendas** (sin la bodega principal) | depósito de X (si X es la bodega: su stock) |
 | `centralWarehouseStock` | **solo** la bodega principal | **igual**: la bodega principal (no depende de X) |
 | `inTransitStock` | en camino hacia cualquier sucursal (tiendas y, por devoluciones, la bodega) | en camino hacia X (bodega: devoluciones de las tiendas) |
@@ -159,7 +193,7 @@ Lo que **debería encontrar** quien cuenta, por ubicación, con
 | Ubicación | Esperado en el conteo |
 |---|---|
 | Piso | `salesFloorStock + pendingDispatchSalesFloor + pendingShipmentSalesFloor` |
-| Depósito | `warehouseStock + pendingDispatchWarehouse` |
+| Depósito | `warehouseStock + pendingDispatchWarehouse + pendingShipmentWarehouse` |
 
 - **Nunca** contar contra `availableStock`: ya resta las ventas en curso del
   POS y las prendas apartadas para pedidos (QR sin pagar, pedidos recibidos
@@ -168,8 +202,7 @@ Lo que **debería encontrar** quien cuenta, por ubicación, con
 - Los dos `pending…` son prendas **ya descontadas que siguen en el local**:
   - `pendingDispatch…` = pedidos de otras tiendas que esta tiene que
     despachar;
-  - `pendingShipmentSalesFloor` = ventas online pagadas que todavía no se
-    enviaron.
+  - `pendingShipment…` = ventas online pagadas que todavía no se enviaron.
   Mostrarlos aparte ("Piso: 9 (+3 por despachar, +1 por enviar)") y en el
   modal de ajuste avisar: "4 unidades ya vendidas o pedidas siguen en el
   local: deberías contar 13".

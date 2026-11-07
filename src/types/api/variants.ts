@@ -30,6 +30,13 @@ export interface VariantSize {
   pendingDispatchSalesFloor?: number
   pendingDispatchWarehouse?: number
 
+  // Ventas online YA PAGADAS de esta tienda que todavia no se enviaron: se
+  // descontaron de su ubicacion al pagarse, pero la prenda sigue en el local
+  // hasta que la orden pasa a `sent`. Misma logica que pendingDispatch*, otra
+  // causa. Para el conteo fisico hay que sumar las dos (doc 06).
+  pendingShipmentSalesFloor?: number
+  pendingShipmentWarehouse?: number
+
   // Despachado desde la bodega central y todavia no recibido por esta sucursal
   inTransitStock?: number
 

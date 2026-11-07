@@ -26,7 +26,11 @@ shape exacto de request/response en Swagger.
 
 ## ¿Qué cambió últimamente?
 
-Empezá por [14-changelog-2026-10.md](14-changelog-2026-10.md): los cambios
+Lo último: [17-changelog-2026-11.md](17-changelog-2026-11.md) — **caja por
+usuario** (3 de noviembre): cada cajero/encargado opera la suya, sin caja no
+se vende, cierre automático a la medianoche con conteo obligatorio.
+
+Antes, [14-changelog-2026-10.md](14-changelog-2026-10.md): los cambios
 del 9 y 10 de octubre de 2026 (pedidos entre sucursales cobrados al pedir,
 cobro por QR, devoluciones, configuración de plazos, desglose del cierre de
 caja), qué se rompe y el checklist del front; después, la actualización
@@ -45,7 +49,7 @@ sucursales, facturas), están en [12-changelog-2026-09.md](12-changelog-2026-09.
 |---|---|
 | [01-auth-and-sessions.md](01-auth-and-sessions.md) | Login de staff, login/registro de customer (Google, guest, subscribe), sesión única, roles a alto nivel |
 | [02-roles-and-permissions.md](02-roles-and-permissions.md) | Matriz completa de roles por endpoint, `@GetBranchId()`, cómo se resuelve la sucursal |
-| [03-storefront-catalog.md](03-storefront-catalog.md) | Catálogo público (`web-page/*`): productos, categorías, descuentos, sucursales, banners |
+| [03-storefront-catalog.md](03-storefront-catalog.md) | Catálogo público (`web-page/*`): productos, categorías, outfits, descuentos, sucursales, banners |
 | [04-cart-checkout-payments.md](04-cart-checkout-payments.md) | Carrito → reprice → crear orden (online/in-store), pagos QR y tarjeta |
 | [05-orders-lifecycle-and-pos.md](05-orders-lifecycle-and-pos.md) | Máquina de estados de la orden, flujo completo del POS, confirmar/cancelar/editar |
 | [06-inventory-and-warehouse.md](06-inventory-and-warehouse.md) | Modelo de stock, bodega vs tienda, traspasos, kardex, dashboards |
@@ -56,9 +60,10 @@ sucursales, facturas), están en [12-changelog-2026-09.md](12-changelog-2026-09.
 | [11-central-warehouse-and-branch-transfers.md](11-central-warehouse-and-branch-transfers.md) | Bodega principal, envíos de la bodega a las tiendas, pedidos entre sucursales (reserva, retiro, integración con el POS), faltantes y revisión |
 | [12-changelog-2026-09.md](12-changelog-2026-09.md) | Qué cambió (28–30/09/2026), qué rompe y checklist del front |
 | [13-prepaid-branch-requests.md](13-prepaid-branch-requests.md) | Pedidos entre sucursales cobrados al pedir: configuración de plazos, cotizar y cobrar (efectivo, tarjeta, QR), devoluciones, venta de retiro con anticipo, anticipo perdido, caja |
-| [14-changelog-2026-10.md](14-changelog-2026-10.md) | Qué cambió (9–10/10, 18/10 y 19/10/2026), qué rompe y checklist del front |
+| [14-changelog-2026-10.md](14-changelog-2026-10.md) | Qué cambió en octubre de 2026 (del 9 al 31/10; el 30/10, lo pendiente del storefront; el 31/10, sucursal elegida, QR y tarjeta), qué rompe y checklist del front |
 | [15-replenishments-and-transfer-stages.md](15-replenishments-and-transfer-stages.md) | Reposiciones (la tienda pide a la bodega, la central atiende), marca `pendingReplenishment`, y `stage`/`stageLabel`/`allowedActions` de todos los traslados; pantallas sugeridas en dos menús |
 | [16-central-returns.md](16-central-returns.md) | Devoluciones de una tienda a la bodega principal (`central_return`): crear (depósito o piso), recibir en la central, anular, kardex, `returnsToReceive` |
+| [17-changelog-2026-11.md](17-changelog-2026-11.md) | Qué cambió en noviembre de 2026 (3/11: caja por usuario, cierre automático, conteo obligatorio), qué rompe y checklist del front |
 
 Este índice cubre **todos** los controllers del backend — si un endpoint no
 aparece en ninguno de estos archivos, no existe (o es nuevo y este doc

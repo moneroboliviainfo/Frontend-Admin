@@ -40,7 +40,9 @@ type SizeRow = {
   availableStock: number
   warehouseStock: number
 
-  // Del deposito, apartado por pedidos con QR sin pagar: NO se puede pasar al piso
+  // Del deposito, lo apartado que NO se puede pasar al piso: pedidos con QR sin
+  // pagar y, desde el 31/10, tambien las ventas web en curso. El calculo de lo
+  // movible no cambia (warehouseStock - heldInWarehouse), solo lo que incluye
   heldInWarehouse: number
   inTransitStock: number
   centralWarehouseStock: number

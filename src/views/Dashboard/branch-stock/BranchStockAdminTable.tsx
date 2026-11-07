@@ -33,9 +33,13 @@ type SizeRow = {
   salesFloorStock: number
   warehouseStock: number
 
-  // Ya descontado por pedidos sin despachar, pero todavia en el local
+  // Ya descontado pero todavia FISICAMENTE en el local, por dos causas:
+  // pedidos de otras tiendas sin despachar, y ventas online pagadas sin enviar.
+  // El conteo esperado suma las dos (doc 06 §Conteo fisico).
   pendingDispatchSalesFloor: number
   pendingDispatchWarehouse: number
+  pendingShipmentSalesFloor: number
+  pendingShipmentWarehouse: number
 }
 
 type ColorGroup = {
@@ -66,7 +70,9 @@ const groupByProduct = (variants: Variant[]): ProductGroup[] => {
       salesFloorStock: size.salesFloorStock ?? size.availableStock ?? 0,
       warehouseStock: size.warehouseStock || 0,
       pendingDispatchSalesFloor: size.pendingDispatchSalesFloor || 0,
-      pendingDispatchWarehouse: size.pendingDispatchWarehouse || 0
+      pendingDispatchWarehouse: size.pendingDispatchWarehouse || 0,
+      pendingShipmentSalesFloor: size.pendingShipmentSalesFloor || 0,
+      pendingShipmentWarehouse: size.pendingShipmentWarehouse || 0
     }))
 
     const color: ColorGroup = {
@@ -102,6 +108,8 @@ const BranchStockAdminTable = () => {
     sizeName: string
     pendingDispatchSalesFloor: number
     pendingDispatchWarehouse: number
+    pendingShipmentSalesFloor: number
+    pendingShipmentWarehouse: number
   } | null>(null)
 
   // Toda la pantalla cuelga del selector de la navbar: sin sucursal no hay nada
@@ -231,6 +239,11 @@ const BranchStockAdminTable = () => {
                                       +{size.pendingDispatchWarehouse} por despachar
                                     </Typography>
                                   )}
+                                  {size.pendingShipmentWarehouse > 0 && (
+                                    <Typography variant='caption' color='warning.main' display='block'>
+                                      +{size.pendingShipmentWarehouse} por enviar
+                                    </Typography>
+                                  )}
                                 </td>
                                 <td>
                                   <Chip
@@ -244,6 +257,11 @@ const BranchStockAdminTable = () => {
                                       +{size.pendingDispatchSalesFloor} por despachar
                                     </Typography>
                                   )}
+                                  {size.pendingShipmentSalesFloor > 0 && (
+                                    <Typography variant='caption' color='warning.main' display='block'>
+                                      +{size.pendingShipmentSalesFloor} por enviar
+                                    </Typography>
+                                  )}
                                 </td>
                                 <td>
                                   <Button
@@ -255,7 +273,9 @@ const BranchStockAdminTable = () => {
                                         variantSizeId: size.variantSizeId,
                                         sizeName: size.sizeName,
                                         pendingDispatchSalesFloor: size.pendingDispatchSalesFloor,
-                                        pendingDispatchWarehouse: size.pendingDispatchWarehouse
+                                        pendingDispatchWarehouse: size.pendingDispatchWarehouse,
+                                        pendingShipmentSalesFloor: size.pendingShipmentSalesFloor,
+                                        pendingShipmentWarehouse: size.pendingShipmentWarehouse
                                       })
                                     }
                                   >
@@ -301,6 +321,8 @@ const BranchStockAdminTable = () => {
         variants={adjustTarget ? [{ id: adjustTarget.variantSizeId, size: { name: adjustTarget.sizeName } }] : []}
         pendingDispatchSalesFloor={adjustTarget?.pendingDispatchSalesFloor}
         pendingDispatchWarehouse={adjustTarget?.pendingDispatchWarehouse}
+        pendingShipmentSalesFloor={adjustTarget?.pendingShipmentSalesFloor}
+        pendingShipmentWarehouse={adjustTarget?.pendingShipmentWarehouse}
         showMessage={(message, severity) =>
           setSnackbar({ message, severity: severity === 'info' ? 'warning' : severity })
         }

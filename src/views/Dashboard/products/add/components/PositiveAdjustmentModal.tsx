@@ -33,11 +33,16 @@ type Props = {
     warehouseStock?: number
   }>
 
-  // Unidades ya descontadas por pedidos sin despachar que siguen en el local:
-  // al contar aparecen, asi que lo esperado es stock + esto. Sin el aviso el
-  // cajero las toma por sobrante y se infla el stock.
+  // Unidades ya descontadas que siguen FISICAMENTE en el local: al contar
+  // aparecen, asi que lo esperado es stock + esto. Sin el aviso el cajero las
+  // toma por sobrante y se infla el stock. Son dos causas distintas:
+  //   pendingDispatch* = pedidos de otras tiendas que esta tiene que despachar
+  //   pendingShipment* = ventas online pagadas que todavia no se enviaron
+  // El conteo esperado suma las dos (doc 06 §Conteo fisico).
   pendingDispatchSalesFloor?: number
   pendingDispatchWarehouse?: number
+  pendingShipmentSalesFloor?: number
+  pendingShipmentWarehouse?: number
   showMessage: (message: string, severity: 'success' | 'error' | 'info' | 'warning') => void
 }
 
@@ -47,12 +52,18 @@ const PositiveAdjustmentModal = ({
   variants,
   pendingDispatchSalesFloor = 0,
   pendingDispatchWarehouse = 0,
+  pendingShipmentSalesFloor = 0,
+  pendingShipmentWarehouse = 0,
   showMessage
 }: Props) => {
   // Por defecto la bodega: lo que aparece contando suele estar guardado
   const [location, setLocation] = useState<StockLocation>('warehouse')
   const [quantities, setQuantities] = useState<Record<number, number>>({})
   const [note, setNote] = useState('')
+
+  // Lo que hay que sumar a lo esperado en la ubicacion que se esta contando
+  const porDespachar = location === 'warehouse' ? pendingDispatchWarehouse : pendingDispatchSalesFloor
+  const porEnviar = location === 'warehouse' ? pendingShipmentWarehouse : pendingShipmentSalesFloor
 
   const adjust = usePositiveAdjustment()
 
@@ -106,14 +117,15 @@ const PositiveAdjustmentModal = ({
 
       <DialogContent>
         {/* El pedido sale primero del deposito y solo lo que falta del piso:
-            por eso el aviso es por ubicacion, no uno solo. */}
-        {(location === 'warehouse' ? pendingDispatchWarehouse : pendingDispatchSalesFloor) > 0 && (
+            por eso el aviso es por ubicacion, no uno solo. Se desglosa por causa
+            porque quien cuenta las busca en lugares distintos. */}
+        {porDespachar + porEnviar > 0 && (
           <Alert severity='warning' sx={{ mb: 4 }}>
-            <strong>
-              {location === 'warehouse' ? pendingDispatchWarehouse : pendingDispatchSalesFloor} por despachar
-            </strong>{' '}
-            siguen en el local: ya se descontaron del stock pero no se enviaron. Súmelas a lo que espera contar
-            antes de registrar un sobrante.
+            <strong>{porDespachar + porEnviar} unidad(es)</strong> ya descontadas del stock siguen en el local:
+            {porDespachar > 0 && <> {porDespachar} por despachar a otra tienda</>}
+            {porDespachar > 0 && porEnviar > 0 && ' y'}
+            {porEnviar > 0 && <> {porEnviar} de ventas online pagadas sin enviar</>}. Súmelas a lo que espera
+            contar antes de registrar un sobrante.
           </Alert>
         )}
 

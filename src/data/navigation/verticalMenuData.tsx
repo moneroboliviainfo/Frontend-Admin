@@ -54,6 +54,15 @@ const getFullMenuData = (): VerticalMenuDataType[] => [
         label: 'Caja',
         icon: 'tabler-cash-register',
         href: '/cash'
+      },
+
+      // Las cajas propias del cajero o encargado. 'Caja' (arriba) es el
+      // historial de toda la sucursal y es de A/S/M; esta es "las mias",
+      // asi que el admin no la ve (el back responde con las suyas, que no tiene)
+      {
+        label: 'Mis cajas',
+        icon: 'tabler-wallet',
+        href: '/cash/mine'
       }
     ]
   },

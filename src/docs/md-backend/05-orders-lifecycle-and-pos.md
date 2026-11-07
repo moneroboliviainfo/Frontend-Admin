@@ -11,6 +11,7 @@ PENDING/PAID/SENT → CANCELLED
 PAID/SENT → CANCELLED_FOR_EDIT → (se crea una orden nueva) → la vieja pasa a COMPLETED_EDITION
 PENDING vencida (sin pagar a tiempo) → EXPIRED   (perezoso, se detecta en la
                                                     próxima lectura, no hay cronjob)
+EXPIRED → PAID   (solo si llega un pago con tarjeta aprobado después de vencer)
 ```
 
 Puntos clave:
@@ -28,8 +29,9 @@ Puntos clave:
 
 ## `OrderType`: `in_store` | `online`
 
-Determina qué descuentos aplican (`appliesInStore`/`appliesOnline`), el
-`payment_type` permitido, y varía el flujo de confirmación.
+Determina qué descuentos aplican (los de la tienda física o los de la web
+**de la sucursal de la venta**, ver [09](09-admin-catalog-crud.md)
+§Descuentos), el `payment_type` permitido, y varía el flujo de confirmación.
 
 ## `PaymentType`: `qr` | `cash` | `card` | `card_online`
 
@@ -46,9 +48,17 @@ POST /auth/login                 → token de MANAGER o CASHIER
 POST /dailyCash/open
 { "openingAmount": "200.00" }
 ```
-Una caja abierta por sucursal a la vez — si ya hay una abierta,
-`409 Conflict`. `GET /dailyCash/current` para saber si ya hay una abierta
-antes de intentar abrir otra.
+**Cada cajero/encargado abre la suya** (una por usuario; varias por
+sucursal). Al entrar al POS:
+1. `GET /dailyCash/pending-count` — si devuelve una caja, su dueño tiene que
+   registrar el conteo (`POST /dailyCash/:id/count`) antes de seguir: se cerró
+   sola a la medianoche.
+2. `GET /dailyCash/current` — si tiene una abierta, seguir; si da 404, pedir
+   el monto de apertura y `POST /dailyCash/open`.
+
+**Sin caja abierta no se puede vender ni confirmar**:
+`409 No tienes una caja abierta: ábrela para vender`. Detalle en
+[07-branches-daily-cash-billing.md](07-branches-daily-cash-billing.md).
 
 ### 2. Armar la venta
 ```
@@ -154,17 +164,53 @@ tampoco hace falta mandarlo; si se manda, reemplaza al existente (corrección
 manual). Guarda quién y cuándo (`sentBy`, `sentAt`). Hasta el 30/09/2026 este
 endpoint fallaba siempre con `500`; ya funciona.
 
+**FedEx con la guía cancelada** (`fedexShipmentCancelled: true` en una orden `paid`):
+pasa si un pago con tarjeta llegó tarde, FedEx ya había cancelado el envío y no se
+pudo crear otro. El `trackingCode` guardado no sirve. Sin un código distinto, este
+endpoint responde `400 The FedEx shipment of this order was cancelled: a new tracking
+code is required`. En la pantalla de despacho, mostrá una alerta ("Guía cancelada:
+generar otra en FedEx") y pedí el código nuevo antes de despachar. Al guardarlo,
+`fedexShipmentCancelled` vuelve a `false`.
+
+**Qué buscar y dónde**: una venta web sale primero del depósito de la sucursal y
+lo que falte, del piso. En `GET /orders` y `GET /orders/:id`, cada línea trae
+`fromWarehouse` y `fromSalesFloor` ya resueltos. En la pantalla de despacho, por
+línea: "Sacar `fromWarehouse` del depósito y `fromSalesFloor` del piso". Es lo
+mismo que en un pedido entre tiendas; el cliente no recibe estos campos.
+
+**`missingQuantity`** (casi siempre `0`): un pago con tarjeta que llegó con la orden
+vencida se confirma aunque ya no haya stock. Esas unidades van dentro de
+`fromSalesFloor` y dejan el piso en negativo, pero no están. Mostrá una alerta por
+línea: "Faltan `missingQuantity`: conseguir con un pedido a otra tienda o a la
+central". El piso vuelve a cuadrar cuando entra esa prenda; el campo no cambia
+después, queda como registro. Si la prenda no existe en ningún lado, la devolución
+y la anulación de la factura se hacen a mano.
+
 ### 8. Cerrar caja
 ```
+GET /dailyCash/current                 → summary: totales en vivo por medio de pago
 POST /dailyCash/:id/close
-{ "closingAmount": "1350.00", "closingNote?": "..." }
+{ "closingAmount": "1090.00", "closingNote?": "..." }   // solo el efectivo contado
 ```
-El `expectedAmount` (cuánto debería haber) se **recalcula en vivo** al
-cerrar, no es un contador que se va incrementando — así que no hace falta
-que el frontend lo vaya llevando. Es **apertura + ventas + anticipos de
-pedidos − devoluciones**, con el desglose en `salesAmount`,
-`advancesAmount` y `refundsAmount` (ver
+Pantalla de cierre: mostrar del `summary` de `GET /dailyCash/current` el
+total en **efectivo**, **tarjeta** y **QR** y el **efectivo esperado en el
+cajón** (`expectedCash`); el cajero cuenta solo el efectivo y lo manda como
+`closingAmount`. La respuesta del cierre trae lo mismo guardado (`cashAmount`,
+`cardAmount`, `qrAmount`, `expectedCashAmount`); sobrante/faltante =
+`closingAmount − expectedCashAmount`.
+
+Solo la caja propia. El `expectedAmount` (cuánto debería haber) se
+**recalcula en vivo** al cerrar con lo que entró en **esa** caja, no es un
+contador que se va incrementando — así que no hace falta que el frontend lo
+vaya llevando. Es **apertura + ventas + anticipos de pedidos −
+devoluciones**, con el desglose en `salesAmount`, `advancesAmount` y
+`refundsAmount`. Da `409` si queda algo a medio cobrar (ventas pendientes,
+un QR de anticipo vivo); a la medianoche la caja se
+cierra sola y queda el conteo pendiente (ver
 [07-branches-daily-cash-billing.md](07-branches-daily-cash-billing.md)).
+
+Confirmar a mano (`POST /orders/confirm/:id`) pasa la venta a la caja de
+**quien confirma**, que también necesita la suya abierta.
 
 ## Consultar órdenes (MANAGER, CASHIER, ADMIN y SUPERVISOR)
 
@@ -194,6 +240,47 @@ MANAGER/CASHIER solo la suya, sin poder elegir otra.
 | `facturasAnteriores` | facturas reemplazadas al refacturar (ver [07](07-branches-daily-cash-billing.md)) |
 
 Los actores vienen como `{ id, name }` o `null`.
+
+## Pagos por devolver (pagos en revisión)
+
+> ⚠️ **Retirado el 31/10: esto no existe en el backend.** No construyas esta
+> pantalla. Tarjeta ya tiene otra regla ([04](04-cart-checkout-payments.md)); el QR
+> tardío sigue sin definir. Ver [14](14-changelog-2026-10.md).
+
+A veces entra un pago que no se puede aplicar a su orden (QR o tarjeta). El dinero
+se cobró, así que queda registrado para **devolverlo a mano**: la orden conserva
+su estado, no descuenta stock ni se factura.
+
+Un pago tardío sobre una orden online vencida **con stock** no llega acá: la orden
+se confirma normal.
+
+| `paymentReviewReason` | Qué pasó |
+|---|---|
+| `no_stock` | La orden online venció y ya no hay stock en la sucursal |
+| `cancelled` | La orden se había cancelado antes del pago |
+| `fedex_expired` | Orden FedEx vencida: su envío se cancela solo |
+| `in_store_expired` | Venta en tienda vencida: el cajero ya la resolvió de otra forma |
+| `amount_mismatch` | Tarjeta: se cobró un monto distinto al de la orden |
+
+```
+GET  /orders/payment-reviews?status=pending|resolved&branchId=&page=&limit=
+GET  /orders/payment-reviews/:id
+POST /orders/payment-reviews/:id/resolve   { "note": "Reembolso BNB, operación 123456" }
+```
+
+- **La lista** trae por defecto las pendientes, de la más nueva a la más vieja, con
+  `meta.total` para un badge. Cada una trae `payment`, `billing`, `branch`,
+  `customer`, `name_phone`, `email`, `paymentReviewAt`, `paymentReviewReason`,
+  `paymentReviewResolvedAt`, `paymentReviewNote` y `paymentReviewResolvedBy`
+  (`{ id, name }`). El detalle suma los `items`. Incluye órdenes que `GET /orders`
+  no muestra, como vencidas y canceladas: usá estos endpoints, no `GET /orders/:id`
+  (da `404` para una cancelada).
+- **`resolve`** (solo ADMIN y SUPERVISOR) **no mueve dinero**: registra un
+  reembolso ya hecho. La nota es obligatoria (vacía → `400`). Ya marcado → `409`;
+  sin pago en revisión → `404`. Deshabilitá el botón mientras dure la request.
+- **Pantalla sugerida**: lista "Pagos por devolver" con cliente, monto, medio de
+  pago, motivo y botón "Marcar como devuelto" con nota. MANAGER y CASHIER la ven
+  sin el botón, para poder responderle al cliente.
 
 ## Lado del cliente (storefront)
 

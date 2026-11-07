@@ -4,7 +4,8 @@ import type {
   DailyCashListParams,
   DailyCashListResponse,
   OpenDailyCashRequest,
-  CloseDailyCashRequest
+  CloseDailyCashRequest,
+  CountDailyCashRequest
 } from '@/types/api/dailyCash'
 
 class DailyCashServiceClass {
@@ -23,6 +24,30 @@ class DailyCashServiceClass {
 
   async openDailyCash(data: OpenDailyCashRequest): Promise<DailyCash> {
     const response = await apiClient.post<DailyCash>('/api/dailyCash/open', data)
+
+    return response.data
+  }
+
+  // Historial de las cajas del usuario logueado (M, C). Misma info que el del
+  // admin, pero sin poder ver las de otros
+  async getMyHistory(params: DailyCashListParams = {}): Promise<DailyCashListResponse> {
+    const response = await apiClient.get<DailyCashListResponse>('/api/dailyCash/mine', { params })
+
+    return response.data
+  }
+
+  // La caja propia que se cerro sola y espera conteo, o null si no hay.
+  // Hay que consultarla ANTES de ofrecer "Abrir caja": con una pendiente,
+  // POST /dailyCash/open responde 409
+  async getPendingCount(): Promise<DailyCash | null> {
+    const response = await apiClient.get<DailyCash | null>('/api/dailyCash/pending-count')
+
+    return response.data || null
+  }
+
+  // Registrar el conteo de una caja cerrada automaticamente (solo la propia)
+  async countDailyCash(id: number, data: CountDailyCashRequest): Promise<DailyCash> {
+    const response = await apiClient.post<DailyCash>(`/api/dailyCash/${id}/count`, data)
 
     return response.data
   }

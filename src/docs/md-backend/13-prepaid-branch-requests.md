@@ -14,12 +14,14 @@ Swagger (`/api/docs`, tags *Branch Transfers*, *Payments - QR* y *Settings*).
 - Un pedido entre sucursales **puede cobrarse al pedir** (opcional). Sin
   cobro es el traspaso de siempre.
 - Lo cobrado es un **anticipo**: **no es una venta y no se factura**. Entra
-  en la caja de la tienda que pide (A).
+  en la caja de **quien lo cobra** en la tienda que pide (A) — caja por
+  usuario, ver [07](07-branches-daily-cash-billing.md).
 - El precio de cada prenda **queda congelado** al pedir.
 - Métodos: **efectivo**, **tarjeta en tienda** o **QR** (BNB). Tarjeta online
   no.
 - Lo que no le llega al cliente (B no lo encontró, llegó menos, se perdió,
-  A lo anuló) **se le devuelve en efectivo** desde la caja de A.
+  A lo anuló) **se le devuelve en efectivo** desde la caja de quien devuelve
+  (un cajero de A con su caja abierta).
 - Cuando el cliente vuelve, se le hace una **venta normal** enlazada al
   pedido: se factura el total, pero en caja **solo paga la diferencia**.
 - Si no vuelve dentro del **plazo de retiro**, **pierde el anticipo** y la
@@ -90,7 +92,9 @@ POST /branch-transfers/requests/quote        (MANAGER, CASHIER)
   }
 ```
 
-- Precio con la misma regla del POS: descuento de tienda vigente, y el total
+- Precio con la misma regla del POS: descuento vigente **de la tienda física
+  de A** (la sucursal que pide y cobra; descuentos por sucursal, ver
+  [09](09-admin-catalog-crud.md) §Descuentos — el de B no cuenta), y el total
   de cada línea redondeado al boliviano (ej.: 2 × 429 con 30 % = 600,60 →
   **601**). No recalcules en el front: usá `totalPrice` y `total`.
 - `available`: lo que hoy se puede pedir en el piso de B.
@@ -118,7 +122,9 @@ Reglas:
   **opcionales**, pero si los mandás no pueden venir vacíos.
 - **Con `paymentType`**: `expectedTotal`, `customerName`, `customerPhone` y
   `customerCi` son **obligatorios**.
-- La **caja de A tiene que estar abierta**.
+- **Quien cobra tiene que tener su caja abierta** (caja por usuario, ver
+  [07](07-branches-daily-cash-billing.md)); con QR también, porque el QR se
+  genera enseguida desde su caja.
 - Si el precio cambió desde la cotización:
   `409 El total del pedido cambió: ahora es Bs 900.00 (se cotizó Bs 850.00). Vuelve a cotizar antes de cobrar`.
   No cobra nada: volvé a cotizar y mostrale el total nuevo al cliente.
@@ -129,7 +135,7 @@ Resultado según el método:
 
 | `paymentType` | Estado | La prenda en B | La plata |
 |---|---|---|---|
-| `cash` / `card` | `pending_dispatch` | sale del piso en el momento | entra en la caja de A |
+| `cash` / `card` | `pending_dispatch` | sale del piso en el momento | entra en la caja de quien cobró |
 | `qr` | `pending_payment` | **apartada** unos minutos, mientras se paga | entra cuando BNB confirma (sección 4) |
 
 **Orden en la UI (efectivo/tarjeta)**: cotizar → mostrar total → el cliente
@@ -164,7 +170,10 @@ POST /payments/generate-qr/request/:id       (MANAGER, CASHIER de la tienda que 
 ```
 
 - El monto es **el anticipo completo** (`advanceAmount`): no se manda.
-- Exige la **caja de A abierta** (el pago entra en el turno en curso).
+- Exige la **caja abierta de quien genera el QR**: el pago entra en esa caja
+  (si ya se cerró cuando llega el pago, en el próximo cierre de la sucursal).
+  Mientras el QR esté vivo, esa caja no se puede cerrar a mano (`409`). Si
+  otro cajero genera un QR nuevo, el pago pasa a su caja.
 - Cada llamada **renueva el apartado** hasta el nuevo `qrExpiresAt`.
 - Se puede llamar de nuevo (el cliente perdió el QR, venció): el backend
   **anula en BNB los QR anteriores** del pedido, para que no se pague dos
@@ -179,7 +188,7 @@ Errores:
 | `409 El pedido #N no se cobra: es un traspaso sin anticipo` | pedido sin cobro |
 | `409 El anticipo del pedido #N ya se pagó` | ya está pagado (también los de efectivo/tarjeta) |
 | `409 No se puede generar el QR: el traslado #N fue anulado` | lo anularon |
-| `409 La caja de esta sucursal no está abierta: ábrela para cobrar el anticipo` | caja cerrada |
+| `409 No tienes una caja abierta: ábrela para generar el QR del anticipo` | quien genera no tiene su caja abierta |
 | `409 La variante X del pedido #N ya no está disponible en la tienda a la que se pidió (disponible D, pedido Q): anula el pedido` | el QR anterior venció y B vendió la prenda |
 
 ### 4.3 Qué mirar al pollear `GET /branch-transfers/:id`
@@ -199,8 +208,9 @@ Errores:
 
 ### 4.4 Casos raros (los resuelve el backend)
 
-- **Pago tardío**: el QR de BNB sigue pagable hasta el fin del día aunque el
-  apartado haya vencido. Si llega el pago:
+- **Pago tardío**: el QR de BNB vence 1 minuto antes que `qrExpiresAt`, así que es
+  raro. Si igual llega el pago (por ejemplo, si A anuló el pedido y BNB no pudo
+  anular el QR):
   - la prenda sigue en B → el pedido sigue normal (`pending_dispatch`);
   - B ya la vendió, o A había anulado el pedido → queda `cancelled` con todo
     el anticipo **por devolver**. Aparece en "devoluciones pendientes".
@@ -271,14 +281,15 @@ POST /branch-transfers/requests/:id/refund       (MANAGER, CASHIER de la tienda 
 ```
 
 - Devuelve **todo lo pendiente de una vez**, siempre **en efectivo**.
-- Sale de la **caja de A**, que tiene que estar abierta.
+- Sale de la **caja de quien devuelve** (tiene que estar abierta), aunque el
+  anticipo lo haya cobrado otro cajero.
 - Se puede devolver apenas hay algo pendiente (por ejemplo, en camino con
   faltante), y otra vez si después se debe más.
 
 Errores: `404 Pedido #N no encontrado` ·
 `409 El pedido #N no tiene un anticipo pagado: no hay nada que devolver` ·
 `409 El pedido #N no tiene nada pendiente de devolver` ·
-`409 La caja de esta sucursal no está abierta: ábrela para devolver el anticipo`.
+`409 No tienes una caja abierta: ábrela para devolver el anticipo`.
 
 ### 5.4 Encontrarlas
 
@@ -391,12 +402,17 @@ POST /dailyCash/:id/close
     "expectedAmount": "2245.00",   // apertura + ventas + anticipos − devoluciones
     "salesAmount": "300.00",       // ventas: lo cobrado en caja (sin la parte del anticipo)
     "advancesAmount": "3861.00",   // anticipos cobrados en el turno
-    "refundsAmount": "1716.00"     // devoluciones pagadas en el turno
+    "refundsAmount": "1716.00",    // devoluciones pagadas en el turno
+    "cashAmount": "...",           // por medio de pago: los anticipos cuentan en
+    "cardAmount": "...",           // su medio (efectivo, tarjeta o QR); las
+    "qrAmount": "..."              // devoluciones, siempre en efectivo
   }
 ```
+(Ver [07](07-branches-daily-cash-billing.md) §Totales por medio de pago.)
 
-- Los anticipos y devoluciones cuentan en el turno en que se registraron
-  (un anticipo QR: cuando BNB confirmó el pago).
+- Cada anticipo/devolución cuenta en la caja de quien lo cobró/pagó; un
+  anticipo QR, en la de quien generó el QR (o, si ya cerró cuando BNB
+  confirmó, en el próximo cierre de la sucursal).
 - En cajas cerradas antes de este cambio, los tres campos vienen `null`.
 - Mostrá el desglose en el cierre: "Ventas / Anticipos / Devoluciones".
 

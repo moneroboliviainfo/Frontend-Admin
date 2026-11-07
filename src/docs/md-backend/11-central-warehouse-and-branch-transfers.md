@@ -357,8 +357,8 @@ GET /variants/branch-stock/:variantId              (ADMIN, SUPERVISOR, MANAGER, 
       "reserved": 1,            // apartado en el piso por ventas en curso
       "heldForRequests": 0,     // apartado en el piso por pedidos: los que esperan a su cliente
                                 //   acá, y la parte del piso de pedidos a esta tienda que esperan el pago QR
-      "heldInWarehouse": 0,     // apartado en el depósito: la parte del depósito de pedidos a
-                                //   esta tienda que esperan el pago QR
+      "heldInWarehouse": 0,     // apartado en el depósito: ventas web en curso y la parte del
+                                //   depósito de pedidos a esta tienda que esperan el pago QR
       "availableSalesFloor": 6, // piso − reserved − heldForRequests
       "availableWarehouse": 2,  // depósito − heldInWarehouse
       "availableToRequest": 8,  // lo que se puede pedir: availableWarehouse + availableSalesFloor

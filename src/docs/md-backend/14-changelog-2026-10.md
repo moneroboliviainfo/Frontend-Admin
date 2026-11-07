@@ -3,8 +3,9 @@
 Secciones: 9–10 de octubre (abajo), [18 de octubre](#actualización-18-de-octubre--stock-de-la-bodega-principal-separado),
 [19 de octubre](#actualización-19-de-octubre--reposiciones-etapas-de-los-traslados-facturas-por-sucursal)
 , [20 de octubre](#actualización-20-de-octubre--reglas-de-traslados-bajas-y-caja),
-[21 de octubre](#actualización-21-de-octubre--ingreso-de-stock-por-excel)
-y [23 de octubre](#actualización-23-de-octubre--editar-sucursal)
+[21 de octubre](#actualización-21-de-octubre--ingreso-de-stock-por-excel),
+[23 de octubre](#actualización-23-de-octubre--editar-sucursal)
+y [30 de octubre (storefront)](#actualización-30-de-octubre--storefront-lo-que-faltaba-documentar)
 (al final).
 
 ## 9 y 10 de octubre
@@ -290,3 +291,92 @@ Errores del backend: campos que el backend reemplaza o ignora igual se validaban
 | Cambio | Impacto en el front |
 |---|---|
 | Nuevo **`POST /variants/subtractstock/bulk`** (ADMIN, SUPERVISOR): da de baja **varias variantes del depósito de la bodega principal en una sola operación**, con un solo motivo. **Solo la bodega**: sin `?branchId=` (se ignora) ni `location` (con `location` → `400`); las bajas en tiendas siguen siendo de a una con `subtractstock?branchId=`. Body `{ "items": [{ "variantId", "quantity" }], "reason" }` — `quantity` **negativa**, como en `subtractstock`; hasta **300** líneas, sin variantes repetidas. **Todo o nada**: si una línea no tiene stock físico suficiente, `400 Stock insuficiente en la bodega principal para la variante N…` y no se graba ninguna. Responde el array de movimientos creados (uno por línea). `subtractstock` (una sola variante) sigue igual | (Opcional) En la bodega, pantalla "Dar de baja" con varias líneas: armar la lista y mandarla de una vez en vez de un `subtractstock` por variante (que podía dejar la baja a medias). Deshabilitar "Confirmar" durante la request (no detecta envíos repetidos) |
+
+## Actualización 27 de octubre — SKU por variante y orden por talla
+
+| Cambio | Impacto en el front |
+|---|---|
+| Cada variante trae **`sku`** (texto, único), autogenerado al crear un color (`POST /variants`) o agregar tallas (`PATCH /variants/:id`): `{CÓDIGO DEL PRODUCTO}-{COLOR}-{TALLA}`, ej. `PAN1-AZUM-36` (código = categoría abreviada + correlativo dentro de la categoría: `PAN1`, `PAN2`…). **Nunca cambia** (aunque se renombre el color o cambie la categoría) | Mostrar el `sku` en el listado, el detalle y las etiquetas; no armarlo en el front ni mandarlo en `POST`/`PATCH` — ver [06](06-inventory-and-warehouse.md) |
+| `search` de **`GET /variants`** y **`GET /variants/products`** también busca por SKU, completo o en parte (`PAN1`, `PAN1-NEG`, `NEG-36`), si la palabra tiene un número o un guion. Devuelve el color / producto completo, como la búsqueda por talla | (Opcional) Buscar por SKU desde el mismo buscador o con el lector de códigos |
+| Las **variantes de cada color vienen ordenadas por talla**: `XXS, XS, S, M, L, XL, XXL, XXXL` y después las numéricas (`36, 38, 40…`). Antes venían por `id` (o sin orden fijo en `GET /variants`). Vale para `GET /variants`, `/variants/products`, `/variants/:id` y las demás respuestas con stock por variante, también las públicas y `GET /outfits/:id` del panel desde el 30/10 | Si el front ordenaba las tallas a mano, puede dejar de hacerlo |
+
+## Actualización 30 de octubre — storefront: lo que faltaba documentar
+
+Son cambios ya hechos en el backend que no estaban anotados, o aclaraciones de cosas que los docs dejaban como "confirmar en Swagger". Las filas marcadas **Nuevo** son cambios del 30/10; las del invitado, la dirección, el envío y el outfit del panel todavía no están desplegadas. ⚠️ Los pagos en revisión de esta sección **se retiraron el 31/10** (ver esa actualización); `paymentStatus` sigue, con otro alcance. Detalle en [03](03-storefront-catalog.md), [04](04-cart-checkout-payments.md), [08](08-customer-account.md) y [09](09-admin-catalog-crud.md).
+
+### ⚠️ Lo que puede romper
+
+1. **La web elige sucursal al entrar** (con una por defecto) y de esa sucursal salen la factura y el stock de la venta. Hay que mandar su `branchId` en `POST /orders/reprice` y en `POST /web-page/orders/online`. Sin `branchId`, el reprice valida contra la suma de todas las tiendas y la orden puede fallar con `400 Insufficient stock for variant ID: N`. Mandalo también como `?branchId=` en el detalle del catálogo (ver la tabla).
+2. **La ruta de retorno de la tarjeta lleva `/w`** y **`paymentStatus`**: `<FRONTEND_URL>/w/checkout/order-confirmed?orderId=...&paymentStatus=confirmed|rejected|review`. Se vuelve a esa ruta también con el pago rechazado: mostrar "confirmada" sin leer el parámetro engaña al cliente.
+3. **`POST /products` exige `weightGrams` y `unitsPerBox`**. Un producto sin esos datos da `400` al cotizar FedEx.
+
+| Cambio | Impacto en el front |
+|---|---|
+| `GET /web-page/products`: `search` por palabras, sin tildes ni mayúsculas, solo en el nombre (hasta 8 palabras; antes buscaba el texto entero). Orden fijo por `id` ascendente; `page` menor a 1 se trata como 1 | Nada que cambiar; los resultados y el orden pueden variar |
+| `POST /shipping/rates`: cada servicio trae **`commit`** (fecha estimada de entrega de FedEx, o `null`) | (Opcional) Mostrar la fecha; tolerar `null` |
+| `POST /shipping/rates`: `400` si un producto no tiene `weightGrams` o `unitsPerBox` | Mostrar el mensaje; cargarlos en el panel || **Nuevo** `GET /web-page/products/:id?branchId=` y `/web-page/outfits/:id?branchId=`: `availableStock` de esa sucursal. Sin el parámetro o vacío, la suma de todas las tiendas, como antes; `0`, negativo o no numérico → `400`; una sucursal que no existe o no vende → stock `0` | Mandar la sucursal elegida en el detalle de producto y de outfit |
+| **Nuevo** Esos dos detalles traen las variantes **ordenadas por talla** (`XXS…XXXL`, después numéricas), y el outfit trae además el `size` de cada variante. Cada variante trae `sku` | Si se ordenaban las tallas a mano, se puede dejar de hacerlo |
+| `POST /cart`: la variante **no trae stock** (el doc decía lo contrario) | No leer stock de `/cart`; usar el reprice |
+| `GET /payments/verify/:id`: `true`/`false`; `404` si la orden venció, se canceló o no es QR | Cortar el polling con el `404` |
+| `GET /web-page/customers/me` trae `address[]` y `orders[]` completas (vacías para un guest) | Usar `orders[]` para "Mis órdenes" |
+| `POST /web-page/orders/online`: `name` y `phone` actualizan el perfil del cliente con cuenta | Avisarlo en el formulario si hace falta |
+| **Invitado**: `address` es obligatorio también para él. Se crea con `POST /addresses` y su token, y se manda ese `id`; `email` para recibir el correo de pago | Formulario de dirección en el checkout de invitado |
+| **Nuevo** ⚠️ **Cada `POST /auth/guest` abre una sesión propia**: direcciones y órdenes solo se ven con el token que las creó (`GET /addresses`, `GET /web-page/customers/order/:id`, `POST /web-page/customers/cancel/order/:id`); otro token → `404`. Un token de invitado anterior → `401 Guest session expired`. Las órdenes y direcciones de invitado anteriores dejan de ser accesibles desde la web | Guardar el token y **reusarlo en toda la compra**, sin pedir uno nuevo en medio; ante el `401`, pedir otro — ver [01](01-auth-and-sessions.md) |
+| **Nuevo** ⚠️ `POST /web-page/orders/online`: `shipment` tiene que corresponder al `place` de la dirección; otro lugar o dirección sin `place` → `400 El envío <nombre> no corresponde al lugar de la dirección`; deshabilitado → `400`; inexistente → `404`. Un envío sin lugar se acepta siempre; FedEx no aplica. `GET /addresses/:id` ahora trae `place` | Ofrecer solo los envíos del lugar de la dirección (`GET /web-page/places`) y pedir el lugar en direcciones nacionales |
+| **Nuevo** `GET /outfits/:id` (panel): variantes con `size` y ordenadas por talla | Nada |
+| **Retirado el 31/10** ~~Pagos tardíos~~ (QR y tarjeta): un pago sobre una orden online vencida se confirma si hay stock. Si no se puede aplicar, queda registrado como **pago en revisión**, sin descontar stock ni facturar | Pantalla nueva en el panel — ver [05](05-orders-lifecycle-and-pos.md) "Pagos por devolver" |
+| **Retirado el 31/10** `GET /orders/payment-reviews`, `GET /orders/payment-reviews/:id` (A, S, M, C) y `POST /orders/payment-reviews/:id/resolve` (A, S; `{ note }`) | Lista "Pagos por devolver" + "Marcar como devuelto" |
+| **Retirado el 31/10** La orden trae `paymentReviewAt`, `paymentReviewReason` y `paymentReviewResolvedAt` (`null` si no aplica). Una orden con `paymentReviewAt` no está pagada, aunque se haya cobrado | Mostrar "Pago por devolver" en el detalle |
+| **Nuevo** ⚠️ `POST /web-page/orders/online`: una dirección que no es del comprador (o de esa sesión de invitado) o que no existe → `404 Address not found`, sin crear la orden (antes aceptaba cualquier `id` existente, y uno inexistente daba `409`) | Usar direcciones creadas con el mismo token |
+| `GET /web-page/customers/me`: en `orders[]` una orden vencida puede seguir `pending` | Tratar como vencida una `pending` con `expiresAt` pasado |
+| `POST /web-page/customers/cancel/order/:id`: la orden cancelada desaparece de `orders[]` y su detalle da `404` | Mostrar el resultado con la respuesta del `POST` |
+| Listados públicos: `sizes` y `subcategories` paginan (`{ data, meta }`); `categories`, `places`, `outfits` y `discounts` devuelven el array directo. `first-discount` es el más reciente, no "el más relevante" | Revisar cómo se lee cada respuesta |
+| Outfits: sección nueva en [03](03-storefront-catalog.md) (no dependen de la sucursal, no se compran como unidad) | Armar el flujo de compra por prenda |
+
+- [ ] Selector de sucursal al entrar a la web (`GET /web-page/branches`), con una por defecto configurada en el front; si no está en la lista, usar la primera.
+- [ ] Mandar la sucursal elegida como `branchId` en el reprice y en la orden; volver a llamar al reprice si el cliente cambia de sucursal.
+- [ ] Reprice: los ids sin stock vienen en el texto del `400` (`Insufficient stock for variants: [10,12]`), no en `errorsStock`.
+- [ ] Checkout: manejar `400 Insufficient stock…` al crear la orden aunque el reprice haya dado OK.
+- [ ] Tener la ruta `/w/checkout/order-confirmed` y mostrar según `paymentStatus` (`confirmed`, `rejected`, `review`).
+- [ ] QR: al recibir `404` en `verify`, dejar de mostrar el QR y avisar "Si ya pagaste, contactanos".
+- [ ] Cotización FedEx: tolerar `commit: null` y mostrar el `400` de producto sin peso o empaque.
+- [ ] Detalle de producto y outfit: mandar `?branchId=` con la sucursal elegida y volver a pedirlo si el cliente cambia de sucursal.
+- [ ] Polling del QR: cortar con `404`.
+- [ ] Checkout de invitado: guardar el token de `POST /auth/guest` y reusarlo en toda la compra; crear la dirección con él y pedir `email`; ante `401 Guest session expired`, pedir otro.
+- [ ] Checkout nacional: pedir el lugar de la dirección y ofrecer solo sus envíos; mostrar el `400` si no corresponde.
+- [ ] "Mis órdenes": `pending` con `expiresAt` pasado se muestra como vencida; tras cancelar, usar la respuesta del `POST`.
+- [ ] Panel: `weightGrams` y `unitsPerBox` en el alta y la edición de productos.
+
+## Actualización 31 de octubre — la web vende del piso y del depósito de la sucursal elegida
+
+Todavía no está desplegado. La sucursal elegida manda en el stock que se muestra, la venta y la factura. El envío FedEx sigue saliendo del remitente único configurado en el backend. El POS no cambia: vende solo del piso.
+
+### ⚠️ Lo que puede romper
+
+1. **Para vender en la web, `branchId` es obligatorio** (sin él → `400`): `POST /shipping/rates` y `POST /orders/reprice` con `type: online`. Reemplaza lo dicho el 30/10 sobre validar contra la suma de todas las tiendas. En `GET /web-page/products/:id` y `GET /web-page/outfits/:id` sigue siendo opcional.
+2. **Los pagos en revisión del 30/10 se retiraron** (tarjeta ya tiene otra regla, abajo; el QR tardío sigue sin definir): no existen `GET /orders/payment-reviews`, `POST /orders/payment-reviews/:id/resolve`, `paymentReviewAt`, `paymentReviewReason` ni `paymentReviewResolvedAt`. No construyas esas pantallas todavía; las secciones que las mencionan quedan sin efecto. `paymentStatus` en el retorno de la tarjeta **sí existe**, pero `review` ya no aparece en ninguna lista: solo indica que hay que contactar al cliente.
+
+| Cambio | Impacto en el front |
+|---|---|
+| `POST /shipping/rates`: el stock se revisa solo en la sucursal de `branchId`, piso + depósito; si no alcanza → `400 Insufficient stock for variants: [...]`, sin cotizar | Mandar la sucursal elegida y volver a cotizar si el cliente la cambia — ver [04](04-cart-checkout-payments.md) |
+| `availableStock` de `GET /web-page/products/:id` y `/web-page/outfits/:id`: ahora es **piso + depósito** de la sucursal de `?branchId=`; sin el parámetro, la suma de las tiendas de `GET /web-page/branches`. Una sucursal que no vende por la web (bodega principal, inactiva o sin facturación SIAT activa) da `0`, y `400 Insufficient stock…` en el reprice online y la cotización | La web puede mostrar más que el POS: es lo esperado. Con una sucursal elegida, mandá `?branchId=`: el total no se puede comprar de una sola tienda |
+| `POST /orders/reprice` con `type: online`: valida contra piso + depósito de `branchId` | Mandar la sucursal elegida |
+| `GET /orders` y `GET /orders/:id` (panel): cada línea trae **`fromWarehouse`** y **`fromSalesFloor`** (cuánto sacar de cada lugar, ya resuelto, como en los pedidos). Una venta en tienda o anterior viene con todo en `fromSalesFloor`. El cliente no recibe estos campos | Pantalla de despacho: "Sacar `fromWarehouse` del depósito y `fromSalesFloor` del piso" — ver [05](05-orders-lifecycle-and-pos.md) |
+| Campo nuevo **`pendingShipmentWarehouse`** en las variantes con stock por sucursal; `heldInWarehouse` ahora incluye ventas web en curso | Conteo físico del depósito: `warehouseStock + pendingDispatchWarehouse + pendingShipmentWarehouse` — ver [06](06-inventory-and-warehouse.md) |
+| `GET /variants/branch-stock/...`: `reserved` es solo la parte del piso; la del depósito suma en `heldInWarehouse` | Nada, si ya usabas `availableSalesFloor` y `availableWarehouse` |
+| Kardex y Excel: una venta web puede dar dos movimientos, uno en cada ubicación | Nada |
+| **QR**: vence 1 minuto antes que la orden o el apartado del pedido, a la hora exacta (antes duraba hasta el fin del día). Cancelar una orden sin pagar anula sus QR en BNB | Cortar el QR al recibir `404` de `verify`; con una cuenta regresiva, usar `expirationDate` de la respuesta de `generate-qr` si viene |
+| `POST /payments/generate-qr`: `404` también si a la orden le queda 1 minuto o menos | Mostrar "La orden venció" y volver a armar la compra |
+| **`POST /payments/card/checkout-params`** renueva la orden y su reserva (10 minutos, tope 2 veces la vida de la orden) y responde **`409`** si por el tope quedan menos de 5 minutos | Pedir los parámetros al hacer clic en "Pagar", enviar a Cybersource enseguida y no reutilizarlos. Con `409`, volver a armar la compra — ver [04](04-cart-checkout-payments.md) |
+| **Tarjeta**: un pago aprobado con la orden vencida se confirma (`confirmed`, de `expired` a `paid`), haya o no stock. `review` queda para orden cancelada o monto distinto. Una orden FedEx puede cambiar de `trackingCode` si su envío ya se había cancelado | Ninguno en el retorno; no dar por definitiva una orden `expired` que el cliente dice haber pagado con tarjeta: volver a consultarla |
+| `GET /orders` y `GET /orders/:id` (panel): cada línea trae **`missingQuantity`** (0 casi siempre): de `fromSalesFloor`, las unidades que no había al confirmar un pago tardío | En el despacho, alerta por línea: "Faltan `missingQuantity`: conseguir con un pedido a otra tienda o a la central" — ver [05](05-orders-lifecycle-and-pos.md) |
+| `PUT /orders/change-status/:id`: una orden FedEx con `fedexShipmentCancelled: true` responde **`400`** sin un `trackingCode` distinto; al recibirlo, el flag vuelve a `false` | Pedir el código nuevo en el despacho — ver [05](05-orders-lifecycle-and-pos.md) |
+
+- [ ] Mandar `branchId` en el reprice online y la cotización FedEx, y en el detalle de producto y outfit cuando ya hay una sucursal elegida.
+- [ ] Cotización FedEx: volver a cotizar si cambia la sucursal y mostrar el `400` sin stock.
+- [ ] Despacho de pedidos online: mostrar `fromWarehouse` / `fromSalesFloor` por línea.
+- [ ] Conteo físico: sumar `pendingShipmentWarehouse` al esperado del depósito.
+- [ ] Quitar del plan la pantalla "Pagos por devolver". El retorno de la tarjeta sigue con `paymentStatus`; con `review`, pedirle al cliente que contacte con su número de orden.
+- [ ] Tarjeta: pedir `checkout-params` al hacer clic en "Pagar", enviar enseguida y manejar el `409`.
+- [ ] Despacho: alerta con `missingQuantity` por línea.
+- [ ] Despacho FedEx: con `fedexShipmentCancelled: true`, alerta "Guía cancelada" y pedir el código nuevo antes de marcar `sent`.

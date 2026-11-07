@@ -80,9 +80,10 @@ en todo lo de stock, ventas, caja y traslados. Solo usan los endpoints SIAT
 (`GET /facturacion/facturacion` sí las acepta).
 
 Para las acciones de venta por `:id` (confirmar, cancelar, editar una orden,
-cerrar caja, facturar), el backend además **valida que ese recurso pertenezca
-a la sucursal del usuario** — si un cajero intenta operar sobre una orden de
-otra sucursal, recibe `404`.
+facturar), el backend además **valida que ese recurso pertenezca a la
+sucursal del usuario** — si un cajero intenta operar sobre una orden de otra
+sucursal, recibe `404`. La caja es **por usuario**: cerrar o contar una caja
+que no es la propia también da `404`.
 
 ## Matriz completa
 
@@ -104,10 +105,13 @@ A = ADMIN, S = SUPERVISOR, M = MANAGER, C = CASHIER.
 | `POST /orders/reprice` | público | sin `@Auth`, a propósito (checkout guest) |
 | `POST /orders/:orderId/facturar` | A, S, M, C | facturación manual (y refacturar ANULADA/RECHAZADA). M/C solo ventas de su sucursal; A/S cualquiera, sin `?branchId=` (factura desde la sucursal de la venta) |
 | `POST /orders/:orderId/facturar-contingencia` | A, S, M, C | ídem, modo contingencia SIAT |
-| `POST /dailyCash/open` | M, C | abrir caja |
-| `POST /dailyCash/:id/close` | M, C | cerrar caja |
-| `GET /dailyCash/current` | A, S, M, C | caja abierta actual |
-| `GET /dailyCash` | A, S, M | historial |
+| `POST /dailyCash/open` | M, C | abrir **su** caja (una por usuario) |
+| `POST /dailyCash/:id/close` | M, C | cerrar **su** caja (el encargado no cierra ajenas) |
+| `POST /dailyCash/:id/count` | M, C | conteo de su caja cerrada automáticamente a la medianoche |
+| `GET /dailyCash/current` | M, C | su caja abierta (ADMIN/SUPERVISOR ya no: usan `GET /dailyCash?status=open`) |
+| `GET /dailyCash/pending-count` | M, C | su caja que espera conteo, o null |
+| `GET /dailyCash/mine` | M, C | historial de **sus** cajas (el usuario sale de la sesión) |
+| `GET /dailyCash` | A, S, M | historial (`?status=`, `?userId=`) |
 
 ### Inventario (`/variants`, `/stock-transfers`)
 

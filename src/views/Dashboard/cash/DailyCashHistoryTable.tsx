@@ -7,6 +7,8 @@ import CardHeader from '@mui/material/CardHeader'
 import Box from '@mui/material/Box'
 import Chip from '@mui/material/Chip'
 import Divider from '@mui/material/Divider'
+import ToggleButton from '@mui/material/ToggleButton'
+import ToggleButtonGroup from '@mui/material/ToggleButtonGroup'
 import Typography from '@mui/material/Typography'
 import Dialog from '@mui/material/Dialog'
 import DialogTitle from '@mui/material/DialogTitle'
@@ -21,29 +23,79 @@ import Alert from '@mui/material/Alert'
 
 import tableStyles from '@core/styles/table.module.css'
 import { useBranchContext } from '@/contexts/BranchContext'
-import { useDailyCashHistory } from '@/hooks/useDailyCash'
-import type { DailyCash } from '@/types/api/dailyCash'
+import { useDeclareBranchScope } from '@/contexts/BranchScopeContext'
+import { useDailyCashHistory, useMyDailyCashHistory } from '@/hooks/useDailyCash'
+import type { DailyCash, DailyCashStatus } from '@/types/api/dailyCash'
+import {
+  diferenciaDeCaja,
+  esperadoEnCajon,
+  printCashClosing,
+  sinContar,
+  tieneDesglosePorMedio
+} from '@/utils/cashClosingReceipt'
 
-const money = (value: string | null) => `Bs ${Number(value ?? 0).toFixed(2)}`
+// Acepta undefined: los totales por medio de pago son opcionales (las cajas
+// cerradas antes del 7/11/2026 no los traen)
+const money = (value: string | null | undefined) => `Bs ${Number(value ?? 0).toFixed(2)}`
 
 const formatDate = (value: string | null) => (value ? new Date(value).toLocaleString('es-BO') : '—')
 
-// Diferencia entre lo contado y lo esperado: negativa = faltante
-const difference = (cash: DailyCash) => Number(cash.closingAmount ?? 0) - Number(cash.expectedAmount ?? 0)
+// Diferencia entre lo contado y lo esperado EN EL CAJON: negativa = faltante.
+// Va contra el efectivo, no contra el total: `expectedAmount` incluye tarjeta y
+// QR, que nunca estuvieron en el cajon, y restarlos daba un faltante falso del
+// tamaño de esas ventas. Las cajas viejas sin `expectedCashAmount` siguen
+// comparandose contra el total, como cuando se cerraron (ver cashClosingReceipt)
+const difference = diferenciaDeCaja
 
-const DailyCashHistoryTable = () => {
+// 'branch' = el historial de la sucursal (A/S/M), en /cash.
+// 'mine'   = las cajas del usuario logueado (M/C), en /cash/mine.
+// Es la misma tabla: cambia de donde salen las filas y el encabezado. Los dos
+// hooks se llaman siempre —no se pueden llamar condicionalmente— y el que no
+// corresponde queda deshabilitado, sin pedir nada.
+type Props = {
+  scope?: 'branch' | 'mine'
+}
+
+const DailyCashHistoryTable = ({ scope = 'branch' }: Props) => {
   const [page, setPage] = useState(1)
   const [pageSize, setPageSize] = useState(10)
   const [detail, setDetail] = useState<DailyCash | null>(null)
 
+  // 'open' = las cajas abiertas AHORA, una por cajero. Es lo que reemplaza al
+  // GET /dailyCash/current que ADMIN y SUPERVISOR ya no pueden usar: sin esto
+  // no tienen forma de ver a quien le falta cerrar.
+  const [status, setStatus] = useState<'all' | DailyCashStatus>('all')
+
+  const cambiarStatus = (valor: 'all' | DailyCashStatus) => {
+    setStatus(valor)
+    setPage(1)
+  }
+
   // Solo ADMIN/SUPERVISOR filtran por sucursal; el MANAGER ve la suya
   const { selectedBranchId, isAdmin } = useBranchContext()
 
-  const { data, isLoading, isError } = useDailyCashHistory({
-    page,
-    limit: pageSize,
-    ...(isAdmin && selectedBranchId ? { branchId: selectedBranchId } : {})
-  })
+  const esMias = scope === 'mine'
+
+  // 'Mis cajas' cuelga de /cash, que esta clasificada como vista de sucursal,
+  // pero son las cajas del usuario: el selector de la navbar no cambia nada de
+  // lo que se ve. Se declara general para que no aparezca (ver branchScope.ts)
+  useDeclareBranchScope(!esMias)
+
+  const filtroEstado = status === 'all' ? {} : { status }
+
+  const branchQuery = useDailyCashHistory(
+    {
+      page,
+      limit: pageSize,
+      ...filtroEstado,
+      ...(isAdmin && selectedBranchId ? { branchId: selectedBranchId } : {})
+    },
+    !esMias
+  )
+
+  const mineQuery = useMyDailyCashHistory({ page, limit: pageSize, ...filtroEstado }, esMias)
+
+  const { data, isLoading, isError } = esMias ? mineQuery : branchQuery
 
   const rows = data?.data || []
   const total = data?.meta?.total || 0
@@ -52,9 +104,26 @@ const DailyCashHistoryTable = () => {
     <>
       <Card>
         <CardHeader
-          title='Historial de caja'
-          subheader='Cada turno con lo que se esperaba, lo que se contó y la diferencia.'
+          title={esMias ? 'Mis cajas' : 'Historial de caja'}
+          subheader={
+            esMias
+              ? 'Tus turnos: lo cobrado por medio de pago, lo contado y la diferencia. Podés reimprimir el comprobante.'
+              : 'Cada turno con lo que se esperaba, lo que se contó y la diferencia.'
+          }
         />
+
+        <Box sx={{ px: 6, pb: 4 }}>
+          <ToggleButtonGroup
+            exclusive
+            size='small'
+            value={status}
+            onChange={(_, valor) => valor && cambiarStatus(valor)}
+          >
+            <ToggleButton value='all'>Todas</ToggleButton>
+            <ToggleButton value='open'>Abiertas ahora</ToggleButton>
+            <ToggleButton value='closed'>Cerradas</ToggleButton>
+          </ToggleButtonGroup>
+        </Box>
 
         <Divider />
 
@@ -70,7 +139,13 @@ const DailyCashHistoryTable = () => {
           </Box>
         ) : rows.length === 0 ? (
           <Box sx={{ p: 8, textAlign: 'center' }}>
-            <Typography color='text.secondary'>Todavía no hay cajas registradas</Typography>
+            <Typography color='text.secondary'>
+              {status === 'open'
+                ? 'No hay cajas abiertas en este momento'
+                : status === 'closed'
+                  ? 'Todavía no hay cajas cerradas'
+                  : 'Todavía no hay cajas registradas'}
+            </Typography>
           </Box>
         ) : (
           <div className='overflow-x-auto'>
@@ -80,7 +155,11 @@ const DailyCashHistoryTable = () => {
                   <th>Turno</th>
                   <th>Sucursal</th>
                   <th>Apertura</th>
-                  <th>Esperado</th>
+                  {/* Lo cobrado por medio: el efectivo es lo unico que se cuenta
+                      en el cajon; tarjeta y QR se cuadran contra vouchers y banco */}
+                  <th>Efectivo</th>
+                  <th>Tarjeta</th>
+                  <th>QR</th>
                   <th>Contado</th>
                   <th>Diferencia</th>
                   <th />
@@ -91,6 +170,9 @@ const DailyCashHistoryTable = () => {
                   const isOpen = cash.status === 'open'
                   const diff = difference(cash)
 
+                  // Las cajas cerradas antes del 7/11/2026 no traen el desglose
+                  const conMedios = tieneDesglosePorMedio(cash)
+
                   return (
                     <tr key={cash.id}>
                       <td>
@@ -100,6 +182,28 @@ const DailyCashHistoryTable = () => {
                         <Typography variant='caption' color='text.secondary'>
                           {isOpen ? 'Abierta' : `Cerrada ${formatDate(cash.closedAt)}`}
                         </Typography>
+
+                        {/* Una caja que cerro el sistema a medianoche se veia
+                            igual que una cerrada a mano, y la que espera conteo
+                            —la que tiene bloqueado a su dueño— no se distinguia */}
+                        {cash.autoClosed && (
+                          <Chip
+                            label='Cierre automático'
+                            size='small'
+                            variant='tonal'
+                            color='warning'
+                            sx={{ mt: 0.5, height: 20, fontSize: '0.7rem' }}
+                          />
+                        )}
+                        {cash.countPending && (
+                          <Chip
+                            label='Conteo pendiente'
+                            size='small'
+                            variant='tonal'
+                            color='error'
+                            sx={{ mt: 0.5, ml: 0.5, height: 20, fontSize: '0.7rem' }}
+                          />
+                        )}
                       </td>
                       <td>
                         <Typography variant='body2'>{cash.branch?.name || '—'}</Typography>
@@ -108,7 +212,13 @@ const DailyCashHistoryTable = () => {
                         <Typography variant='body2'>{money(cash.openingAmount)}</Typography>
                       </td>
                       <td>
-                        <Typography variant='body2'>{isOpen ? '—' : money(cash.expectedAmount)}</Typography>
+                        <Typography variant='body2'>{conMedios ? money(cash.cashAmount) : '—'}</Typography>
+                      </td>
+                      <td>
+                        <Typography variant='body2'>{conMedios ? money(cash.cardAmount) : '—'}</Typography>
+                      </td>
+                      <td>
+                        <Typography variant='body2'>{conMedios ? money(cash.qrAmount) : '—'}</Typography>
                       </td>
                       <td>
                         <Typography variant='body2'>{isOpen ? '—' : money(cash.closingAmount)}</Typography>
@@ -116,6 +226,12 @@ const DailyCashHistoryTable = () => {
                       <td>
                         {isOpen ? (
                           <Chip label='En curso' size='small' variant='tonal' color='primary' />
+                        ) : cash.countPending ? (
+
+                          // Sin conteo no hay diferencia que mostrar: su
+                          // closingAmount es null y restarlo daria un faltante
+                          // igual a todo el esperado
+                          <Chip label='Sin contar' size='small' variant='tonal' color='warning' />
                         ) : (
                           <Chip
                             label={diff === 0 ? 'Cuadra' : diff > 0 ? `Sobra ${money(String(diff))}` : `Falta ${money(String(Math.abs(diff)))}`}
@@ -168,6 +284,29 @@ const DailyCashHistoryTable = () => {
         <DialogContent>
           {detail && (
             <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+              {/* Lo cobrado por cada medio: es contra esto que se cuadran los
+                  vouchers y el banco. Las cajas viejas no lo traen */}
+              {tieneDesglosePorMedio(detail) && (
+                <>
+                  <Typography variant='caption' color='text.secondary'>
+                    COBRADO POR MEDIO DE PAGO
+                  </Typography>
+                  <Box className='flex items-center justify-between'>
+                    <Typography variant='body2'>Efectivo</Typography>
+                    <Typography variant='body2'>{money(detail.cashAmount)}</Typography>
+                  </Box>
+                  <Box className='flex items-center justify-between'>
+                    <Typography variant='body2'>Tarjeta</Typography>
+                    <Typography variant='body2'>{money(detail.cardAmount)}</Typography>
+                  </Box>
+                  <Box className='flex items-center justify-between'>
+                    <Typography variant='body2'>QR</Typography>
+                    <Typography variant='body2'>{money(detail.qrAmount)}</Typography>
+                  </Box>
+                  <Divider />
+                </>
+              )}
+
               <Box className='flex items-center justify-between'>
                 <Typography variant='body2'>Apertura</Typography>
                 <Typography variant='body2'>{money(detail.openingAmount)}</Typography>
@@ -195,10 +334,10 @@ const DailyCashHistoryTable = () => {
 
               <Box className='flex items-center justify-between'>
                 <Typography variant='body2' className='font-medium'>
-                  Esperado en caja
+                  Esperado en el cajón
                 </Typography>
                 <Typography variant='body2' className='font-medium'>
-                  {detail.status === 'open' ? 'Caja abierta' : money(detail.expectedAmount)}
+                  {detail.status === 'open' ? 'Caja abierta' : money(String(esperadoEnCajon(detail)))}
                 </Typography>
               </Box>
               <Box className='flex items-center justify-between'>
@@ -206,11 +345,19 @@ const DailyCashHistoryTable = () => {
                   Contado
                 </Typography>
                 <Typography variant='body2' className='font-medium'>
-                  {detail.status === 'open' ? '—' : money(detail.closingAmount)}
+                  {detail.status === 'open' ? '—' : sinContar(detail) ? 'Sin contar' : money(detail.closingAmount)}
                 </Typography>
               </Box>
 
-              {detail.status === 'closed' && (
+              {/* Sin conteo no hay diferencia: su closingAmount es null y la
+                  resta daria un faltante igual a todo lo esperado */}
+              {detail.status === 'closed' && sinContar(detail) && (
+                <Alert severity='warning'>
+                  Esta caja se cerró automáticamente y todavía no se contó el efectivo.
+                </Alert>
+              )}
+
+              {detail.status === 'closed' && !sinContar(detail) && (
                 <Alert
                   severity={
                     difference(detail) === 0 ? 'success' : difference(detail) > 0 ? 'info' : 'error'
@@ -238,7 +385,19 @@ const DailyCashHistoryTable = () => {
           )}
         </DialogContent>
 
-        <DialogActions>
+        <DialogActions sx={{ gap: 1 }}>
+          {/* Reimprimir el comprobante: el ticket se pierde o lo pide el
+              encargado despues. Solo tiene sentido en una caja ya cerrada */}
+          {detail?.status === 'closed' && (
+            <Button
+              variant='outlined'
+              startIcon={<i className='tabler-printer' />}
+              onClick={() => printCashClosing(detail)}
+            >
+              Imprimir
+            </Button>
+          )}
+
           <Button variant='contained' onClick={() => setDetail(null)}>
             Cerrar
           </Button>
