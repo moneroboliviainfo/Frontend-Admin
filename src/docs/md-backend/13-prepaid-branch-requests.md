@@ -400,6 +400,7 @@ POST /dailyCash/:id/close
 → DailyCash {
     ...,
     "expectedAmount": "2245.00",   // apertura + ventas + anticipos − devoluciones
+                                   //   − gastos − retiros (ver 07 §Gastos y retiros)
     "salesAmount": "300.00",       // ventas: lo cobrado en caja (sin la parte del anticipo)
     "advancesAmount": "3861.00",   // anticipos cobrados en el turno
     "refundsAmount": "1716.00",    // devoluciones pagadas en el turno

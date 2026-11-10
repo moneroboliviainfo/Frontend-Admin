@@ -111,6 +111,9 @@ A = ADMIN, S = SUPERVISOR, M = MANAGER, C = CASHIER.
 | `GET /dailyCash/current` | M, C | su caja abierta (ADMIN/SUPERVISOR ya no: usan `GET /dailyCash?status=open`) |
 | `GET /dailyCash/pending-count` | M, C | su caja que espera conteo, o null |
 | `GET /dailyCash/mine` | M, C | historial de **sus** cajas (el usuario sale de la sesión) |
+| `POST /dailyCash/:id/expenses` | M, C | gasto o retiro de efectivo de **su** caja (abierta, o cerrada sola sin conteo) |
+| `DELETE /dailyCash/:id/expenses/:expenseId` | M, C | anular un gasto/retiro de **su** caja (mismas condiciones) |
+| `GET /dailyCash/:id/expenses` | A, S, M, C | gastos/retiros de una caja: CASHIER las suyas, MANAGER las de su sucursal, A/S cualquiera |
 | `GET /dailyCash` | A, S, M | historial (`?status=`, `?userId=`) |
 
 ### Inventario (`/variants`, `/stock-transfers`)

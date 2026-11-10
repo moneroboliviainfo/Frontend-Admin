@@ -24,7 +24,7 @@ import Alert from '@mui/material/Alert'
 import tableStyles from '@core/styles/table.module.css'
 import { useBranchContext } from '@/contexts/BranchContext'
 import { useDeclareBranchScope } from '@/contexts/BranchScopeContext'
-import { useDailyCashHistory, useMyDailyCashHistory } from '@/hooks/useDailyCash'
+import { useDailyCashExpenses, useDailyCashHistory, useMyDailyCashHistory } from '@/hooks/useDailyCash'
 import type { DailyCash, DailyCashStatus } from '@/types/api/dailyCash'
 import {
   diferenciaDeCaja,
@@ -46,6 +46,10 @@ const formatDate = (value: string | null) => (value ? new Date(value).toLocaleSt
 // tamaño de esas ventas. Las cajas viejas sin `expectedCashAmount` siguen
 // comparandose contra el total, como cuando se cerraron (ver cashClosingReceipt)
 const difference = diferenciaDeCaja
+
+// Gastos + retiros. En las cajas cerradas antes del 8/11/2026 vienen null: 0
+const salidasDeCaja = (cash: DailyCash) =>
+  Number(cash.expensesAmount ?? 0) + Number(cash.withdrawalsAmount ?? 0)
 
 // 'branch' = el historial de la sucursal (A/S/M), en /cash.
 // 'mine'   = las cajas del usuario logueado (M/C), en /cash/mine.
@@ -96,6 +100,10 @@ const DailyCashHistoryTable = ({ scope = 'branch' }: Props) => {
   const mineQuery = useMyDailyCashHistory({ page, limit: pageSize, ...filtroEstado }, esMias)
 
   const { data, isLoading, isError } = esMias ? mineQuery : branchQuery
+
+  // El historial trae solo los totales: el desglose de gastos y retiros se pide
+  // aparte, y recien cuando se abre el detalle de una caja
+  const { data: movimientos = [] } = useDailyCashExpenses(detail?.id ?? null, !!detail)
 
   const rows = data?.data || []
   const total = data?.meta?.total || 0
@@ -160,6 +168,8 @@ const DailyCashHistoryTable = ({ scope = 'branch' }: Props) => {
                   <th>Efectivo</th>
                   <th>Tarjeta</th>
                   <th>QR</th>
+                  {/* Salidas del cajon: bajan el efectivo esperado */}
+                  <th>Gastos</th>
                   <th>Contado</th>
                   <th>Diferencia</th>
                   <th />
@@ -219,6 +229,13 @@ const DailyCashHistoryTable = ({ scope = 'branch' }: Props) => {
                       </td>
                       <td>
                         <Typography variant='body2'>{conMedios ? money(cash.qrAmount) : '—'}</Typography>
+                      </td>
+                      <td>
+                        {/* Gastos y retiros juntos: los dos salen del cajon.
+                            El desglose esta en el detalle */}
+                        <Typography variant='body2'>
+                          {salidasDeCaja(cash) > 0 ? `- ${money(String(salidasDeCaja(cash)))}` : '—'}
+                        </Typography>
                       </td>
                       <td>
                         <Typography variant='body2'>{isOpen ? '—' : money(cash.closingAmount)}</Typography>
@@ -330,6 +347,19 @@ const DailyCashHistoryTable = ({ scope = 'branch' }: Props) => {
                 </>
               )}
 
+              {Number(detail.expensesAmount ?? 0) > 0 && (
+                <Box className='flex items-center justify-between'>
+                  <Typography variant='body2'>Gastos</Typography>
+                  <Typography variant='body2'>- {money(detail.expensesAmount)}</Typography>
+                </Box>
+              )}
+              {Number(detail.withdrawalsAmount ?? 0) > 0 && (
+                <Box className='flex items-center justify-between'>
+                  <Typography variant='body2'>Retiros</Typography>
+                  <Typography variant='body2'>- {money(detail.withdrawalsAmount)}</Typography>
+                </Box>
+              )}
+
               <Divider />
 
               <Box className='flex items-center justify-between'>
@@ -348,6 +378,37 @@ const DailyCashHistoryTable = ({ scope = 'branch' }: Props) => {
                   {detail.status === 'open' ? '—' : sinContar(detail) ? 'Sin contar' : money(detail.closingAmount)}
                 </Typography>
               </Box>
+
+              {/* Qué salió del cajón, con el motivo. Los anulados se muestran
+                  tachados: dejan rastro pero no restan */}
+              {movimientos.length > 0 && (
+                <>
+                  <Divider />
+                  <Typography variant='caption' color='text.secondary'>
+                    GASTOS Y RETIROS
+                  </Typography>
+                  {movimientos.map(mov => (
+                    <Box
+                      key={mov.id}
+                      className='flex items-center justify-between'
+                      sx={{ opacity: mov.voidedAt ? 0.5 : 1 }}
+                    >
+                      <Typography
+                        variant='body2'
+                        sx={{ textDecoration: mov.voidedAt ? 'line-through' : undefined }}
+                      >
+                        {mov.type === 'withdrawal' ? 'Retiro' : 'Gasto'} · {mov.description}
+                      </Typography>
+                      <Typography
+                        variant='body2'
+                        sx={{ textDecoration: mov.voidedAt ? 'line-through' : undefined }}
+                      >
+                        - {money(mov.amount)}
+                      </Typography>
+                    </Box>
+                  ))}
+                </>
+              )}
 
               {/* Sin conteo no hay diferencia: su closingAmount es null y la
                   resta daria un faltante igual a todo lo esperado */}

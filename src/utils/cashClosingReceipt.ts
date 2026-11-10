@@ -130,6 +130,8 @@ export const generateCashClosingHTML = (cash: DailyCash): string => {
       ${cash.salesAmount !== null ? fila('Ventas', money(cash.salesAmount)) : ''}
       ${cash.advancesAmount !== null ? fila('Anticipos', money(cash.advancesAmount)) : ''}
       ${cash.refundsAmount !== null ? fila('Devoluciones', `- ${money(cash.refundsAmount)}`) : ''}
+      ${Number(cash.expensesAmount ?? 0) > 0 ? fila('Gastos', `- ${money(cash.expensesAmount)}`) : ''}
+      ${Number(cash.withdrawalsAmount ?? 0) > 0 ? fila('Retiros', `- ${money(cash.withdrawalsAmount)}`) : ''}
 
       <div class="sep"></div>
 
@@ -219,6 +221,8 @@ export const printCashClosingBluetooth = async (cash: DailyCash): Promise<void> 
   if (cash.salesAmount !== null) await printLine(row('Ventas', money(cash.salesAmount)))
   if (cash.advancesAmount !== null) await printLine(row('Anticipos', money(cash.advancesAmount)))
   if (cash.refundsAmount !== null) await printLine(row('Devoluciones', `-${money(cash.refundsAmount)}`))
+  if (Number(cash.expensesAmount ?? 0) > 0) await printLine(row('Gastos', `-${money(cash.expensesAmount)}`))
+  if (Number(cash.withdrawalsAmount ?? 0) > 0) await printLine(row('Retiros', `-${money(cash.withdrawalsAmount)}`))
 
   await writeToprinter(ESC_POS.LINE_SEPARATOR)
 

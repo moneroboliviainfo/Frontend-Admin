@@ -332,7 +332,9 @@ orden PAID → factura automática a SIAT (fire-and-forget)
 POST /auth/login                               (cajero/manager)
         ↓
 GET /dailyCash/pending-count                   (¿conteo pendiente de una caja que se cerró sola?
-                                                → POST /dailyCash/:id/count antes de seguir)
+                                                → gastos/retiros olvidados con
+                                                  POST /dailyCash/:id/expenses, luego
+                                                  POST /dailyCash/:id/count antes de seguir)
         ↓
 GET /dailyCash/current → 404 → POST /dailyCash/open
                                                (abrir SU caja: una por cajero; sin caja abierta

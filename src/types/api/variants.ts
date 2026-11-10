@@ -287,6 +287,29 @@ export interface ProductColorWithStock {
   pdfs?: string[]
 }
 
+// En que sucursal y canal vale un descuento. Desde el 06/11/2026 un descuento
+// no es del sistema entero: vale en las tiendas y webs que tiene asignadas
+export interface DiscountBranchScope {
+  discountId: number
+  branchId: number
+  channel: 'in_store' | 'online'
+}
+
+export interface ProductDiscount {
+  id: number
+  value: number
+  description?: string
+  isActive?: boolean
+
+  // OBSOLETOS: son un resumen ("aplica en ese canal de ALGUNA sucursal"). Para
+  // saber si aplica en UNA sucursal hay que mirar `branches`
+  appliesOnline?: boolean
+  appliesInStore?: boolean
+
+  // Viene en GET /products y en GET /variants?branchId=
+  branches?: DiscountBranchScope[]
+}
+
 export interface ProductWithStock {
   id: number
   name: string
@@ -294,5 +317,5 @@ export interface ProductWithStock {
   subcategory?: { id: number; name: string; category?: { id: number; name: string } }
 
   // null si no hay descuento vigente
-  discount?: unknown | null
+  discount?: ProductDiscount | null
 }

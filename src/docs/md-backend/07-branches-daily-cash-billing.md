@@ -87,15 +87,24 @@ POST /dailyCash/open                                                (M, C)
 
 GET /dailyCash/current                                              (M, C)
 → TU caja abierta (404 si no tenés), con `summary`: el resumen EN VIVO por
-  medio de pago (ver abajo) — para mostrarlo ANTES de contar y cerrar
+  medio de pago (ver abajo) — para mostrarlo ANTES de contar y cerrar — y
+  `expenses`: sus gastos y retiros (ver "Gastos y retiros")
 
 POST /dailyCash/:id/close                                           (M, C, solo la propia)
 { "closingAmount": "1090.00", "closingNote?": "Faltante de 10 Bs" }
   closingAmount = SOLO el efectivo contado en el cajón
 → DailyCash { status: "closed", cashAmount, cardAmount, qrAmount,
+               expensesAmount, withdrawalsAmount,
                expectedCashAmount, closingAmount, closedBy,
-               salesAmount, advancesAmount, refundsAmount, expectedAmount, ... }
+               salesAmount, advancesAmount, refundsAmount, expectedAmount,
+               expenses: [...], ... }
 ```
+
+Las respuestas de una caja (`open`, `close`, `count`, `pending-count`,
+`current`) traen `expenses` (sus gastos y retiros, también los anulados). El
+historial (`/mine`, `GET /dailyCash`) trae solo los totales
+`expensesAmount`/`withdrawalsAmount`; el detalle, con
+`GET /dailyCash/:id/expenses`.
 
 ### Totales por medio de pago
 
@@ -108,13 +117,17 @@ siempre en efectivo):
 | `cashAmount` | total en **efectivo** |
 | `cardAmount` | total con **tarjeta** |
 | `qrAmount` | total por **QR** |
-| `expectedCashAmount` | **efectivo que tiene que haber en el cajón** = apertura + `cashAmount` |
+| `expensesAmount` | gastos pagados con el efectivo del cajón |
+| `withdrawalsAmount` | retiros de efectivo (depósito al banco, entrega al encargado…) |
+| `expectedCashAmount` | **efectivo que tiene que haber en el cajón** = apertura + `cashAmount` − `expensesAmount` − `withdrawalsAmount` |
 | `closingAmount` | lo que contó el cajero — **solo efectivo** |
 
 **Sobrante / faltante = `closingAmount − expectedCashAmount`** (el front lo
 calcula). La tarjeta y el QR no se cuentan en el cajón: se controlan contra
 los vouchers / el banco. En cajas cerradas antes del 7/11/2026 estos campos
-vienen `null` (ahí el conteo se comparaba con `expectedAmount`).
+vienen `null` (ahí el conteo se comparaba con `expectedAmount`);
+`expensesAmount`/`withdrawalsAmount` vienen `null` en las cerradas antes del
+8/11/2026 (mostrar 0).
 
 En la caja **abierta**, `GET /dailyCash/current` trae lo mismo calculado en
 vivo, con el detalle por concepto:
@@ -125,10 +138,60 @@ vivo, con el detalle por concepto:
   "advances": { "cash": "80.00",  "card": "0.00",   "qr": "50.00",  "total": "130.00" },
   "refunds":  { "cash": "50.00",  "card": "0.00",   "qr": "0.00",   "total": "50.00" },
   "byMethod": { "cash": "730.00", "card": "300.00", "qr": "200.00", "total": "1230.00" },
-  "expectedCash": "930.00",     // apertura (200) + byMethod.cash
-  "expected": "1430.00"         // apertura + todo (= expectedAmount)
+  "expenses": "30.00",          // gastos
+  "withdrawals": "500.00",      // retiros
+  "expectedCash": "400.00",     // apertura (200) + byMethod.cash − gastos − retiros
+  "expected": "900.00"          // apertura + todo − gastos − retiros (= expectedAmount)
 }
 ```
+
+`byMethod.cash` es lo que **entró** en efectivo; los gastos y retiros se
+restan aparte. Lo que se compara con el conteo es `expectedCash`.
+
+### Gastos y retiros
+
+Salidas de efectivo del cajón que no son ventas ni devoluciones. Se restan
+del efectivo esperado (`expectedCashAmount`) y del `expectedAmount`. Hay dos
+tipos:
+- **`expense` (gasto)**: transporte, limpieza, insumos, almuerzo… Lleva
+  `category`: `transport` | `cleaning` | `supplies` | `food` | `other`.
+- **`withdrawal` (retiro)**: se saca plata del cajón (depósito al banco,
+  entrega al encargado). **No** lleva `category`.
+
+Los registra **solo el dueño de la caja**, en dos momentos:
+- con su caja **abierta**: durante el turno, en el momento del gasto, o en la
+  pantalla de cierre antes de contar;
+- en una caja **cerrada sola a la medianoche** que todavía espera su conteo
+  (`countPending: true`): en la pantalla de conteo, para cargar lo que se
+  olvidó. El `expectedCashAmount` de esa caja se recalcula.
+
+Con la caja ya contada o cerrada a mano: `409`.
+
+```
+POST /dailyCash/:id/expenses                                        (M, C, solo la propia)
+{ "type": "expense", "category": "transport",
+  "amount": "25.50", "description": "Taxi para llevar mercadería" }
+{ "type": "withdrawal", "amount": "500.00", "description": "Depósito al banco" }
+→ { id, type, category, amount, description, createdAt, voidedAt: null,
+    dailyCashId, createdById, createdBy: { id, name } }
+  400: gasto sin categoría, retiro con categoría, monto ≤ 0 o con más de 2
+       decimales, descripción vacía (máx. 500)
+  409: el monto supera el efectivo que tiene que haber en la caja; o la caja
+       ya no admite gastos
+
+DELETE /dailyCash/:id/expenses/:expenseId                           (M, C, solo la propia)
+→ el movimiento con voidedAt (se ANULA, no se borra: deja de restar)
+  mismas condiciones que registrarlo; 409 si ya estaba anulado
+
+GET /dailyCash/:id/expenses                                         (A, S, M, C)
+→ [movimiento, ...] de esa caja, también los anulados (voidedAt != null),
+  por fecha. CASHIER: solo de sus cajas; MANAGER: las de su sucursal;
+  ADMIN/SUPERVISOR: cualquiera (otra → 404)
+```
+
+Después de registrar o anular, volvé a pedir la caja (`current` o
+`pending-count`) para mostrar el esperado actualizado. Los anulados se
+muestran tachados o se ocultan, pero no suman.
 
 El resumen en vivo no incluye la plata que llegó tarde a la sucursal (un
 pago QR/tarjeta cuya caja ya había cerrado): esa entra recién en el cierre,
@@ -143,7 +206,7 @@ cobrar** — el mensaje dice qué y con qué número:
 `expectedAmount` se calcula **en el momento del cierre** con lo que entró en
 **esta** caja, no es un contador que el frontend tenga que llevar:
 
-**`expectedAmount` = apertura + `salesAmount` + `advancesAmount` − `refundsAmount`**
+**`expectedAmount` = apertura + `salesAmount` + `advancesAmount` − `refundsAmount` − `expensesAmount` − `withdrawalsAmount`**
 
 | Campo | Qué suma |
 |---|---|
@@ -192,7 +255,9 @@ GET /dailyCash/pending-count                                        (M, C)
 
 POST /dailyCash/:id/count                                           (M, C, solo la propia)
 { "closingAmount": "1090.00", "closingNote?": "..." }   // solo el efectivo contado
-  (en la pantalla, mostrar los totales por medio y expectedCashAmount de esa caja)
+  (en la pantalla, mostrar los totales por medio y expectedCashAmount de esa
+  caja, y dejar cargar antes los gastos/retiros olvidados con
+  POST /dailyCash/:id/expenses: recalculan expectedCashAmount)
 → DailyCash { closingAmount, countedAt, countPending: false, ... }
   409 si esa caja no se cerró sola o ya se contó
 ```

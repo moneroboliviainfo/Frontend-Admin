@@ -17,6 +17,39 @@ export interface DailyCashUser {
   enabled?: boolean
 }
 
+// Salidas de efectivo del cajon que NO son ventas ni devoluciones. Se restan
+// del efectivo esperado, asi que entran en el arqueo.
+export type DailyCashExpenseType = 'expense' | 'withdrawal'
+
+// Solo para los gastos: un retiro no lleva categoria (el back da 400 si se manda)
+export type DailyCashExpenseCategory = 'transport' | 'cleaning' | 'supplies' | 'food' | 'other'
+
+export interface DailyCashExpense {
+  id: number
+  type: DailyCashExpenseType
+  category: DailyCashExpenseCategory | null
+  amount: string
+  description: string
+  createdAt: string
+
+  // Anular NO borra: el movimiento queda con fecha y deja de restar. Se muestra
+  // tachado o se oculta, pero no se saca de la lista
+  voidedAt: string | null
+
+  dailyCashId: number
+  createdById: number
+  createdBy?: { id: number; name?: string }
+}
+
+export interface CreateDailyCashExpenseRequest {
+  type: DailyCashExpenseType
+
+  // Obligatoria en un gasto, prohibida en un retiro
+  category?: DailyCashExpenseCategory
+  amount: string
+  description: string
+}
+
 export interface DailyCash {
   id: number
   status: DailyCashStatus
@@ -39,7 +72,15 @@ export interface DailyCash {
   cardAmount?: string | null
   qrAmount?: string | null
 
-  // El efectivo que tiene que haber EN EL CAJON = apertura + cashAmount.
+  // Gastos y retiros de esta caja. `null` en las cerradas antes del 8/11/2026:
+  // ahi se muestran como 0
+  expensesAmount?: string | null
+  withdrawalsAmount?: string | null
+
+  // El efectivo que tiene que haber EN EL CAJON:
+  //   apertura + cashAmount - expensesAmount - withdrawalsAmount
+  // Lo calcula el back: no sumarlo a mano o los gastos quedarian afuera y
+  // apareceria un faltante falso.
   // Sobrante/faltante = closingAmount - expectedCashAmount
   expectedCashAmount?: string | null
 
@@ -65,6 +106,11 @@ export interface DailyCash {
   // Solo en GET /dailyCash/current: el resumen en vivo, antes de cerrar
   summary?: DailyCashSummary
 
+  // Los movimientos de esta caja, anulados incluidos. Vienen en open, close,
+  // count, pending-count y current; el historial trae solo los totales y el
+  // detalle se pide con GET /dailyCash/:id/expenses
+  expenses?: DailyCashExpense[]
+
   openedBy?: DailyCashUser
   closedBy?: DailyCashUser
 }
@@ -84,7 +130,13 @@ export interface DailyCashSummary {
   refunds: DailyCashAmountsByMethod
   byMethod: DailyCashAmountsByMethod
 
-  // apertura + byMethod.cash: lo que tiene que estar en el cajon
+  // Gastos y retiros del turno. `byMethod.cash` es lo que ENTRO en efectivo:
+  // estos se restan aparte
+  expenses: string
+  withdrawals: string
+
+  // apertura + byMethod.cash - gastos - retiros: lo que tiene que estar en el
+  // cajon. Es contra esto que se compara el conteo
   expectedCash: string
 
   // apertura + todo (= expectedAmount). No sirve para contar el cajon

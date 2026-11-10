@@ -189,22 +189,34 @@ y la anulación de la factura se hacen a mano.
 ### 8. Cerrar caja
 ```
 GET /dailyCash/current                 → summary: totales en vivo por medio de pago
+                                         + expenses: gastos y retiros de la caja
+POST /dailyCash/:id/expenses           (opcional: gastos/retiros que falten)
 POST /dailyCash/:id/close
 { "closingAmount": "1090.00", "closingNote?": "..." }   // solo el efectivo contado
 ```
 Pantalla de cierre: mostrar del `summary` de `GET /dailyCash/current` el
-total en **efectivo**, **tarjeta** y **QR** y el **efectivo esperado en el
-cajón** (`expectedCash`); el cajero cuenta solo el efectivo y lo manda como
-`closingAmount`. La respuesta del cierre trae lo mismo guardado (`cashAmount`,
-`cardAmount`, `qrAmount`, `expectedCashAmount`); sobrante/faltante =
+total en **efectivo**, **tarjeta** y **QR**, los **gastos** y **retiros**
+(`expenses`, `withdrawals`) y el **efectivo esperado en el cajón**
+(`expectedCash`, ya descontados los gastos y retiros); dejar agregar los
+gastos/retiros que falten antes de contar. El cajero cuenta solo el efectivo
+y lo manda como `closingAmount`. La respuesta del cierre trae lo mismo
+guardado (`cashAmount`, `cardAmount`, `qrAmount`, `expensesAmount`,
+`withdrawalsAmount`, `expectedCashAmount`); sobrante/faltante =
 `closingAmount − expectedCashAmount`.
+
+**Gastos y retiros durante el turno**: cuando el cajero paga algo con la
+plata del cajón (taxi, limpieza…) o la saca (depósito, entrega al
+encargado), se registra en el momento con `POST /dailyCash/:id/expenses`
+(gasto con categoría, retiro sin categoría). Detalle en
+[07-branches-daily-cash-billing.md](07-branches-daily-cash-billing.md)
+§Gastos y retiros.
 
 Solo la caja propia. El `expectedAmount` (cuánto debería haber) se
 **recalcula en vivo** al cerrar con lo que entró en **esa** caja, no es un
 contador que se va incrementando — así que no hace falta que el frontend lo
 vaya llevando. Es **apertura + ventas + anticipos de pedidos −
-devoluciones**, con el desglose en `salesAmount`, `advancesAmount` y
-`refundsAmount`. Da `409` si queda algo a medio cobrar (ventas pendientes,
+devoluciones − gastos − retiros**, con el desglose en `salesAmount`,
+`advancesAmount`, `refundsAmount`, `expensesAmount` y `withdrawalsAmount`. Da `409` si queda algo a medio cobrar (ventas pendientes,
 un QR de anticipo vivo); a la medianoche la caja se
 cierra sola y queda el conteo pendiente (ver
 [07-branches-daily-cash-billing.md](07-branches-daily-cash-billing.md)).

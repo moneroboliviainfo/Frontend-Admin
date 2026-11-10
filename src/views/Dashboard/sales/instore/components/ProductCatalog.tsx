@@ -30,6 +30,8 @@ import RequestFromBranchModal from './RequestFromBranchModal'
 import RequestQrDialog from './RequestQrDialog'
 import type { RequestTarget } from './RequestFromBranchModal'
 import { useBranchContext } from '@/contexts/BranchContext'
+import { useUserRole } from '@/hooks/useUserRole'
+import { aplicaEnSucursal } from '@/utils/discountScope'
 
 // Un pedido recibido en esta tienda que espera a su cliente
 export type PickupOrder = {
@@ -91,6 +93,13 @@ const ProductCatalog: React.FC<ProductCatalogProps> = ({
   // Solo aplica si algún día un ADMIN entra al POS; MANAGER/CASHIER se resuelven solos
   const { selectedBranchId, isAdmin } = useBranchContext()
   const branchId = isAdmin ? (selectedBranchId ?? undefined) : undefined
+
+  // Para decidir si un descuento se muestra hace falta saber en QUE sucursal se
+  // esta vendiendo. El cajero y el encargado la traen fija del login; el admin,
+  // del selector. No se puede usar `branchId` de arriba: ese va undefined para
+  // M/C porque el back resuelve su sucursal solo
+  const { userBranch } = useUserRole()
+  const sucursalDeLaVenta = isAdmin ? selectedBranchId : userBranch?.id
 
   const handleOpenTransfer = (e: React.MouseEvent, item: any) => {
     e.stopPropagation()
@@ -251,7 +260,9 @@ const ProductCatalog: React.FC<ProductCatalogProps> = ({
                     <Typography variant='caption' color='text.secondary' display='block' sx={{ mb: 1 }}>
                       Talla: {item.size}
                     </Typography>
-                    {item.product?.discount && item.product.discount.appliesInStore ? (
+                    {/* Solo si el descuento vale en ESTA sucursal: `appliesInStore`
+                        dice "en alguna sucursal" y mostraba rebajas ajenas */}
+                    {aplicaEnSucursal(item.product?.discount, sucursalDeLaVenta) ? (
                       <Box sx={{ mb: 1 }}>
                         <Typography
                           variant='caption'

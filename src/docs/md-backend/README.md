@@ -26,9 +26,15 @@ shape exacto de request/response en Swagger.
 
 ## ¿Qué cambió últimamente?
 
-Lo último: [17-changelog-2026-11.md](17-changelog-2026-11.md) — **caja por
-usuario** (3 de noviembre): cada cajero/encargado opera la suya, sin caja no
-se vende, cierre automático a la medianoche con conteo obligatorio.
+Lo último: [17-changelog-2026-11.md](17-changelog-2026-11.md):
+- **8 de noviembre — gastos y retiros de caja**: el cajero registra lo que
+  saca del cajón (`POST /dailyCash/:id/expenses`) y se resta del efectivo
+  esperado.
+- **6 de noviembre — cierre por medio de pago** (efectivo / tarjeta / QR, el
+  conteo es solo el efectivo, "Mis cajas") y **descuentos por sucursal**.
+- **3 de noviembre — caja por usuario**: cada cajero/encargado opera la
+  suya, sin caja no se vende, cierre automático a la medianoche con conteo
+  obligatorio.
 
 Antes, [14-changelog-2026-10.md](14-changelog-2026-10.md): los cambios
 del 9 y 10 de octubre de 2026 (pedidos entre sucursales cobrados al pedir,
@@ -63,7 +69,7 @@ sucursales, facturas), están en [12-changelog-2026-09.md](12-changelog-2026-09.
 | [14-changelog-2026-10.md](14-changelog-2026-10.md) | Qué cambió en octubre de 2026 (del 9 al 31/10; el 30/10, lo pendiente del storefront; el 31/10, sucursal elegida, QR y tarjeta), qué rompe y checklist del front |
 | [15-replenishments-and-transfer-stages.md](15-replenishments-and-transfer-stages.md) | Reposiciones (la tienda pide a la bodega, la central atiende), marca `pendingReplenishment`, y `stage`/`stageLabel`/`allowedActions` de todos los traslados; pantallas sugeridas en dos menús |
 | [16-central-returns.md](16-central-returns.md) | Devoluciones de una tienda a la bodega principal (`central_return`): crear (depósito o piso), recibir en la central, anular, kardex, `returnsToReceive` |
-| [17-changelog-2026-11.md](17-changelog-2026-11.md) | Qué cambió en noviembre de 2026 (3/11: caja por usuario, cierre automático, conteo obligatorio), qué rompe y checklist del front |
+| [17-changelog-2026-11.md](17-changelog-2026-11.md) | Qué cambió en noviembre de 2026 (3/11: caja por usuario, cierre automático, conteo obligatorio; 6/11: cierre por medio de pago, "Mis cajas", descuentos por sucursal; 8/11: gastos y retiros de caja), qué rompe y checklist del front |
 
 Este índice cubre **todos** los controllers del backend — si un endpoint no
 aparece en ninguno de estos archivos, no existe (o es nuevo y este doc

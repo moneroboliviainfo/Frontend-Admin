@@ -5,7 +5,8 @@ import type {
   DailyCashListParams,
   OpenDailyCashRequest,
   CloseDailyCashRequest,
-  CountDailyCashRequest
+  CountDailyCashRequest,
+  CreateDailyCashExpenseRequest
 } from '@/types/api/dailyCash'
 
 export const useDailyCash = () => {
@@ -38,6 +39,45 @@ export const useCountDailyCash = () => {
       dailyCashService.countDailyCash(id, data),
     onSuccess: () => {
       // Al contarla se libera la apertura: las dos consultas quedan viejas
+      queryClient.invalidateQueries({ queryKey: ['dailyCash'] })
+    }
+  })
+}
+
+// --- Gastos y retiros
+//
+// Las tres mutaciones invalidan ['dailyCash'] entero: despues de registrar o
+// anular hay que volver a pedir la caja, porque el esperado del cajon lo
+// recalcula el back y sin eso la pantalla mostraria el viejo.
+
+export const useDailyCashExpenses = (dailyCashId: number | null, enabled: boolean = true) => {
+  return useQuery({
+    queryKey: ['dailyCash', 'expenses', dailyCashId],
+    queryFn: () => dailyCashService.getExpenses(dailyCashId as number),
+    enabled: enabled && !!dailyCashId,
+    staleTime: 30000
+  })
+}
+
+export const useCreateDailyCashExpense = () => {
+  const queryClient = useQueryClient()
+
+  return useMutation({
+    mutationFn: ({ dailyCashId, data }: { dailyCashId: number; data: CreateDailyCashExpenseRequest }) =>
+      dailyCashService.createExpense(dailyCashId, data),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['dailyCash'] })
+    }
+  })
+}
+
+export const useVoidDailyCashExpense = () => {
+  const queryClient = useQueryClient()
+
+  return useMutation({
+    mutationFn: ({ dailyCashId, expenseId }: { dailyCashId: number; expenseId: number }) =>
+      dailyCashService.voidExpense(dailyCashId, expenseId),
+    onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['dailyCash'] })
     }
   })

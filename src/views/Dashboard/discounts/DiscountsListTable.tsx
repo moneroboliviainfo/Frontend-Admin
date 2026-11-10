@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useMemo, useState, useCallback } from 'react'
+import { useEffect, useMemo, useRef, useState, useCallback } from 'react'
 import type { SyntheticEvent } from 'react'
 
 import { AdapterDayjs } from '@mui/x-date-pickers/AdapterDayjs'
@@ -56,6 +56,8 @@ import {
   useDeleteAllPermanentDiscounts,
   useDeleteAllSeasonalDiscounts
 } from '@/hooks/useDiscounts'
+import { useBranchContext } from '@/contexts/BranchContext'
+import ManageDiscountsDialog from './ManageDiscountsDialog'
 
 import CustomTextField from '@core/components/mui/TextField'
 import { useProducts } from '@/hooks/useProducts'
@@ -119,9 +121,15 @@ const DiscountsListTable = () => {
 
   const [addDialogOpen, setAddDialogOpen] = useState(false)
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false)
+  const [manageDialogOpen, setManageDialogOpen] = useState(false)
   const [deleteAllPermanentDialogOpen, setDeleteAllPermanentDialogOpen] = useState(false)
   const [deleteAllSeasonalDialogOpen, setDeleteAllSeasonalDialogOpen] = useState(false)
   const [productToRemoveDiscount, setProductToRemoveDiscount] = useState<number | null>(null)
+
+  // El descuento se crea para la sucursal del selector de la navbar: desde el
+  // 06/11/2026 un descuento vale por sucursal y canal, no para todo el sistema
+  const { selectedBranch, selectedBranchId } = useBranchContext()
+
   const [discountType, setDiscountType] = useState<'permanent' | 'temporary'>('permanent')
 
   const [formData, setFormData] = useState({
@@ -248,6 +256,47 @@ const DiscountsListTable = () => {
     setAddDialogOpen(true)
   }, [])
 
+  // Las dos listas que espera el back, armadas con la sucursal del selector y
+  // los canales tildados. Una lista vacia = en ninguna sucursal de ese canal;
+  // no se mandan appliesOnline/appliesInStore porque quedaron obsoletos y solo
+  // cuentan cuando falta la lista del mismo canal
+  const canalesDeLaSucursal = useCallback(() => {
+    const id = selectedBranchId as number
+
+    return {
+      inStoreBranchIds: formData.appliesInStore ? [id] : [],
+      onlineBranchIds: formData.appliesOnline ? [id] : []
+    }
+  }, [selectedBranchId, formData.appliesInStore, formData.appliesOnline])
+
+  // Cambiar de sucursal con el formulario abierto lo deja a medias: lo escrito
+  // era para OTRA sucursal. Se limpia y se avisa, en vez de crear en silencio
+  // el descuento en la sucursal equivocada.
+  const sucursalDelFormulario = useRef<number | null>(null)
+
+  useEffect(() => {
+    if (!addDialogOpen) {
+      sucursalDelFormulario.current = selectedBranchId
+
+      return
+    }
+
+    if (sucursalDelFormulario.current === selectedBranchId) return
+
+    sucursalDelFormulario.current = selectedBranchId
+    setFormData({
+      description: '',
+      value: 0,
+      startDate: null,
+      endDate: null,
+      appliesOnline: true,
+      appliesInStore: true
+    })
+    setSelectedProducts([])
+    setApplyToAll(false)
+    showMessage('Cambiaste de sucursal: el formulario se vació para no crear el descuento donde no corresponde', 'warning')
+  }, [selectedBranchId, addDialogOpen, showMessage])
+
   const handleSubmitDiscount = useCallback(async () => {
     if (!applyToAll && selectedProducts.length === 0) {
       showMessage('Debe seleccionar al menos un producto o marcar "Aplicar a todos"', 'warning')
@@ -280,16 +329,14 @@ const DiscountsListTable = () => {
         discountResponse = await createPermanentDiscount.mutateAsync({
           description: formData.description,
           isActive: true,
-          appliesOnline: formData.appliesOnline,
-          appliesInStore: formData.appliesInStore,
+          ...canalesDeLaSucursal(),
           value: formData.value
         })
       } else {
         discountResponse = await createSeasonalDiscount.mutateAsync({
           description: formData.description,
           isActive: true,
-          appliesOnline: formData.appliesOnline,
-          appliesInStore: formData.appliesInStore,
+          ...canalesDeLaSucursal(),
           value: formData.value,
           startDate: formData.startDate!.toISOString(),
           endDate: formData.endDate!.toISOString()
@@ -317,6 +364,7 @@ const DiscountsListTable = () => {
     applyToAll,
     selectedProducts,
     formData,
+    canalesDeLaSucursal,
     discountType,
     createPermanentDiscount,
     createSeasonalDiscount,
@@ -657,6 +705,17 @@ const DiscountsListTable = () => {
           >
             Quitar Temporales
           </Button>
+          {/* Gestionar los descuentos en si: sacar uno de esta sucursal sin
+              borrarlo de las demas, o eliminarlo del todo. Antes la unica
+              herramienta eran los borrados masivos de al lado */}
+          <Button
+            variant='outlined'
+            color='primary'
+            onClick={() => setManageDialogOpen(true)}
+            startIcon={<i className='tabler-adjustments' />}
+          >
+            Gestionar descuentos
+          </Button>
           <Button
             variant='outlined'
             color='error'
@@ -779,6 +838,13 @@ const DiscountsListTable = () => {
         <DialogContent>
           <LocalizationProvider dateAdapter={AdapterDayjs} adapterLocale='es'>
             <Box sx={{ display: 'flex', flexDirection: 'column', gap: 3, pt: 2 }}>
+              {/* A que sucursal se va a crear. Sale del selector de la navbar y
+                  el descuento NO aplica en las demas: sin decirlo, el admin no
+                  tiene como saber a donde fue a parar */}
+              <Alert severity='info'>
+                El descuento se va a crear para <strong>{selectedBranch?.name || 'la sucursal seleccionada'}</strong>.
+                Para otra sucursal, cambiala en el selector de arriba y creá otro.
+              </Alert>
               <CustomTextField
                 select
                 label='Tipo de Descuento'
@@ -918,12 +984,25 @@ const DiscountsListTable = () => {
         </DialogActions>
       </Dialog>
 
+      <ManageDiscountsDialog
+        open={manageDialogOpen}
+        onClose={() => setManageDialogOpen(false)}
+        showMessage={showMessage}
+      />
+
       <Dialog open={deleteAllPermanentDialogOpen} onClose={() => setDeleteAllPermanentDialogOpen(false)}>
         <DialogTitle>Eliminar todos los descuentos permanentes</DialogTitle>
         <DialogContent>
           <DialogContentText>
             ¿Estás seguro de que deseas eliminar TODOS los descuentos permanentes? Esta acción no se puede deshacer.
           </DialogContentText>
+
+          {/* El endpoint borra los de TODO el sistema, no los de la sucursal
+              del selector. Con el selector arriba se lee al reves si no se dice */}
+          <Alert severity='warning' sx={{ mt: 3 }}>
+            Se eliminan los de <strong>todas las sucursales</strong>, no solo los de{' '}
+            {selectedBranch?.name || 'la sucursal seleccionada'}.
+          </Alert>
         </DialogContent>
         <DialogActions>
           <Button onClick={() => setDeleteAllPermanentDialogOpen(false)} color='secondary'>
@@ -946,6 +1025,13 @@ const DiscountsListTable = () => {
           <DialogContentText>
             ¿Estás seguro de que deseas eliminar TODOS los descuentos temporales? Esta acción no se puede deshacer.
           </DialogContentText>
+
+          {/* El endpoint borra los de TODO el sistema, no los de la sucursal
+              del selector. Con el selector arriba se lee al reves si no se dice */}
+          <Alert severity='warning' sx={{ mt: 3 }}>
+            Se eliminan los de <strong>todas las sucursales</strong>, no solo los de{' '}
+            {selectedBranch?.name || 'la sucursal seleccionada'}.
+          </Alert>
         </DialogContent>
         <DialogActions>
           <Button onClick={() => setDeleteAllSeasonalDialogOpen(false)} color='secondary'>

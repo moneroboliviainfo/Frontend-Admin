@@ -1,5 +1,33 @@
 # Cambios en `develop` — noviembre de 2026
 
+## 8 de noviembre — gastos y retiros de caja
+
+El cajero registra lo que saca del cajón que no es una venta: **gastos**
+(con categoría) y **retiros** (depósito al banco, entrega al encargado). Se
+restan del efectivo esperado. Detalle en
+[07](07-branches-daily-cash-billing.md) §Gastos y retiros (ya actualizado).
+
+| # | Cambio | Impacto en el front | Detalle |
+|---|---|---|---|
+| 1 | Endpoint nuevo **`POST /dailyCash/:id/expenses`** (M, C, caja propia): `{ type: 'expense' \| 'withdrawal', category?, amount, description }`. Con la caja abierta, o al registrar el conteo de una cerrada sola | Botón "Gasto / Retiro" en el POS y en las pantallas de cierre y de conteo | [07](07-branches-daily-cash-billing.md) |
+| 2 | Endpoint nuevo **`DELETE /dailyCash/:id/expenses/:expenseId`**: anula (queda con `voidedAt`) | Anular desde la lista | [07](07-branches-daily-cash-billing.md) |
+| 3 | Endpoint nuevo **`GET /dailyCash/:id/expenses`** (A, S, M, C) | Detalle de gastos en el historial | [07](07-branches-daily-cash-billing.md) |
+| 4 | `summary` de `GET /dailyCash/current` trae `expenses` y `withdrawals`; **`expectedCash` y `expected` ya los descuentan** | Mostrarlos en el cierre | [07](07-branches-daily-cash-billing.md) |
+| 5 | Las cajas traen `expensesAmount` y `withdrawalsAmount` (`null` en las cerradas antes de este cambio: mostrar 0); **`expectedCashAmount` = apertura + `cashAmount` − gastos − retiros** | Columnas en el historial | [07](07-branches-daily-cash-billing.md) |
+| 6 | `open`, `close`, `count`, `pending-count` y `current` traen la lista `expenses` | Listar los movimientos en el cierre y el conteo | [07](07-branches-daily-cash-billing.md) |
+
+**Qué se rompe:** nada, si el front ya usa `expectedCashAmount` / `expectedCash`
+para la diferencia. Si en algún lado calcula `apertura + cashAmount` a mano,
+va a dar un faltante falso cuando haya gastos: usar el campo del backend.
+
+- [ ] Formulario de gasto/retiro (tipo, categoría solo para gasto, monto,
+      descripción) en el POS, en el cierre y en el conteo pendiente.
+- [ ] Lista de movimientos de la caja con "Anular".
+- [ ] Cierre / conteo: mostrar gastos y retiros, y el efectivo esperado ya
+      descontado.
+- [ ] Historial: columnas gastos / retiros y detalle con
+      `GET /dailyCash/:id/expenses`.
+
 ## 6 de noviembre — cierre de caja por medio de pago
 
 El cierre muestra el total en **efectivo**, **tarjeta** y **QR**, y el

@@ -6,7 +6,9 @@ import type {
   AddDiscountsToProductsRequest,
   AddDiscountsToProductsResponse,
   RemoveDiscountRequest,
-  ApplyDiscountToAllRequest
+  ApplyDiscountToAllRequest,
+  UpdatePermanentDiscountRequest,
+  UpdateSeasonalDiscountRequest
 } from '@/types/api/discounts'
 
 class DiscountServiceClass {
@@ -37,6 +39,34 @@ class DiscountServiceClass {
     const data: RemoveDiscountRequest = { discount: null }
 
     await apiClient.patch(`/api/products/${productId}`, data)
+  }
+
+  // Los descuentos que existen, con sus sucursales por canal. Sin paginar: trae
+  // permanentes y de temporada juntos
+  async getDiscounts(): Promise<DiscountResponse[]> {
+    const response = await apiClient.get<DiscountResponse[]>('/api/discounts')
+
+    return response.data || []
+  }
+
+  // Editar: lo que se usa para sacar un descuento de UNA sucursal sin tocar las
+  // demas (se manda la lista sin esa sucursal)
+  async updatePermanentDiscount(id: number, data: UpdatePermanentDiscountRequest): Promise<DiscountResponse> {
+    const response = await apiClient.patch<DiscountResponse>(`/api/discounts/permanent/${id}`, data)
+
+    return response.data
+  }
+
+  async updateSeasonalDiscount(id: number, data: UpdateSeasonalDiscountRequest): Promise<DiscountResponse> {
+    const response = await apiClient.patch<DiscountResponse>(`/api/discounts/seasonal/${id}`, data)
+
+    return response.data
+  }
+
+  // Borra UN descuento. No confundir con los de abajo, que borran todos los de
+  // su tipo en todas las sucursales
+  async deleteDiscount(id: number): Promise<void> {
+    await apiClient.delete(`/api/discounts/${id}`)
   }
 
   async deleteAllPermanentDiscounts(): Promise<void> {

@@ -5,7 +5,9 @@ import type {
   DailyCashListResponse,
   OpenDailyCashRequest,
   CloseDailyCashRequest,
-  CountDailyCashRequest
+  CountDailyCashRequest,
+  DailyCashExpense,
+  CreateDailyCashExpenseRequest
 } from '@/types/api/dailyCash'
 
 class DailyCashServiceClass {
@@ -26,6 +28,31 @@ class DailyCashServiceClass {
     const response = await apiClient.post<DailyCash>('/api/dailyCash/open', data)
 
     return response.data
+  }
+
+  // --- Gastos y retiros: salidas de efectivo que no son ventas. Los registra
+  // solo el dueño de la caja, con ella abierta o cerrada sola esperando conteo
+
+  async createExpense(dailyCashId: number, data: CreateDailyCashExpenseRequest): Promise<DailyCashExpense> {
+    const response = await apiClient.post<DailyCashExpense>(`/api/dailyCash/${dailyCashId}/expenses`, data)
+
+    return response.data
+  }
+
+  // Anula, no borra: vuelve con `voidedAt` y deja de restar del esperado
+  async voidExpense(dailyCashId: number, expenseId: number): Promise<DailyCashExpense> {
+    const response = await apiClient.delete<DailyCashExpense>(
+      `/api/dailyCash/${dailyCashId}/expenses/${expenseId}`
+    )
+
+    return response.data
+  }
+
+  // Detalle de una caja, anulados incluidos. El historial solo trae los totales
+  async getExpenses(dailyCashId: number): Promise<DailyCashExpense[]> {
+    const response = await apiClient.get<DailyCashExpense[]>(`/api/dailyCash/${dailyCashId}/expenses`)
+
+    return response.data || []
   }
 
   // Historial de las cajas del usuario logueado (M, C). Misma info que el del

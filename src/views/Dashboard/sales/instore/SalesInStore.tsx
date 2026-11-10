@@ -15,7 +15,8 @@ import {
   Button,
   TextField,
   CircularProgress,
-  Typography
+  Typography,
+  Divider
 } from '@mui/material'
 
 import { useQueryClient } from '@tanstack/react-query'
@@ -46,6 +47,7 @@ import { isRestockRequest } from '@/views/Dashboard/central-warehouse/transfers'
 import type { PickupOrder } from './components/ProductCatalog'
 import { useUserRole } from '@/hooks/useUserRole'
 import CloseCashSummaryModal from './CloseCashSummaryModal'
+import CashExpensesPanel from './CashExpensesPanel'
 import { useVariants } from '@/hooks/useVariants'
 import type { CartItem, RepriceResponse, Order, GenerateQRResponse, BillingInfo } from '@/types/api/sales'
 import type { Variant, VariantSize } from '@/types/api/variants'
@@ -85,6 +87,7 @@ const PointOfSale: React.FC = () => {
   const [dailyCashError, setDailyCashError] = useState('')
 
   const [closeDailyCashModalOpen, setCloseDailyCashModalOpen] = useState(false)
+  const [gastosModalOpen, setGastosModalOpen] = useState(false)
   const [closingAmount, setClosingAmount] = useState('')
   const [closingNote, setClosingNote] = useState('')
   const [closeDailyCashError, setCloseDailyCashError] = useState('')
@@ -1043,6 +1046,12 @@ const PointOfSale: React.FC = () => {
                 </Typography>
               )}
 
+              {/* La caja se cerro sola: aca se cargan los gastos y retiros que
+                  quedaron sin registrar antes de contar */}
+              <Box sx={{ mb: 3 }}>
+                <CashExpensesPanel dailyCashId={pendingCount.id} expenses={pendingCount.expenses} />
+              </Box>
+
               <TextField
                 label='Efectivo contado (Bs)'
                 type='text'
@@ -1169,18 +1178,41 @@ const PointOfSale: React.FC = () => {
             alignItems: 'center'
           }}
         >
-          <Typography variant='body2' color='text.secondary'>
-            Caja abierta: Bs {dailyCashData.openingAmount}
-          </Typography>
-          <Button
-            size='small'
-            color='secondary'
-            variant='outlined'
-            startIcon={<i className='tabler-lock' />}
-            onClick={() => setCloseDailyCashModalOpen(true)}
-          >
-            Cerrar Caja
-          </Button>
+          {/* En una sola linea para no robarle alto al catalogo: el rotulo
+              chico al lado y el monto —lo unico que el cajero mira durante el
+              turno— destacado */}
+          <Box sx={{ display: 'flex', alignItems: 'baseline', gap: 1 }}>
+            <Typography variant='caption' color='text.secondary'>
+              Caja abierta con
+            </Typography>
+            <Typography variant='h6' fontWeight='bold' color='primary.main'>
+              Bs {dailyCashData.openingAmount}
+            </Typography>
+          </Box>
+
+          {/* Los dos van en primary y a tamaño normal: son las acciones de caja
+              del turno y antes, chiquitos y en gris, se perdian en la barra */}
+          <Box sx={{ display: 'flex', gap: 2 }}>
+            {/* En el momento del gasto, no al cerrar: si el cajero paga un taxi
+                a media tarde, lo registra ahi mismo y no tiene que acordarse */}
+            <Button
+              color='primary'
+              variant='contained'
+              startIcon={<i className='tabler-receipt-2' />}
+              onClick={() => setGastosModalOpen(true)}
+            >
+              Gasto / Retiro
+            </Button>
+
+            <Button
+              color='primary'
+              variant='contained'
+              startIcon={<i className='tabler-lock' />}
+              onClick={() => setCloseDailyCashModalOpen(true)}
+            >
+              Cerrar Caja
+            </Button>
+          </Box>
         </Box>
       )}
 
@@ -1273,6 +1305,30 @@ const PointOfSale: React.FC = () => {
         billing={billing}
       />
 
+      {/* Gastos y retiros durante el turno. El mismo panel que se ve al cerrar
+          y al contar: una sola forma de registrarlos */}
+      <Dialog open={gastosModalOpen} onClose={() => setGastosModalOpen(false)} maxWidth='xs' fullWidth>
+        <DialogTitle>Gastos y retiros</DialogTitle>
+        <DialogContent>
+          <Box sx={{ pt: 2 }}>
+            {dailyCashData && (
+              <CashExpensesPanel dailyCashId={dailyCashData.id} expenses={dailyCashData.expenses} />
+            )}
+
+            {dailyCashData?.summary && (
+              <Alert severity='info' sx={{ mt: 3 }}>
+                Se descuentan del efectivo que tiene que haber en el cajón al cerrar.
+              </Alert>
+            )}
+          </Box>
+        </DialogContent>
+        <DialogActions>
+          <Button variant='contained' onClick={() => setGastosModalOpen(false)}>
+            Listo
+          </Button>
+        </DialogActions>
+      </Dialog>
+
       <Dialog open={closeDailyCashModalOpen} maxWidth='sm' fullWidth>
         <DialogTitle>Cerrar Caja</DialogTitle>
         <DialogContent>
@@ -1299,6 +1355,16 @@ const PointOfSale: React.FC = () => {
                   <Typography variant='body2'>Bs {dailyCashData.summary.byMethod.qr}</Typography>
                 </Box>
               </Box>
+            )}
+
+            {/* Gastos y retiros antes de contar: lo que salio del cajon y no
+                es una venta. Registrarlos aca baja el esperado, asi el conteo
+                no sale con un faltante por algo que ya se sabia */}
+            {dailyCashData && (
+              <>
+                <Divider />
+                <CashExpensesPanel dailyCashId={dailyCashData.id} expenses={dailyCashData.expenses} />
+              </>
             )}
 
             <Alert severity='info'>

@@ -92,6 +92,15 @@ const CloseCashSummaryModal = ({ dailyCash, onClose }: Props) => {
 
           <Row label='Apertura' value={money(dailyCash.openingAmount)} />
 
+          {/* Salieron del cajon, por eso bajan el esperado. `null` en las cajas
+              cerradas antes del 8/11/2026: ahi no se muestran */}
+          {dailyCash.expensesAmount != null && Number(dailyCash.expensesAmount) > 0 && (
+            <Row label='Gastos' value={`- ${money(dailyCash.expensesAmount)}`} />
+          )}
+          {dailyCash.withdrawalsAmount != null && Number(dailyCash.withdrawalsAmount) > 0 && (
+            <Row label='Retiros' value={`- ${money(dailyCash.withdrawalsAmount)}`} />
+          )}
+
           {hasBreakdown && (
             <>
               <Row label='Ventas del turno' value={money(dailyCash.salesAmount)} />

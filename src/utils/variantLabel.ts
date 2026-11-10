@@ -33,14 +33,16 @@ export type LabelSize = {
   // todos los rollos. Sirve cuando un rollo apoya distinto que los demas y hay
   // que moverlo sin descalibrar a los otros cuatro.
   //
-  // OJO: mueve DONDE EMPIEZA A IMPRIMIR en el cabezal, asi que solo afecta a la
-  // termica. Por el driver de la PC la posicion la decide Windows. Para correr
-  // lo que se ve DENTRO de la etiqueta —en las dos salidas— esta contentOffsetMm.
+  // OJO: mueve DONDE EMPIEZA A IMPRIMIR en el cabezal: es el ajuste horizontal
+  // de la TERMICA. El de la hoja es contentOffsetMm.
   offsetMm?: number
 
-  // Corrimiento del CONTENIDO (texto y QR) dentro de cada etiqueta, en mm:
-  // positivo a la derecha, negativo a la izquierda. Vale para la hoja y para la
-  // termica por igual, porque mueve el dibujo, no el papel.
+  // Corrimiento del contenido dentro de cada etiqueta en la HOJA (PC), en mm:
+  // positivo a la derecha, negativo a la izquierda. La termica NO lo usa.
+  //
+  // Cada salida tiene su propia perilla a proposito: antes este valor movia las
+  // dos, asi que corregir la PC descalibraba la termica y habia que compensar
+  // con offsetMm. Separadas, cada una se ajusta sola.
   contentOffsetMm?: number
 
   // Ajuste VERTICAL propio de esta medida, en mm, SOLO en la termica: positivo
@@ -74,9 +76,6 @@ export const LABEL_SIZES: LabelSize[] = [
   // 30 | 1 mm = 67 mm de papel. Lo que se imprime es de borde a borde de las dos
   // etiquetas: 30 + 4 + 30 = 64 mm, que entra en el cabezal de 72.
   // Cada fila lleva dos etiquetas distintas
-  // contentOffsetMm: el texto y el QR entraban 1.5 mm a la derecha dentro de cada
-  // etiqueta, asi que el contenido se corre a la izquierda. Es propio de este
-  // rollo: no toca a los otros cuatro
   {
     id: '30x20-doble',
     label: '30 × 20 mm (rollo doble)',
@@ -84,12 +83,19 @@ export const LABEL_SIZES: LabelSize[] = [
     height: 20,
     perRow: 2,
     gapMm: 4,
-    contentOffsetMm: -1.5,
 
-    // Solo termica: ahi el contenido salia 1.5 mm a la izquierda y 3 mm arriba
-    // de donde corresponde. Por hoja ya sale bien, por eso no se usa
-    // contentOffsetMm para esto
-    offsetMm: 1.5,
+    // --- Hoja (PC): el unico numero a tocar para mover la impresion de la PC.
+    // Subirlo va a la derecha, bajarlo a la izquierda. No afecta a la termica.
+    // Calibrado en papel: en 0 quedaba apenas pasado a la derecha y en -1.5 se
+    // pegaba al borde izquierdo
+    contentOffsetMm: -1,
+
+    // --- Termica: en 0 queda donde ya salia bien. Antes era 1.5 para anular el
+    // -1.5 que entonces compartian las dos salidas; separadas, no hace falta
+    offsetMm: 0,
+
+    // --- Termica: este rollo no se adelanta como los demas, asi que no se le
+    // recortan los 3 mm de arriba (ver offsetYMm)
     offsetYMm: 3
   },
   { id: '40x40', label: '40 × 40 mm', width: 40, height: 40 },
@@ -391,9 +397,7 @@ export const generateLabelsSheetHTML = (labels: VariantLabel[], size: LabelSize)
 
   const etiquetas = filas
     .map(fila => {
-      const contenido = fila
-        .map(label => `<div class="etiqueta">${labelParts(label, size).markup}</div>`)
-        .join('')
+      const contenido = fila.map(label => `<div class="etiqueta">${labelParts(label, size).markup}</div>`).join('')
 
       // Con una sola por fila no se envuelve: el HTML queda igual que antes
       return porFila === 1 ? contenido : `<div class="fila-rollo">${contenido}</div>`
@@ -972,12 +976,6 @@ export const renderLabelBitmap = async (
     // de lo que hay. Es el caso raro; lo normal es negativo (la impresora se adelanta)
     if (bajadaDots > 0) ctx.translate(0, bajadaDots)
 
-    // El mismo corrimiento horizontal que aplica la hoja (ver contentOffsetMm),
-    // para que las dos salidas queden iguales. Va DESPUES del recorte: lo que
-    // se pase del borde se corta y no invade la etiqueta de al lado
-    if (size.contentOffsetMm) ctx.translate(size.contentOffsetMm * DOTS_PER_MM, 0)
-
-
     await drawLabel(ctx, labels[i], size, altoUtilMm - bajadaDots / DOTS_PER_MM)
     ctx.restore()
   }
@@ -1074,8 +1072,6 @@ const rasterCommands = ({ widthBytes, height, data }: LabelBitmap): Uint8Array[]
 // de gap. La DP30 SI lo honra —se la ve hacer ese recorrido al terminar— y por
 // eso cada etiqueta queda bien parada para la proxima.
 const FEED_TO_NEXT_LABEL = new Uint8Array([0x1d, 0x0c])
-
-
 
 // GS L: margen izquierdo, en puntos. Corre la impresion sin gastar bytes en blanco
 const margenCommand = (dots: number) => new Uint8Array([0x1d, 0x4c, dots & 0xff, dots >> 8])

@@ -22,6 +22,10 @@ const CON_SUCURSAL = [
   '/replenishments', // con el switch "Todas" apagado, las tablas filtran por la del selector
   '/central-warehouse', // a qué sucursal se despacha (salvo la pestaña Retiros)
   '/siat/eventos', // evento significativo del punto de venta de la sucursal
+
+  // Desde el 06/11/2026 un descuento vale por sucursal y canal: el que se crea
+  // se aplica a la sucursal del selector, asi que la pantalla depende de el
+  '/discounts',
 ]
 
 const GENERALES = [
@@ -40,7 +44,6 @@ const GENERALES = [
   '/category',
   '/receptions',
   '/branch-requests', // abre con "Todas"; al apagar el switch la tabla declara el selector
-  '/discounts',
   '/outfits',
   '/banners',
   '/sliders',
