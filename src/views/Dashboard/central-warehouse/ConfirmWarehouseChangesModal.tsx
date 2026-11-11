@@ -16,6 +16,8 @@ import Typography from '@mui/material/Typography'
 
 import CustomTextField from '@core/components/mui/TextField'
 import VariantQRModal from '@/views/Dashboard/products/add/components/VariantQRModal'
+import LabelBatchDialog from '@/components/labels/LabelBatchDialog'
+import type { LabelBatchRow } from '@/components/labels/LabelBatchDialog'
 import { prendas } from './units'
 
 type Entry = [string, number]
@@ -57,6 +59,10 @@ const parseLabel = (label?: string): VariantQrInfo | null => {
   return { productName: parts[0], colorName: parts[1], sizeName: parts[2].slice('Talla '.length) }
 }
 
+// Lo que se va a etiquetar en lote: las filas ya armadas y el titulo del
+// dialogo, que cambia segun de que seccion se abrio
+type Lote = { title: string; rows: LabelBatchRow[] }
+
 const ConfirmWarehouseChangesModal = ({
   open,
   onClose,
@@ -72,9 +78,55 @@ const ConfirmWarehouseChangesModal = ({
   // Variante cuya etiqueta se va a imprimir (abre el modal del QR encima de este)
   const [qrTarget, setQrTarget] = useState<QrTarget | null>(null)
 
+  // Las etiquetas de TODA la seccion de una vez: el mismo dialogo que en
+  // Productos → Variantes, pero con las prendas que se estan moviendo
+  const [lote, setLote] = useState<Lote | null>(null)
+
   useEffect(() => {
     if (open) setNote('')
   }, [open])
+
+  // Una fila por variante, con la cantidad que se esta moviendo como sugerida.
+  // Las que no tienen datos de etiqueta (sin nombre ni color) se dejan afuera:
+  // no se puede imprimir algo que no sabemos que es
+  const filasDe = (entries: Entry[], hint: string): LabelBatchRow[] =>
+    entries.flatMap(([variantSizeId, quantity]) => {
+      const id = Number(variantSizeId)
+      const info = qrInfo[id] || parseLabel(labels[id])
+
+      if (!info) return []
+
+      return [
+        {
+          variantId: id,
+          sku: info.sku,
+          productName: info.productName,
+          colorName: info.colorName,
+          sizeName: info.sizeName,
+          quantity,
+          hint: `${quantity} ${hint}`
+        }
+      ]
+    })
+
+  // Boton de la seccion: aparece solo si hay algo etiquetable
+  const botonDeLote = (entries: Entry[], title: string, hint: string) => {
+    const rows = filasDe(entries, hint)
+
+    if (rows.length === 0) return null
+
+    const unidades = rows.reduce((sum, row) => sum + row.quantity, 0)
+
+    return (
+      <Button
+        size='small'
+        startIcon={<i className='tabler-printer' />}
+        onClick={() => setLote({ title, rows })}
+      >
+        Imprimir etiquetas ({unidades})
+      </Button>
+    )
+  }
 
   const renderLines = (entries: Entry[], sign: string) => (
     <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
@@ -111,9 +163,12 @@ const ConfirmWarehouseChangesModal = ({
       <DialogContent>
         {incoming.length > 0 && (
           <Box sx={{ mb: outgoing.length > 0 ? 4 : 0 }}>
-            <Typography variant='body2' className='font-medium' sx={{ mb: 2 }}>
-              Ingresan a la bodega ({prendas(sumUnits(incoming))})
-            </Typography>
+            <Box className='flex items-center gap-2' sx={{ mb: 2 }}>
+              <Typography variant='body2' className='font-medium' sx={{ flex: 1 }}>
+                Ingresan a la bodega ({prendas(sumUnits(incoming))})
+              </Typography>
+              {botonDeLote(incoming, 'Etiquetas de lo que ingresa', 'ingresan')}
+            </Box>
             {renderLines(incoming, '+')}
           </Box>
         )}
@@ -122,9 +177,12 @@ const ConfirmWarehouseChangesModal = ({
 
         {outgoing.length > 0 && (
           <Box>
-            <Typography variant='body2' className='font-medium' sx={{ mb: 2 }}>
-              Salen hacia {branchName} ({prendas(sumUnits(outgoing))})
-            </Typography>
+            <Box className='flex items-center gap-2' sx={{ mb: 2 }}>
+              <Typography variant='body2' className='font-medium' sx={{ flex: 1 }}>
+                Salen hacia {branchName} ({prendas(sumUnits(outgoing))})
+              </Typography>
+              {botonDeLote(outgoing, `Etiquetas del envío a ${branchName || 'la sucursal'}`, 'en el envío')}
+            </Box>
             {renderLines(outgoing, '-')}
 
             <CustomTextField
@@ -160,6 +218,19 @@ const ConfirmWarehouseChangesModal = ({
           Confirmar
         </Button>
       </DialogActions>
+
+      {/* Todas las etiquetas de la seccion de una vez, agrupadas por producto:
+          el mismo dialogo (y las mismas dos salidas, PC y termica) que usa
+          Productos → Variantes para imprimir por stock */}
+      {lote && (
+        <LabelBatchDialog
+          open
+          onClose={() => setLote(null)}
+          title={lote.title}
+          rows={lote.rows}
+          groupBy='product'
+        />
+      )}
 
       {/* El mismo modal de Productos → Variantes: QR, descarga y etiquetas por
           web o Bluetooth en las cuatro medidas */}
