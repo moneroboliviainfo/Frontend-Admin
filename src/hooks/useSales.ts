@@ -45,6 +45,14 @@ export const useRepriceCart = () => {
   })
 }
 
+// Vista previa en modo edicion. La venta tiene que estar en CANCELLED_FOR_EDIT
+export const useEditRepriceCart = () => {
+  return useMutation({
+    mutationFn: ({ orderId, token }: { orderId: number; token: string }) =>
+      cartService.editRepriceCart(orderId, token)
+  })
+}
+
 export const useCreateOrder = () => {
   const queryClient = useQueryClient()
 

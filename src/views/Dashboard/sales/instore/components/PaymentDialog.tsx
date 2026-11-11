@@ -24,7 +24,7 @@ import {
 } from '@mui/material'
 import Grid from '@mui/material/Grid2'
 
-import type { Order, RepriceResponse, GenerateQRResponse, BillingInfo, TipoDocumentoIdentidad } from '@/types/api/sales'
+import type { Order, RepriceResponse, GenerateQRResponse, BillingInfo, TipoDocumentoIdentidad, KeptPrice } from '@/types/api/sales'
 import { useSearchBilling, useTiposDocumentoIdentidad, useVerificarNit } from '@/hooks/useSales'
 
 interface PaymentMethod {
@@ -50,6 +50,10 @@ interface PaymentDialogProps {
   onConfirmPayment: () => void
   onCancelOrder: () => void
   isEditingOrder?: boolean
+
+  // Solo en edicion: que precio se conserva de la venta original, por producto.
+  // Sale de `edit-reprice`
+  keptPrices?: KeptPrice[]
   editingOrderId?: number | null
   billing: BillingInfo
   onBillingChange: (billing: BillingInfo) => void
@@ -71,6 +75,7 @@ const PaymentDialog: React.FC<PaymentDialogProps> = ({
   onConfirmPayment,
   onCancelOrder,
   isEditingOrder = false,
+  keptPrices = [],
   editingOrderId = null,
   billing,
   onBillingChange
@@ -357,6 +362,29 @@ const PaymentDialog: React.FC<PaymentDialogProps> = ({
                 ? `Bs ${totalToPay.toFixed(2)}`
                 : 'Bs 0.00'}
           </Typography>
+
+          {/* Editar es corregir un registro, no volver a vender: lo ya cobrado
+              mantiene su precio aunque hoy sea otro. Sin decirlo, el cajero ve
+              un total que no coincide con el catalogo y cree que es un error */}
+          {isEditingOrder && keptPrices.length > 0 && (
+            <Box sx={{ mt: 2, textAlign: 'left' }}>
+              <Typography variant='caption' color='text.secondary' sx={{ display: 'block', mb: 0.5 }}>
+                SE CONSERVA EL PRECIO DE LA VENTA ORIGINAL
+              </Typography>
+              {keptPrices.map(kept => (
+                <Typography key={kept.productId} variant='caption' sx={{ display: 'block' }}>
+                  {kept.productName}: Bs{' '}
+                  {(kept.unitPrice * (1 - (kept.discountValue || 0) / 100)).toFixed(2)}
+                  {kept.remaining > 0
+                    ? ` · quedan ${kept.remaining} u. a ese precio`
+                    : ' · sin unidades a ese precio'}
+                </Typography>
+              ))}
+              <Typography variant='caption' color='text.secondary' sx={{ display: 'block', mt: 0.5 }}>
+                Lo que supere esas unidades va al precio de hoy.
+              </Typography>
+            </Box>
+          )}
 
           {/* Con un pedido cobrado por adelantado, el total facturado y lo que
               se cobra en caja son distintos: hay que mostrar las dos cifras */}

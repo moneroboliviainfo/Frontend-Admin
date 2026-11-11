@@ -31,6 +31,30 @@ export interface RepriceResponse {
   amountDue?: string
 }
 
+// Lo que se cobro en la venta ORIGINAL, por producto. Editar es corregir un
+// error de registro, no volver a vender: esas unidades conservan su precio y
+// su descuento aunque hoy sean otros.
+export interface KeptPrice {
+  productId: number
+  productName: string
+  unitPrice: number
+  discountValue: number
+
+  // Unidades que tenia ese producto en la venta original
+  quantity: number
+
+  // De esas, las que TODAVIA entrarian al precio original. Sirve para avisar
+  // "quedan N u. al precio viejo": pasadas esas, se cobra el precio de hoy
+  remaining: number
+}
+
+// POST /orders/:id/edit-reprice — la vista previa de una venta en edicion.
+// Es `reprice` + los precios conservados, y da exactamente lo que va a cobrar
+// el PATCH con ese mismo carrito
+export interface EditRepriceResponse extends RepriceResponse {
+  keptPrices?: KeptPrice[]
+}
+
 export interface RepriceError {
   message: string
   error: string

@@ -6,6 +6,7 @@ import type {
   CartRequest,
   CartResponse,
   RepriceResponse,
+  EditRepriceResponse,
   Order,
   CreateOrderRequest,
   ConfirmOrderRequest,
@@ -56,6 +57,20 @@ class CartServiceClass {
 
   // branchTransferId enlaza la venta con un pedido recibido, para que su unidad
   // reservada cuente como disponible. El back lo IGNORA si no va branchId.
+  // Vista previa de una venta EN EDICION. No usar `repriceCart` ahi: no conoce
+  // la venta y cotiza a precio de hoy, asi que la pantalla mostraria un total
+  // distinto del que termina guardando el PATCH.
+  //
+  // Solo funciona con la venta ya en CANCELLED_FOR_EDIT (si no, 404): el
+  // cancel-for-edit va antes.
+  async editRepriceCart(orderId: number, token: string): Promise<EditRepriceResponse> {
+    const response = await apiClient.post<EditRepriceResponse>(`/api/orders/${orderId}/edit-reprice`, {
+      items: token
+    })
+
+    return response.data
+  }
+
   async repriceCart(token: string, branchTransferId?: number, branchId?: number): Promise<RepriceResponse> {
     const response = await apiClient.post<RepriceResponse>('/api/orders/reprice', {
       items: token,

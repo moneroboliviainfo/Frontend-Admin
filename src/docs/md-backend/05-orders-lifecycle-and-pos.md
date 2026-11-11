@@ -153,6 +153,109 @@ sin pasar por `cancel-for-edit` primero. Los pedidos online con envío FedEx
 sin tocar la orden (antes fallaba recién en el `PATCH`, con la orden ya
 trabada). Ocultá "editar" para esos pedidos.
 
+**Precio en la venta corregida (desde el 10/11/2026).** Editar es corregir
+un error de registro, no volver a vender: lo que ya se cobró **conserva el
+precio y el descuento de la venta original**, aunque hoy sean otros.
+- Va **por producto**, no por variante: cambiar talla o color del mismo
+  producto mantiene el precio cobrado.
+- Hasta la cantidad que tenía ese producto en la venta original. Las
+  unidades de más, o un producto que no estaba, van **al precio de hoy**,
+  en una línea aparte (la venta corregida puede traer dos líneas de la misma
+  variante con distinto precio: mostrarlas tal cual).
+- Las prendas de un pedido cobrado siguen con su precio congelado, como
+  antes.
+- **Vista previa:** en modo edición, después de cada cambio del carrito,
+  usar `POST /orders/:id/edit-reprice` **en vez de** `POST /orders/reprice`
+  (que no conoce la venta y mostraría los precios de hoy):
+
+  ```
+  POST /orders/:id/edit-reprice        (M, C — solo su sucursal; la venta en CANCELLED_FOR_EDIT, si no 404)
+  { "items": "<jwt del carrito nuevo>" }
+  →
+  {
+    "items": [ { "variantId", "quantity", "unit_price", "discountValue", "totalPrice" } ],
+    "total": "260.00",
+    "advanceApplied": "0.00",          // pedido cobrado que la venta retiraba (si hay)
+    "amountDue": "260.00",
+    "errorsStock": [],
+    "keptPrices": [                    // lo cobrado en la venta original, una entrada por línea
+      { "productId": 7, "productName": "Polera P", "unitPrice": 100,
+        "discountValue": 20, "quantity": 2, "remaining": 0 }
+    ]
+  }
+  ```
+
+  Son exactamente los precios que va a cobrar el `PATCH` con ese mismo
+  carrito. `remaining` = unidades de ese producto que todavía entrarían al
+  precio original: sirve para avisar "Polera P: precio original 80 (quedan
+  N u.)". Para buscar y agregar prendas se sigue usando `GET /variants`, que
+  muestra el precio de hoy (no sabe de la edición). Sin stock → `400`, igual
+  que `reprice`.
+
+#### Flujo completo de la pantalla de edición (paso a paso)
+
+`edit-reprice` solo funciona con la venta ya en `CANCELLED_FOR_EDIT`, así
+que **`cancel-for-edit` va antes**. Hay dos formas válidas de ordenar la
+pantalla; elegí una:
+
+**A) Recomendada — cancelar al entrar en modo edición:**
+1. El cajero toca "Editar" en la venta → `POST /orders/cancel-for-edit/:id`.
+   Si responde `400` (p. ej. FedEx), no entrar en modo edición.
+2. Precargar el carrito con los items de la venta (`GET /orders/:id`) y
+   armarlo con `POST /cart?type=<type de la venta>` y `branchId` de la
+   venta en el body (como en el paso 1 del POS). Para buscar prendas, `GET /variants`.
+3. **Después de cada cambio del carrito** → `POST /orders/:id/edit-reprice`
+   con el token del carrito. Los precios, líneas y total que se muestran
+   salen **de esta respuesta**, no de `/cart` ni de `GET /variants` (esos
+   muestran el precio de hoy).
+4. "Guardar" → `PATCH /orders/:id` con el **mismo** token. La respuesta es
+   la venta nueva (otro `id`); su total coincide con el último
+   `edit-reprice`.
+
+**B) Si la pantalla ya llama a `cancel-for-edit` recién al guardar:** al
+tocar "Guardar", llamar `cancel-for-edit` → `edit-reprice` → mostrar un
+diálogo de confirmación con el total y las líneas de `edit-reprice` →
+`PATCH`. Mientras se arma el carrito no hay vista previa con el precio
+conservado (mostrar el total como "a confirmar").
+
+Errores de `edit-reprice`:
+- `404 Order N not found or not cancel for edit`: la venta no está en
+  `CANCELLED_FOR_EDIT` (falta `cancel-for-edit`, o ya se guardó la edición)
+  o es de otra sucursal.
+- `400 Insufficient stock for variants: [ids]`: no hay stock para el carrito
+  nuevo; marcar esas variantes. Mismo error que daría el `PATCH`.
+- `401 Invalid or expired token`: el token del carrito venció; volver a
+  armarlo con `POST /cart`.
+
+Cómo mostrar `keptPrices`:
+- `unitPrice` es el **precio de lista** cobrado y `discountValue` el % que
+  se le aplicó. Mostrar por ejemplo "Polera P — precio original Bs 100 −20%
+  (quedan 2 u.)". No calcular el total en el front: los totales vienen
+  ya redondeados en `items[].totalPrice` y `total`.
+- Puede haber **varias entradas del mismo producto** (la venta original
+  tenía varias líneas): sumar `remaining` por `productId` para el aviso.
+- `remaining: 0` en todas = ya se usaron todas las unidades al precio
+  original; lo que se agregue va al precio de hoy.
+- En `items` puede venir **la misma variante en dos líneas** con distinto
+  precio (parte al precio original, parte al de hoy). Mostrarlas así, sin
+  juntarlas.
+
+Ejemplo: la venta original tenía 2 Polera P (talla 36) a Bs 100 −20% = 160.
+Hoy la Polera P vale 100 sin descuento.
+
+| Carrito nuevo | `items` de `edit-reprice` | `total` | `remaining` |
+|---|---|---|---|
+| 2 P talla 38 | 2 × 100 −20% = 160 | 160 | 0 |
+| 1 P talla 36 | 1 × 100 −20% = 80 | 80 | 1 |
+| 3 P talla 38 | 2 × 100 −20% = 160 y 1 × 100 = 100 | 260 | 0 |
+| 1 Q (otro producto) | Q al precio de hoy | precio de Q | 2 |
+
+La caja: la venta corregida queda en la caja de la venta original y **no
+pide cobrar ni devolver la diferencia** (editar corrige un registro, no es
+un cambio de mercadería). Si el total cambia, avisar al cajero; si en
+realidad el cliente se lleva algo más, eso es **una venta nueva**, no una
+edición.
+
 ### Despachar un pedido online (PAID → SENT)
 ```
 PUT /orders/change-status/:id

@@ -97,12 +97,13 @@ A = ADMIN, S = SUPERVISOR, M = MANAGER, C = CASHIER.
 | `POST /orders/confirm/:id` | M, C | confirmar pago CASH/CARD manual |
 | `POST /orders/cancel/:id` | M, C | anular venta |
 | `POST /orders/cancel-for-edit/:id` | M, C | paso 1 de editar una venta |
+| `POST /orders/:id/edit-reprice` | M, C | vista previa de la edición (precio conservado); solo ventas de su sucursal en `CANCELLED_FOR_EDIT` |
 | `PATCH /orders/:id` | M, C | paso 2 de editar (nuevos items) |
 | `PUT /orders/change-status/:id` | M, C | cambiar estado PAID → SENT (envío online) |
 | `GET /orders` | A, S, M, C | lista |
 | `GET /orders/:id` | A, S, M, C | detalle — A/S ven cualquiera, M/C solo la suya |
 | `GET /orders/export/exel` | A, S, M | reporte Excel |
-| `POST /orders/reprice` | público | sin `@Auth`, a propósito (checkout guest) |
+| `POST /orders/reprice` | público | sin `@Auth`, a propósito (checkout guest). No sirve para la vista previa de una edición: ver `edit-reprice` |
 | `POST /orders/:orderId/facturar` | A, S, M, C | facturación manual (y refacturar ANULADA/RECHAZADA). M/C solo ventas de su sucursal; A/S cualquiera, sin `?branchId=` (factura desde la sucursal de la venta) |
 | `POST /orders/:orderId/facturar-contingencia` | A, S, M, C | ídem, modo contingencia SIAT |
 | `POST /dailyCash/open` | M, C | abrir **su** caja (una por usuario) |

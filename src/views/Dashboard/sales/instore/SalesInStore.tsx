@@ -24,6 +24,7 @@ import { useQueryClient } from '@tanstack/react-query'
 import {
   useAddToCart,
   useRepriceCart,
+  useEditRepriceCart,
   useCreateOrder,
   useConfirmOrder,
   useCancelOrder,
@@ -49,7 +50,14 @@ import { useUserRole } from '@/hooks/useUserRole'
 import CloseCashSummaryModal from './CloseCashSummaryModal'
 import CashExpensesPanel from './CashExpensesPanel'
 import { useVariants } from '@/hooks/useVariants'
-import type { CartItem, RepriceResponse, Order, GenerateQRResponse, BillingInfo } from '@/types/api/sales'
+import type {
+  CartItem,
+  RepriceResponse,
+  KeptPrice,
+  Order,
+  GenerateQRResponse,
+  BillingInfo
+} from '@/types/api/sales'
 import type { Variant, VariantSize } from '@/types/api/variants'
 import ProductCatalog from './components/ProductCatalog'
 import ShoppingCart from './components/ShoppingCart'
@@ -169,6 +177,15 @@ const PointOfSale: React.FC = () => {
 
   const addToCartMutation = useAddToCart()
   const repriceMutation = useRepriceCart()
+  const editRepriceMutation = useEditRepriceCart()
+
+  // Lo que se conserva del precio original, por producto: alimenta el aviso
+  // "precio original Bs X (quedan N u.)" de la pantalla de edicion
+  const [keptPrices, setKeptPrices] = useState<KeptPrice[]>([])
+
+  // Lo que la recotizacion en vivo rechazo por stock: bloquea el "+" de esas
+  // prendas y el boton de confirmar
+  const [sinStock, setSinStock] = useState<number[]>([])
   const createOrderMutation = useCreateOrder()
   const confirmOrderMutation = useConfirmOrder()
   const cancelOrderMutation = useCancelOrder()
@@ -401,6 +418,27 @@ const PointOfSale: React.FC = () => {
     return allFlattenedVariants.find(v => v.variantSizeId === variantId)
   }
 
+  // El catalogo esta paginado: una prenda del carrito puede no estar en la
+  // pagina actual. El carrito guarda su info, asi que sirve de respaldo.
+  const nombreDeVariante = (variantId: number) =>
+    getVariantInfo(variantId)?.displayName ||
+    cartItems.find(item => item.variantId === variantId)?.variantInfo?.displayName ||
+    `Variante ${variantId}`
+
+  // El back avisa el stock de dos formas: "Insufficient stock for variant 2436"
+  // (venta normal) y "Insufficient stock for variants: [2436]" (edit-reprice).
+  // El numero no le dice nada al cajero: se traduce a nombre de prenda.
+  const variantesSinStock = (errorMsg: string): number[] => {
+    if (!errorMsg.includes('Insufficient stock')) return []
+
+    return (errorMsg.match(/\d+/g) || []).map(Number)
+  }
+
+  const mensajeDeStock = (ids: number[]) =>
+    ids.length > 0
+      ? `Sin stock suficiente: ${ids.map(nombreDeVariante).join(', ')}. Bajá la cantidad o quitá la prenda.`
+      : 'Sin stock suficiente para una de las prendas del carrito.'
+
   const addToCart = (item: any) => {
     const existingItemIndex = cartItems.findIndex(cartItem => cartItem.variantId === item.variantSizeId)
 
@@ -488,6 +526,74 @@ const PointOfSale: React.FC = () => {
     }
   }
 
+  // Vista previa en vivo mientras se edita.
+  //
+  // El carrito pinta `repriceData` si lo tiene y si no el precio del catalogo,
+  // que es el de HOY. Al editar eso esta mal: lo ya cobrado conserva su precio
+  // original, asi que se veia un importe y al confirmar salia otro.
+  //
+  // El doc pide recalcular despues de CADA cambio del carrito, asi que se arma
+  // el carrito y se pide `edit-reprice` en cada cambio. Solo en modo edicion:
+  // la venta normal sigue cotizando una sola vez, al ir a pagar.
+  useEffect(() => {
+    if (!isEditingOrder || !editingOrderId || cartItems.length === 0) {
+      setSinStock([])
+
+      return
+    }
+
+    let cancelado = false
+
+    // Esperar un poco: tocar "+" tres veces seguidas no son tres recalculos
+    const timer = setTimeout(async () => {
+      try {
+        const cartResponse = await addToCartMutation.mutateAsync({
+          items: cartItems.map(item => ({ variantId: item.variantId, quantity: item.quantity }))
+        })
+
+        if (cancelado) return
+
+        const editResponse = await editRepriceMutation.mutateAsync({
+          orderId: editingOrderId,
+          token: cartResponse.token
+        })
+
+        if (cancelado) return
+
+        setCartToken(cartResponse.token)
+        setRepriceData(editResponse)
+        setKeptPrices(editResponse.keptPrices || [])
+        setSinStock([])
+
+        // Ya hay stock: el aviso anterior deja de ser cierto. Solo se limpia el
+        // de stock, no un error ajeno que siga en pantalla
+        setErrorMessage(prev => (prev.startsWith('Sin stock suficiente') ? '' : prev))
+      } catch (error: any) {
+        if (cancelado) return
+
+        const errorMsg = error?.response?.data?.message || ''
+        const ids = variantesSinStock(errorMsg)
+
+        // El stock SI se avisa: es lo unico que el cajero puede arreglar, y
+        // callarlo lo dejaba subir la cantidad creyendo que la venta iba a
+        // pasar. Lo demas (un corte de red, un 500) se calla: la vista previa
+        // es informativa y el error real vuelve a salir al confirmar
+        if (errorMsg.includes('Insufficient stock')) {
+          setSinStock(ids)
+          setErrorMessage(mensajeDeStock(ids))
+        }
+      }
+    }, 400)
+
+    return () => {
+      cancelado = true
+      clearTimeout(timer)
+    }
+
+    // addToCartMutation/editRepriceMutation son estables entre renders
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [cartItems, isEditingOrder, editingOrderId])
+
   const verifyStockAndPrices = async () => {
     if (cartItems.length === 0) {
       setErrorMessage('El carrito está vacío')
@@ -511,16 +617,21 @@ const PointOfSale: React.FC = () => {
 
       setCartToken(cartResponse.token)
 
-      if (isEditingOrder) {
-        const repriceResponse = await repriceMutation.mutateAsync({
-          token: cartResponse.token,
-          branchTransferId: linkedTransferId ?? undefined,
-          branchId: userBranch?.id
+      if (isEditingOrder && editingOrderId) {
+        // En edicion va `edit-reprice`, NO `reprice`: este ultimo no conoce la
+        // venta y cotiza a precio de hoy, asi que si el descuento vencio entre
+        // la venta y la correccion, la pantalla mostraba un total y el PATCH
+        // guardaba otro. `edit-reprice` conserva el precio cobrado por producto
+        // y devuelve exactamente lo que va a cobrar el PATCH.
+        const editResponse = await editRepriceMutation.mutateAsync({
+          orderId: editingOrderId,
+          token: cartResponse.token
         })
 
         prefillBillingFromTransfer()
 
-        setRepriceData(repriceResponse)
+        setRepriceData(editResponse)
+        setKeptPrices(editResponse.keptPrices || [])
         setCurrentStep('ORDER_CREATED')
         setActiveStepIndex(2)
         setShowPaymentDialog(true)
@@ -560,11 +671,11 @@ const PointOfSale: React.FC = () => {
           `${variantInfo?.displayName || 'Esta prenda'} está reservada para el pedido #${reservedFor}. ` +
             'Si el cliente viene a retirarlo, marque "Entregar este pedido" en la prenda antes de cobrar.'
         )
-      } else if (errorMsg.includes('Insufficient stock for variant')) {
-        const variantId = errorMsg.match(/variant (\d+)/)?.[1]
-        const variantInfo = getVariantInfo(Number(variantId))
+      } else if (errorMsg.includes('Insufficient stock')) {
+        const ids = variantesSinStock(errorMsg)
 
-        setErrorMessage(`Stock insuficiente para: ${variantInfo?.displayName || 'Producto'} (ID: ${variantId})`)
+        setSinStock(ids)
+        setErrorMessage(mensajeDeStock(ids))
       } else {
         setErrorMessage(errorMsg)
       }
@@ -1252,6 +1363,7 @@ const PointOfSale: React.FC = () => {
               onProceedToPayment={verifyStockAndPrices}
               isEditingOrder={isEditingOrder}
               editingOrderId={editingOrderId}
+              outOfStockVariantIds={sinStock}
             />
           </Grid>
         </Grid>
@@ -1274,6 +1386,7 @@ const PointOfSale: React.FC = () => {
         onConfirmPayment={confirmPayment}
         onCancelOrder={() => setShowCancelDialog(true)}
         isEditingOrder={isEditingOrder}
+        keptPrices={keptPrices}
         editingOrderId={editingOrderId}
         billing={billing}
         onBillingChange={setBilling}

@@ -150,6 +150,21 @@ DELETE /discounts/:id             (A)   borra uno puntual
 ```
 Lectura pública: `GET /web-page/discounts`, `/first-discount`, `/:id`.
 
+### Fechas y vigencia (desde el 10/11/2026)
+
+- Temporada: `startDate` y `endDate` **obligatorias** al crear; al editar,
+  omitidas = no cambian, pero si vienen deben ser fechas válidas (`null` →
+  `400`). Inicio posterior al fin → `400`, también en un PATCH que manda una
+  sola (se compara con la guardada).
+- Permanente: no lleva fechas.
+- **Vigente** = activo y, si es de temporada, con las dos fechas y hoy entre
+  ellas. Es la misma regla para el precio (POS, web, anticipo) y para los
+  listados web.
+- **`GET /discounts` (admin)** trae los vigentes **y los programados**
+  (activos que todavía no empezaron), marcados con `scheduled: true`: esos
+  todavía no se cobran. No trae los desactivados ni los vencidos. Un
+  descuento que no aparece ahí no se está cobrando.
+
 ### Dónde aplica: por sucursal y canal (desde el 06/11/2026)
 
 Cada descuento elige en qué **sucursal** y en qué **canal** vale: la

@@ -1,5 +1,54 @@
 # Cambios en `develop` — noviembre de 2026
 
+## 10 de noviembre — fechas de los descuentos de temporada
+
+Editar un descuento de temporada no validaba las fechas: se podía dejar sin
+fin (`null`) y quedaba aplicando para siempre en POS y web pero **oculto** en
+`GET /discounts`. Ahora se valida y hay una sola regla de "vigente". Detalle
+en [09](09-admin-catalog-crud.md) §Discounts (ya actualizado).
+
+| # | Cambio | Impacto en el front | Detalle |
+|---|---|---|---|
+| 1 | `PATCH /discounts/seasonal/:id`: `startDate`/`endDate` siguen siendo opcionales (omitida = no cambia), pero si vienen tienen que ser una fecha válida; **`null` → `400`** | No mandar `null` para "sin fin": un descuento sin fin es uno permanente | [09](09-admin-catalog-crud.md) |
+| 2 | `POST /discounts/seasonal` y `PATCH /discounts/seasonal/:id`: **inicio posterior al fin → `400`** (`La fecha de inicio del descuento no puede ser posterior a la de fin`). Se mira con los valores ya combinados: en un PATCH que manda solo una, contra la guardada | Validar en el formulario y mostrar el mensaje del 400 | [09](09-admin-catalog-crud.md) |
+| 3 | Un descuento de temporada al que le falte una fecha **ya no aplica** en ningún lado (antes aplicaba en el precio pero no salía en los listados). Editarlo exige mandar las dos fechas | Ninguno, salvo datos viejos rotos | [09](09-admin-catalog-crud.md) |
+| 4 | **`GET /discounts` (admin) también trae los programados** (activos que todavía no empezaron). Antes desaparecían hasta su fecha de inicio. Siguen sin salir los desactivados y los vencidos | Mostrarlos en la lista | [09](09-admin-catalog-crud.md) |
+| 5 | Campo nuevo **`scheduled`** en `GET /discounts`, `GET /discounts/:id` y la respuesta de create/update: `true` = programado, todavía no se cobra | Etiqueta "Programado (desde …)" | [09](09-admin-catalog-crud.md) |
+
+**Qué se rompe:** nada, si el front ya manda las dos fechas válidas. Si en
+algún lado se asume que todo lo de `GET /discounts` se está cobrando hoy,
+hay que mirar `scheduled`.
+
+- [ ] Formulario de temporada: fin ≥ inicio, sin opción de dejar el fin vacío.
+- [ ] Lista de descuentos: etiqueta "Programado" cuando `scheduled` es `true`.
+
+## 10 de noviembre — editar una venta conserva el precio cobrado
+
+Antes, la venta corregida (`PATCH /orders/:id`) se recalculaba con el
+precio y el descuento **de hoy**: si el descuento había vencido o el precio
+había cambiado, el total ya no cuadraba con lo cobrado ni con la caja.
+Detalle en [05](05-orders-lifecycle-and-pos.md) §7 (ya actualizado).
+
+| # | Cambio | Impacto en el front | Detalle |
+|---|---|---|---|
+| 1 | La venta corregida conserva el precio y descuento originales **por producto**, hasta la cantidad original; lo de más o los productos nuevos van al precio de hoy en una línea aparte | Mostrar las líneas como vienen (puede haber dos líneas de la misma variante con distinto precio) | [05](05-orders-lifecycle-and-pos.md) §7 |
+| 2 | Endpoint nuevo **`POST /orders/:id/edit-reprice`** (M, C, su sucursal, venta en `CANCELLED_FOR_EDIT`): `{ items }` → misma respuesta que `reprice` + `keptPrices` (lo cobrado en la original, con `remaining`). Da los mismos precios que va a cobrar el `PATCH` | En modo edición, llamarlo **en vez de** `POST /orders/reprice` (que muestra los precios de hoy); aviso "precio original" con `keptPrices` | [05](05-orders-lifecycle-and-pos.md) §7 |
+
+**Qué se rompe:** nada. Pero si en modo edición se sigue usando
+`POST /orders/reprice`, la vista previa puede mostrar un total distinto del
+que queda.
+
+- [ ] Modo edición: `cancel-for-edit` **antes** de `edit-reprice` (al
+      entrar en modo edición, o al guardar con un diálogo de confirmación:
+      las dos opciones en [05](05-orders-lifecycle-and-pos.md) §7 "Flujo
+      completo").
+- [ ] Modo edición: `edit-reprice` en lugar de `reprice` en cada cambio del
+      carrito; precios y total de la pantalla salen de su respuesta.
+- [ ] Aviso de precio original por producto con `keptPrices` / `remaining`
+      (sumar por `productId`).
+- [ ] Mostrar las líneas tal cual (la misma variante puede venir en dos
+      líneas con distinto precio).
+
 ## 8 de noviembre — gastos y retiros de caja
 
 El cajero registra lo que saca del cajón que no es una venta: **gastos**

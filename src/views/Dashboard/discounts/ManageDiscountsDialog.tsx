@@ -157,6 +157,22 @@ const ManageDiscountsDialog = ({ open, onClose, showMessage }: Props) => {
                     color={esDeTemporada(discount) ? 'warning' : 'secondary'}
                   />
 
+                  {/* Existe y se lista, pero todavia no se cobra: sin esto se
+                      confunde con uno vigente y nadie entiende por que el
+                      precio no baja */}
+                  {discount.scheduled && (
+                    <Chip
+                      label={
+                        discount.startDate
+                          ? `Programado desde ${new Date(discount.startDate).toLocaleDateString('es-BO')}`
+                          : 'Programado'
+                      }
+                      size='small'
+                      variant='tonal'
+                      color='info'
+                    />
+                  )}
+
                   <Box sx={{ flex: 1 }} />
 
                   <Tooltip title='Eliminar este descuento'>
@@ -169,6 +185,13 @@ const ManageDiscountsDialog = ({ open, onClose, showMessage }: Props) => {
                 </Box>
 
                 {/* Dónde vale hoy, para no editar a ciegas */}
+                {esDeTemporada(discount) && (
+                  <Typography variant='caption' color='text.secondary' sx={{ display: 'block', mt: 0.5 }}>
+                    Del {new Date(discount.startDate as string).toLocaleDateString('es-BO')} al{' '}
+                    {discount.endDate ? new Date(discount.endDate).toLocaleDateString('es-BO') : '—'}
+                  </Typography>
+                )}
+
                 <Typography variant='caption' color='text.secondary' sx={{ display: 'block', mt: 0.5 }}>
                   Tienda física: {discount.inStoreBranches?.map(b => b.name).join(', ') || 'ninguna'} · Web:{' '}
                   {discount.onlineBranches?.map(b => b.name).join(', ') || 'ninguna'}

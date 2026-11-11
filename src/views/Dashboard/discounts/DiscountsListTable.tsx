@@ -316,6 +316,15 @@ const DiscountsListTable = () => {
       return
     }
 
+    // El back rechaza con 400 un inicio posterior al fin. Se corta antes para
+    // no mandar algo que ya se sabe invalido. Un descuento sin fecha de fin no
+    // existe: ese es un descuento permanente
+    if (discountType === 'temporary' && formData.startDate!.isAfter(formData.endDate!)) {
+      showMessage('La fecha de inicio no puede ser posterior a la de fin', 'warning')
+
+      return
+    }
+
     if (applyToAll && discountType !== 'temporary') {
       showMessage('Solo los descuentos temporales se pueden aplicar a todos los productos', 'warning')
 
@@ -934,7 +943,16 @@ const DiscountsListTable = () => {
                   <DatePicker
                     label='Fecha de Inicio'
                     value={formData.startDate}
-                    onChange={newValue => setFormData({ ...formData, startDate: newValue })}
+                    onChange={newValue =>
+                      setFormData(prev => ({
+                        ...prev,
+                        startDate: newValue,
+
+                        // Mover el inicio mas alla del fin dejaba un rango
+                        // invalido que solo se descubria al guardar
+                        endDate: newValue && prev.endDate && newValue.isAfter(prev.endDate) ? null : prev.endDate
+                      }))
+                    }
                     slotProps={{
                       textField: {
                         fullWidth: true
@@ -942,13 +960,17 @@ const DiscountsListTable = () => {
                     }}
                   />
 
+                  {/* minDate: el calendario ni deja elegir un fin anterior al
+                      inicio, asi el 400 del back no llega a pasar */}
                   <DatePicker
                     label='Fecha de Fin'
                     value={formData.endDate}
+                    minDate={formData.startDate || undefined}
                     onChange={newValue => setFormData({ ...formData, endDate: newValue })}
                     slotProps={{
                       textField: {
-                        fullWidth: true
+                        fullWidth: true,
+                        helperText: 'Un descuento sin fecha de fin es uno permanente'
                       }
                     }}
                   />

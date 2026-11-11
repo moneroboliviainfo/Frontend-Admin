@@ -44,6 +44,11 @@ export interface DiscountResponse {
   inStoreBranches?: DiscountBranch[]
   onlineBranches?: DiscountBranch[]
 
+  // Activo pero todavia no empezo: existe y se lista, pero no se esta cobrando.
+  // Desde el 10/11/2026 GET /discounts tambien trae estos (antes desaparecian
+  // hasta su fecha de inicio)
+  scheduled?: boolean
+
   value: number
   startDate?: string
   endDate?: string

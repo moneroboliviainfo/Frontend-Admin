@@ -12,7 +12,7 @@ import {
   CircularProgress
 } from '@mui/material'
 
-import type { CartItem, RepriceResponse, Order } from '@/types/api/sales'
+import type { CartItem, RepriceItem, RepriceResponse, Order } from '@/types/api/sales'
 
 interface CartItemLocal extends CartItem {
   variantInfo?: any
@@ -34,6 +34,11 @@ interface ShoppingCartProps {
   // variantId -> unidades ya pagadas al encargar el pedido. La venta de retiro
   // tiene que llevarlas todas: no se pueden sacar ni reducir.
   paidQuantities?: Record<number, number>
+
+  // Variantes que el back rechazo por stock al recotizar. Se bloquea el "+" de
+  // esas y el boton de confirmar: antes el cajero podia seguir subiendo la
+  // cantidad sin enterarse de que la venta no iba a pasar.
+  outOfStockVariantIds?: number[]
 }
 
 const ShoppingCart: React.FC<ShoppingCartProps> = ({
@@ -48,16 +53,17 @@ const ShoppingCart: React.FC<ShoppingCartProps> = ({
   paidQuantities = {},
   onProceedToPayment,
   isEditingOrder = false,
-  editingOrderId = null
+  editingOrderId = null,
+  outOfStockVariantIds = []
 }) => {
+  // Venia formateando en pesos colombianos y SIN decimales: un precio
+  // conservado de 1.50 se mostraba como "$ 2", que es justo el precio de hoy.
+  // Se muestra en Bs con dos decimales, igual que el total y que el resto del
+  // sistema
   const formatCurrency = (amount: number | string) => {
     const numAmount = typeof amount === 'string' ? parseFloat(amount) : amount
 
-    return new Intl.NumberFormat('es-CO', {
-      style: 'currency',
-      currency: 'COP',
-      minimumFractionDigits: 0
-    }).format(numAmount)
+    return `Bs ${(Number.isFinite(numAmount) ? numAmount : 0).toFixed(2)}`
   }
 
   const calculateTotal = () => {
@@ -111,7 +117,23 @@ const ShoppingCart: React.FC<ShoppingCartProps> = ({
           <Box>
             {cartItems.map(item => {
               const variantInfo = item.variantInfo
-              const repriceItem = repriceData?.items.find(ri => ri.variantId === item.variantId)
+
+              // Al editar, edit-reprice devuelve VARIAS lineas de la misma
+              // variante: las unidades que conservan el precio de la venta
+              // original y las nuevas al precio de hoy. `find` mostraba solo la
+              // primera, asi que el importe de la prenda salia corto aunque el
+              // total general (que lo calcula el back) estuviera bien.
+              const lineas = repriceData?.items.filter(ri => ri.variantId === item.variantId) || []
+
+              const subtotal = lineas.reduce((acc, linea) => acc + Number(linea.totalPrice), 0)
+
+              // El precio efectivo por unidad: `unit_price` es el de lista y no
+              // lleva el descuento, por eso se saca del importe de la linea
+              const porUnidad = (linea: RepriceItem) =>
+                linea.quantity ? Number(linea.totalPrice) / linea.quantity : 0
+
+              // Si las lineas no cobran lo mismo no hay un "c/u": se desglosa
+              const unitarios = [...new Set(lineas.map(porUnidad))]
 
               return (
                 <Card key={item.variantId} sx={{ mb: 1.5 }}>
@@ -124,6 +146,11 @@ const ShoppingCart: React.FC<ShoppingCartProps> = ({
                         <Typography variant='caption' color='text.secondary' fontSize='0.7rem'>
                           {variantInfo?.size} | {variantInfo?.color?.name}
                         </Typography>
+                        {outOfStockVariantIds.includes(item.variantId) && (
+                          <Typography variant='caption' color='error.main' fontSize='0.7rem' display='block'>
+                            Sin stock para esta cantidad
+                          </Typography>
+                        )}
                         {!!paidQuantities[item.variantId] && (
                           <Typography variant='caption' color='success.main' fontSize='0.7rem' display='block'>
                             {paidQuantities[item.variantId]} ya pagada(s) en el pedido
@@ -159,7 +186,7 @@ const ShoppingCart: React.FC<ShoppingCartProps> = ({
                           <IconButton
                             size='small'
                             onClick={() => onUpdateQuantity(item.variantId, item.quantity + 1)}
-                            disabled={isLoading}
+                            disabled={isLoading || outOfStockVariantIds.includes(item.variantId)}
                             sx={{ p: 0.5 }}
                           >
                             <span style={{ fontSize: '0.8rem' }}>➕</span>
@@ -172,16 +199,19 @@ const ShoppingCart: React.FC<ShoppingCartProps> = ({
                       )}
                       <Box sx={{ textAlign: 'right' }}>
                         <Typography variant='caption' color='text.secondary' display='block' fontSize='0.65rem'>
-                          {repriceItem
-                            ? formatCurrency(repriceItem.unit_price)
-                            : variantInfo?.price
-                              ? formatCurrency(variantInfo.price)
-                              : '-'}{' '}
-                          c/u
+                          {lineas.length === 0
+                            ? variantInfo?.price
+                              ? `${formatCurrency(variantInfo.price)} c/u`
+                              : '-'
+                            : unitarios.length === 1
+                              ? `${formatCurrency(unitarios[0])} c/u`
+                              : lineas
+                                  .map(linea => `${linea.quantity} × ${formatCurrency(porUnidad(linea))}`)
+                                  .join(' + ')}
                         </Typography>
                         <Typography variant='body1' color='primary' fontWeight='bold'>
-                          {repriceItem
-                            ? formatCurrency(repriceItem.totalPrice)
+                          {lineas.length > 0
+                            ? formatCurrency(subtotal)
                             : variantInfo?.price
                               ? formatCurrency(variantInfo.price * item.quantity)
                               : '-'}
@@ -223,7 +253,7 @@ const ShoppingCart: React.FC<ShoppingCartProps> = ({
               fullWidth
               size='medium'
               onClick={onProceedToPayment}
-              disabled={cartItems.length === 0 || isLoading}
+              disabled={cartItems.length === 0 || isLoading || outOfStockVariantIds.length > 0}
               startIcon={isLoading ? <CircularProgress size={18} color='inherit' /> : <span>✓</span>}
               sx={{ py: 1 }}
               color={isEditingOrder ? 'warning' : 'primary'}
